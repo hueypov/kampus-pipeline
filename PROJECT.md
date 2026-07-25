@@ -170,6 +170,71 @@ how to operate the crew, while the runtime mechanics live in
 `crew-investigator.md` is an available agent definition, but it is not one of
 the four runtime roster roles declared by `pipeline-crew-mcp`.
 
+### How the crew workflow runs
+
+The crew is a continuous **backlog-to-merged-work loop**. Its durable source of
+truth is the target repository's GitHub state: issues, labels, plans, pull
+requests, review verdicts, and merge state. MCP channel messages are only
+delivery/wake-up signals; an acknowledgement means a message reached an inbox,
+not that a role read it or that its contents are true.
+
+```text
+fuzzy direction ──> cartographer ──> wayfinder map/frontier ──┐
+                                                               │
+new observation / issue ───────────────────────────────────> intake desk
+                                                               │
+                              report → triage → plan          ▼
+                                                   GitHub-ready backlog
+                                                               │
+                                         claim one lane        ▼
+                                              engineering manager × N
+                                                               │
+                                         coder → reviewer → shipper
+                                                ▲       │        │
+                                      review FAIL ──────┘        ▼
+                                                       merged PR / closed issue
+                                                               │
+chief of staff <──── verifies live GitHub state ───────────────┘
+        │
+        └── verified update to the operator or approval request to the approver
+```
+
+The roles deliberately have narrow responsibilities:
+
+1. **Cartographer — discover work, not implementation.** It is launched on
+   demand when the operator has a fuzzy destination. It runs `wayfinder` to
+   turn that uncertainty into a map and concrete frontier tickets. When work is
+   ready for the normal queue it sends an `IntakePing` to the intake desk. It
+   never routes work straight to an engineering manager, because that would
+   bypass triage.
+2. **Intake desk — make work actionable.** It watches incoming observations and
+   charted work, then uses the issue pipeline (`report`, `triage`, and planning
+   when required) to produce a classified, scoped, pickable backlog item. Its
+   output is repository state, not a private conversation.
+3. **Engineering manager — drain ready work.** Each engine instance claims one
+   available lane through the tracker before working it, which prevents two
+   engines from taking the same lane. It drives the execution chain by spawning
+   implementation, review, and shipping work. The configured engine count and
+   WIP caps limit how much can run concurrently.
+4. **Coder, reviewer, shipper — execute one lane safely.** A coder prepares the
+   branch and pull request. An independent reviewer records a verdict for the
+   current PR head. A FAIL returns to the coder on the same lane; only a PASS
+   allows the shipper to enqueue or merge according to the repository's rules.
+5. **Chief of staff — report verified reality.** It reads the board and PR state
+   before communicating with humans. It does not treat a peer's message as
+   proof. For approval-gated work, it brings the current PR to the configured
+   approver; the shipping path resumes only after the required approval is on
+   the current commit.
+
+The standing `stand-up` roster starts the chief of staff, intake desk, and the
+configured number of engineering managers. The cartographer is intentionally
+human-in-the-loop and starts only through `spawn-role cartographer`; it comes up
+idle until the operator gives it a mapping task.
+
+If a channel message fails, the receiving role can still find the work by
+reading the GitHub board on its next loop. That makes channels a latency
+optimization rather than a correctness dependency.
+
 ### Operator configuration
 
 The generated `.claude/crew.config.jsonc` must supply:
