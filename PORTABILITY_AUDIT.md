@@ -36,6 +36,9 @@ deleted:
   npm publication or global installation.
 - `architecture-audit` now uses repository-neutral paths and direct current-repo
   resolution; it no longer carries copied Phoenix examples or policy references.
+- `campaign` now preserves initiative coordination through a repository-owned
+  campaign contract rather than Phoenix milestones, labels, roadmap rows, or
+  `origin/main`.
 
 The counts below remain the **baseline inventory** until the full scan is
 re-run after each extraction slice. Entries for these four repaired areas are
