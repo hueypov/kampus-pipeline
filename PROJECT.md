@@ -166,7 +166,9 @@ how to operate the crew, while the runtime mechanics live in
 | Cartographer | singleton, on-demand | Human-in-the-loop exploration and wayfinding; not started by the standing roster. |
 | Intake desk | singleton bridge | Owns intake/triage-facing coordination. |
 | Engineering manager | scalable engine | Executes independent work lanes; `count` and WIP caps come from configuration. |
-| Investigator | support role | Provides focused research/investigation support. |
+
+`crew-investigator.md` is an available agent definition, but it is not one of
+the four runtime roster roles declared by `pipeline-crew-mcp`.
 
 ### Operator configuration
 
