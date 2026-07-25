@@ -9,14 +9,16 @@ a global `pipeline` executable.
 Run these two commands once in the root of the repository adopting the toolkit:
 
 ```bash
-git submodule add <toolkit-remote> .pipeline/toolkit
+git submodule add git@github.com:hueypov/kampus-pipeline.git .pipeline/toolkit
 ./.pipeline/toolkit/bin/pipeline init
 ```
 
 `git submodule add` both records and initializes the submodule. The first
-`pipeline init` installs only the pinned toolkit workspace, writes the
-project-local Claude wiring, seeds neutral architecture and domain glossaries, and
-adds the `pipeline` script to the adopting repository's `package.json`.
+`pipeline init` installs only the pinned toolkit workspace, creates
+consumer-facing `claude-plugins/<plugin>` links, links the Kampus Pipeline agents
+into `.claude/agents`, writes project-local Claude wiring against those links,
+seeds neutral architecture and domain glossaries, and adds the `pipeline` script
+to the adopting repository's `package.json`.
 
 From this point onward, use one consistent command interface:
 
@@ -78,13 +80,7 @@ pnpm pipeline sync
 pnpm pipeline init --check
 ```
 
-To add the optional generic GitHub Actions baseline (toolkit verification and
-documentation-path safety), opt in explicitly:
-
-```bash
-pnpm pipeline init --with-github-actions
-```
-
-It writes only `.github/workflows/pipeline-toolkit.yml` and
-`.github/workflows/pipeline-doc-safety.yml`, and never replaces a consumer
+Initialization also writes the generic GitHub Actions baseline:
+`.github/workflows/pipeline-toolkit.yml` and
+`.github/workflows/pipeline-doc-safety.yml`. It never replaces a consumer
 workflow that already exists.

@@ -1,5 +1,5 @@
 import {execFileSync, spawnSync} from "node:child_process";
-import {chmodSync, copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
+import {chmodSync, copyFileSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
@@ -81,12 +81,20 @@ describe("pipeline init", () => {
 		});
 		expect(existsSync(join(consumer, ".pipeline/pipeline.json"))).toBe(true);
 		expect(readFileSync(join(consumer, ".glossary/LANGUAGE.md"), "utf8")).toBe("# Fixture language\n");
-		expect(existsSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"))).toBe(false);
+		expect(readFileSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"), "utf8")).toBe("name: Fixture toolkit\n");
+		expect(existsSync(join(consumer, "claude-plugins/kampus-pipeline"))).toBe(true);
+		expect(existsSync(join(consumer, "claude-plugins/pipeline-crew"))).toBe(true);
+		expect(existsSync(join(consumer, ".claude/agents/reviewer.md"))).toBe(true);
+		expect(lstatSync(join(consumer, "claude-plugins/kampus-pipeline")).isSymbolicLink()).toBe(true);
+		expect(readlinkSync(join(consumer, "claude-plugins/kampus-pipeline"))).toContain(".pipeline/toolkit/claude-plugins/kampus-pipeline");
+		expect(lstatSync(join(consumer, ".claude/agents/reviewer.md")).isSymbolicLink()).toBe(true);
 		expect(existsSync(join(consumer, ".claude/skills/deslop-comments"))).toBe(true);
 		expect(existsSync(join(consumer, ".claude/skills/release"))).toBe(false);
 		expect(readFileSync(join(consumer, ".glossary/TERMS.md"), "utf8")).toBe("# Fixture terms\n");
 		const settingsPath = join(consumer, ".claude/settings.json");
 		const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as {hooks: Record<string, unknown[]>};
+		expect(JSON.stringify(settings.hooks)).toContain("$CLAUDE_PROJECT_DIR/claude-plugins/kampus-pipeline/hooks/");
+		expect(JSON.stringify(settings.hooks)).not.toContain(".pipeline/toolkit/claude-plugins");
 		settings.hooks.SessionStart?.push({
 			matcher: "startup|resume",
 			hooks: [{type: "command", command: "old/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-sweep --execute"}],
@@ -97,8 +105,6 @@ describe("pipeline init", () => {
 		write(join(consumer, ".glossary/LANGUAGE.md"), "# Consumer language\n");
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
 		expect(readFileSync(join(consumer, ".glossary/LANGUAGE.md"), "utf8")).toBe("# Consumer language\n");
-		expect(command(consumer, ["init", "--with-github-actions"], mockBin).status).toBe(0);
-		expect(readFileSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"), "utf8")).toBe("name: Fixture toolkit\n");
 		write(join(consumer, ".github/workflows/pipeline-toolkit.yml"), "name: Consumer workflow\n");
 		expect(command(consumer, ["sync"], mockBin).status).toBe(0);
 		expect(readFileSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"), "utf8")).toBe("name: Consumer workflow\n");
@@ -127,7 +133,7 @@ describe("pipeline init", () => {
 	it("dispatches generated hooks through the local toolkit binary", () => {
 		const {consumer, mockBin} = fixture();
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
-		const result = spawnSync(join(consumer, ".pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh"), ["worktree-guard", "pre-file"], {
+		const result = spawnSync(join(consumer, "claude-plugins/kampus-pipeline/hooks/guard.sh"), ["worktree-guard", "pre-file"], {
 			cwd: consumer,
 			encoding: "utf8",
 			input: "{}\n",
