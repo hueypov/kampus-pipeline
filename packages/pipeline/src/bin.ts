@@ -9,25 +9,6 @@ const CONFIG_RELATIVE_PATH = ".pipeline/pipeline.json";
 const SETTINGS_RELATIVE_PATH = ".claude/settings.json";
 const CREW_CONFIG_RELATIVE_PATH = ".claude/crew.config.jsonc";
 const MANAGED_IGNORE_RELATIVE_PATH = ".claude/.gitignore";
-const PORTABLE_CLI_TOOLS = new Set([
-	"version",
-	"decisions-index",
-	"epic-ledger",
-	"epic-lock",
-	"eval-harness",
-	"intake-dedup",
-	"leak-guard",
-	"redact-leaks",
-	"ref-guard",
-	"review-head",
-	"spawn-guard",
-	"token-spend",
-	"tracker",
-	"trivial-diff",
-	"worktree-guard",
-	"worktree-sweep",
-]);
-
 type ManagedPath = {path: string; target: string};
 type PipelineConfig = {
 	schemaVersion: 1;
@@ -59,7 +40,7 @@ const toolkitRootFor = (projectRoot: string): string => resolve(projectRoot, TOO
 const assertToolkit = (projectRoot: string): string => {
 	const toolkit = toolkitRootFor(projectRoot);
 	if (!existsSync(join(toolkit, "package.json"))) fail(`missing initialized toolkit at ${TOOLKIT_RELATIVE_PATH}`);
-	if (!existsSync(join(toolkit, "packages/pipeline-cli/src/bin.mjs"))) fail("toolkit is missing packages/pipeline-cli");
+	if (!existsSync(join(toolkit, "packages/pipeline-cli/src/bin.ts"))) fail("toolkit is missing packages/pipeline-cli");
 	if (!existsSync(join(toolkit, "packages/pipeline-crew-mcp/src/bin.ts"))) fail("toolkit is missing packages/pipeline-crew-mcp");
 	const submodule = spawnSync("git", ["submodule", "status", "--", TOOLKIT_RELATIVE_PATH], {
 		cwd: projectRoot,
@@ -235,10 +216,8 @@ else if (command === "check") {
 	if (errors.length) fail(`check failed:\n${errors.map((error) => `- ${error}`).join("\n")}`);
 	console.log("pipeline: check passed");
 } else if (command === "cli") {
-	if (!args[0] || !PORTABLE_CLI_TOOLS.has(args[0])) {
-		fail(`CLI tool '${args[0] ?? "(missing)"}' is not part of the generic toolkit v1`);
-	}
-	forward("packages/pipeline-cli/src/bin.mjs", args);
+	if (!args[0]) fail("CLI tool is required");
+	forward("packages/pipeline-cli/src/bin.ts", args);
 }
 else if (command === "crew") forward("packages/pipeline-crew-mcp/src/bin.ts", args);
 else fail("usage: pipeline <init|sync|check|cli|crew> [args]");

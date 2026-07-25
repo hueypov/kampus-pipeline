@@ -28,7 +28,7 @@ const fixture = (): {consumer: string; mockBin: string} => {
 	mkdirSync(mockBin, {recursive: true});
 	write(join(toolkit, "package.json"), '{"name":"fixture-toolkit","private":true}\n');
 	write(join(toolkit, "bin/pipeline"), "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"$(dirname \"$0\")/pipeline.calls\"\nexit 0\n", true);
-	write(join(toolkit, "packages/pipeline-cli/src/bin.mjs"), "export {};\n");
+	write(join(toolkit, "packages/pipeline-cli/src/bin.ts"), "export {};\n");
 	write(join(toolkit, "packages/pipeline-crew-mcp/src/bin.ts"), "export {};\n");
 	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/example/SKILL.md"), "# Example\n");
 	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/report/SKILL.md"), "# Report\n");
@@ -96,13 +96,13 @@ describe("pipeline init", () => {
 		expect(existsSync(join(consumer, ".claude/commands/stand-up.md"))).toBe(true);
 	});
 
-	it("does not expose nonportable CLI tools through the portable wrapper", () => {
-		const result = spawnSync(process.execPath, [join(process.cwd(), "src/bin.ts"), "cli", "release"], {
+	it("requires a CLI tool name", () => {
+		const result = spawnSync(process.execPath, [join(process.cwd(), "src/bin.ts"), "cli"], {
 			cwd: process.cwd(),
 			encoding: "utf8",
 		});
 		expect(result.status).toBe(1);
-		expect(result.stderr).toContain("not part of the generic toolkit v1");
+		expect(result.stderr).toContain("CLI tool is required");
 	});
 
 	it("dispatches generated hooks through the local toolkit binary", () => {
