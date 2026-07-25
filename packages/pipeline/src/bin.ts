@@ -3,28 +3,27 @@ import {spawnSync} from "node:child_process";
 import {existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {dirname, join, relative, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
+import {CORE_SKILL_NAMES} from "./payload.ts";
 
 const TOOLKIT_RELATIVE_PATH = ".pipeline/toolkit";
-const PLUGIN_ROOTS = ["kampus-pipeline", "pipeline-crew"] as const;
 const CONFIG_RELATIVE_PATH = ".pipeline/pipeline.json";
 const PACKAGE_JSON_RELATIVE_PATH = "package.json";
 const PIPELINE_PACKAGE_SCRIPT = "./.pipeline/toolkit/bin/pipeline";
 const SETTINGS_RELATIVE_PATH = ".claude/settings.json";
-const CREW_CONFIG_RELATIVE_PATH = ".claude/crew.config.jsonc";
-const CREW_CONFIG_TEMPLATE_RELATIVE_PATH = ".claude/crew.config.template.jsonc";
-const CREW_CONFIG_SOURCE_TEMPLATE_RELATIVE_PATH = "claude-plugins/pipeline-crew/crew.config.template.jsonc";
-const MANAGED_IGNORE_RELATIVE_PATH = ".claude/.gitignore";
 const LANGUAGE_TEMPLATE_RELATIVE_PATH = "templates/glossary/LANGUAGE.md";
 const LANGUAGE_RELATIVE_PATH = ".glossary/LANGUAGE.md";
+const TERMS_TEMPLATE_RELATIVE_PATH = "templates/glossary/TERMS.md";
+const TERMS_RELATIVE_PATH = ".glossary/TERMS.md";
 const GITHUB_WORKFLOW_TEMPLATES = [
 	{source: "templates/github/workflows/pipeline-toolkit.yml", destination: ".github/workflows/pipeline-toolkit.yml"},
 	{source: "templates/github/workflows/pipeline-doc-safety.yml", destination: ".github/workflows/pipeline-doc-safety.yml"},
 ] as const;
 type ManagedPath = {path: string; target: string};
 type PipelineConfig = {
-	schemaVersion: 1;
+	schemaVersion: 2;
 	toolkitRoot: string;
 	managedPaths: ManagedPath[];
+	managedHooks: Record<string, unknown[]>;
 };
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -52,12 +51,9 @@ const assertToolkit = (projectRoot: string): string => {
 	const toolkit = toolkitRootFor(projectRoot);
 	if (!existsSync(join(toolkit, "package.json"))) fail(`missing initialized toolkit at ${TOOLKIT_RELATIVE_PATH}`);
 	if (!existsSync(join(toolkit, "packages/pipeline-cli/src/bin.ts"))) fail("toolkit is missing packages/pipeline-cli");
-	if (!existsSync(join(toolkit, "packages/pipeline-crew-mcp/src/bin.ts"))) fail("toolkit is missing packages/pipeline-crew-mcp");
-	for (const plugin of PLUGIN_ROOTS) {
-		if (!existsSync(join(toolkit, "claude-plugins", plugin))) fail(`toolkit is missing claude-plugins/${plugin}`);
-	}
-	if (!existsSync(join(toolkit, CREW_CONFIG_SOURCE_TEMPLATE_RELATIVE_PATH))) fail(`toolkit is missing ${CREW_CONFIG_SOURCE_TEMPLATE_RELATIVE_PATH}`);
+	if (!existsSync(join(toolkit, "claude-plugins/kampus-pipeline"))) fail("toolkit is missing claude-plugins/kampus-pipeline");
 	if (!existsSync(join(toolkit, LANGUAGE_TEMPLATE_RELATIVE_PATH))) fail(`toolkit is missing ${LANGUAGE_TEMPLATE_RELATIVE_PATH}`);
+	if (!existsSync(join(toolkit, TERMS_TEMPLATE_RELATIVE_PATH))) fail(`toolkit is missing ${TERMS_TEMPLATE_RELATIVE_PATH}`);
 	for (const template of GITHUB_WORKFLOW_TEMPLATES) {
 		if (!existsSync(join(toolkit, template.source))) fail(`toolkit is missing ${template.source}`);
 	}
@@ -73,11 +69,6 @@ const assertToolkit = (projectRoot: string): string => {
 
 const commandExists = (command: string): boolean => {
 	const result = spawnSync(command, ["--version"], {stdio: "ignore"});
-	return !result.error && result.status === 0;
-};
-
-const isGitHubAuthenticated = (): boolean => {
-	const result = spawnSync("gh", ["auth", "status"], {stdio: "ignore"});
 	return !result.error && result.status === 0;
 };
 
@@ -103,7 +94,7 @@ const pipelineHooks = (toolkitRoot: string, projectRoot: string): Record<string,
 		...(timeout ? {timeout} : {}),
 	});
 	return {
-		SessionStart: [{matcher: "startup|resume", hooks: [hook("install.sh", 120), hook("guard.sh spawn-guard freshness"), hook("guard.sh worktree-sweep --execute")]}],
+		SessionStart: [{matcher: "startup|resume", hooks: [hook("install.sh", 120), hook("guard.sh spawn-guard freshness")]}],
 		PreToolUse: [
 			{matcher: "Read|Edit|Write", hooks: [hook("guard.sh worktree-guard pre-file")]},
 			{matcher: "Bash", hooks: [hook("guard.sh worktree-guard pre-bash")]},
@@ -115,7 +106,9 @@ const pipelineHooks = (toolkitRoot: string, projectRoot: string): Record<string,
 	};
 };
 
-const mergeSettings = (projectRoot: string, toolkitRoot: string): void => {
+const isPipelineHook = (entry: unknown): boolean => JSON.stringify(entry).includes("claude-plugins/kampus-pipeline/hooks/");
+
+const mergeSettings = (projectRoot: string, toolkitRoot: string): Record<string, unknown[]> => {
 	const settingsPath = join(projectRoot, SETTINGS_RELATIVE_PATH);
 	let settings: Record<string, unknown> = {};
 	if (existsSync(settingsPath)) {
@@ -125,14 +118,20 @@ const mergeSettings = (projectRoot: string, toolkitRoot: string): void => {
 			fail(`${SETTINGS_RELATIVE_PATH} is not valid JSON; refusing to overwrite it`);
 		}
 	}
-	const hooks = (settings.hooks ?? {}) as Record<string, unknown[]>;
-	for (const [event, additions] of Object.entries(pipelineHooks(toolkitRoot, projectRoot))) {
-		const current = hooks[event] ?? [];
-		const serialized = new Set(current.map((entry) => JSON.stringify(entry)));
-		hooks[event] = [...current, ...additions.filter((entry) => !serialized.has(JSON.stringify(entry)))];
+	const hooks = {...((settings.hooks ?? {}) as Record<string, unknown[]>)};
+	const managedHooks = pipelineHooks(toolkitRoot, projectRoot);
+	for (const event of Object.keys(hooks)) {
+		const preserved = (hooks[event] ?? []).filter((entry) => !isPipelineHook(entry));
+		if (managedHooks[event]) hooks[event] = preserved;
+		else if (preserved.length) hooks[event] = preserved;
+		else delete hooks[event];
+	}
+	for (const [event, additions] of Object.entries(managedHooks)) {
+		hooks[event] = [...(hooks[event] ?? []), ...additions];
 	}
 	settings.hooks = hooks;
 	writeJson(settingsPath, settings);
+	return managedHooks;
 };
 
 const mergePackageScript = (projectRoot: string): void => {
@@ -184,16 +183,6 @@ const linkEntries = (projectRoot: string, toolkitRoot: string, sourceRelative: s
 		});
 };
 
-const mergeIgnore = (projectRoot: string): void => {
-	const path = join(projectRoot, MANAGED_IGNORE_RELATIVE_PATH);
-	const required = ["crew.config.jsonc", "crew-run/"];
-	const current = existsSync(path) ? readFileSync(path, "utf8") : "";
-	const lines = new Set(current.split("\n").filter(Boolean));
-	for (const line of required) lines.add(line);
-	mkdirSync(dirname(path), {recursive: true});
-	writeFileSync(path, `${[...lines].join("\n")}\n`);
-};
-
 const materializeTemplate = (projectRoot: string, toolkitRoot: string, sourceRelative: string, destinationRelative: string, prior: Map<string, string>): ManagedPath | undefined => {
 	const destination = join(projectRoot, destinationRelative);
 	const target = `template:${sourceRelative}`;
@@ -210,22 +199,24 @@ const materializeTemplate = (projectRoot: string, toolkitRoot: string, sourceRel
 const installToolkit = (toolkitRoot: string): void => {
 	run("pnpm", ["install", "--frozen-lockfile"], toolkitRoot);
 	run("pnpm", ["--filter", "@kampus/pipeline-cli", "build"], toolkitRoot);
-	run("pnpm", ["--filter", "@kampus/pipeline-crew-mcp", "typecheck"], toolkitRoot);
+};
+
+const supportsTypeStripping = (): boolean => {
+	const [major = 0, minor = 0] = process.versions.node.split(".").map(Number);
+	return major > 22 || (major === 22 && minor >= 6);
 };
 
 const check = (projectRoot: string): string[] => {
 	const errors: string[] = [];
 	let toolkitRoot = "";
 	try { toolkitRoot = assertToolkit(projectRoot); } catch { return ["toolkit submodule is not initialized"]; }
-	for (const command of ["node", "pnpm", "claude", "gh", "tmux"]) if (!commandExists(command)) errors.push(`missing required command: ${command}`);
-	if (Number.parseInt(process.versions.node, 10) < 20) errors.push("Node.js 20 or newer is required");
-	if (commandExists("gh") && !isGitHubAuthenticated()) errors.push("GitHub CLI is not authenticated; run gh auth login");
+	for (const command of ["node", "pnpm"]) if (!commandExists(command)) errors.push(`missing required command: ${command}`);
+	if (!supportsTypeStripping()) errors.push("Node.js 22.6 or newer is required");
 	const config = readConfig(projectRoot);
 	if (!config) errors.push(`missing ${CONFIG_RELATIVE_PATH}`);
 	if (!existsSync(join(projectRoot, SETTINGS_RELATIVE_PATH))) errors.push(`missing ${SETTINGS_RELATIVE_PATH}`);
-	if (!existsSync(join(projectRoot, CREW_CONFIG_RELATIVE_PATH))) errors.push(`missing ${CREW_CONFIG_RELATIVE_PATH}; copy ${CREW_CONFIG_TEMPLATE_RELATIVE_PATH} and fill every placeholder`);
-	else if (readFileSync(join(projectRoot, CREW_CONFIG_RELATIVE_PATH), "utf8").includes("<placeholder")) errors.push("crew configuration still contains placeholders");
 	if (!existsSync(join(projectRoot, LANGUAGE_RELATIVE_PATH))) errors.push(`missing ${LANGUAGE_RELATIVE_PATH}`);
+	if (!existsSync(join(projectRoot, TERMS_RELATIVE_PATH))) errors.push(`missing ${TERMS_RELATIVE_PATH}`);
 	if (toolkitRoot && config?.toolkitRoot !== TOOLKIT_RELATIVE_PATH) errors.push("pipeline config has an unsupported toolkit path");
 	return errors;
 };
@@ -245,36 +236,32 @@ const init = (args: string[]): void => {
 	}
 	const toolkitRoot = assertToolkit(projectRoot);
 	installToolkit(toolkitRoot);
-	const prior = new Map((readConfig(projectRoot)?.managedPaths ?? []).map((entry) => [entry.path, entry.target]));
+	const priorConfig = readConfig(projectRoot);
+	const prior = new Map((priorConfig?.managedPaths ?? []).map((entry) => [entry.path, entry.target]));
 	const languageVocabulary = materializeTemplate(projectRoot, toolkitRoot, LANGUAGE_TEMPLATE_RELATIVE_PATH, LANGUAGE_RELATIVE_PATH, prior);
-	const crewConfigTemplate = materializeTemplate(projectRoot, toolkitRoot, CREW_CONFIG_SOURCE_TEMPLATE_RELATIVE_PATH, CREW_CONFIG_TEMPLATE_RELATIVE_PATH, prior);
+	const domainVocabulary = materializeTemplate(projectRoot, toolkitRoot, TERMS_TEMPLATE_RELATIVE_PATH, TERMS_RELATIVE_PATH, prior);
 	const githubWorkflows = GITHUB_WORKFLOW_TEMPLATES
 		.filter((template) => withGitHubActions || prior.get(template.destination) === `template:${template.source}`)
 		.flatMap((template) => {
 			const managed = materializeTemplate(projectRoot, toolkitRoot, template.source, template.destination, prior);
 			return managed ? [managed] : [];
 		});
-	mergeSettings(projectRoot, toolkitRoot);
+	const managedHooks = mergeSettings(projectRoot, toolkitRoot);
 	mergePackageScript(projectRoot);
 	const managedPaths = [
 		...(languageVocabulary ? [languageVocabulary] : []),
-		...(crewConfigTemplate ? [crewConfigTemplate] : []),
+		...(domainVocabulary ? [domainVocabulary] : []),
 		...githubWorkflows,
-		...linkEntries(projectRoot, toolkitRoot, "claude-plugins", "claude-plugins", (name) => PLUGIN_ROOTS.includes(name as (typeof PLUGIN_ROOTS)[number]), force, prior),
-		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/skills", ".claude/skills", (name) => existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name, "SKILL.md")), force, prior),
-		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/agents", ".claude/agents", (name) => name.endsWith(".md"), force, prior),
-		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/pipeline-crew/agents", ".claude/agents", (name) => name.endsWith(".md"), force, prior),
-		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/pipeline-crew/commands", ".claude/commands", (name) => name.endsWith(".md"), force, prior),
+		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/skills", ".claude/skills", (name) => CORE_SKILL_NAMES.has(name) && existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name, "SKILL.md")), force, prior),
 	];
-	mergeIgnore(projectRoot);
-	writeJson(join(projectRoot, CONFIG_RELATIVE_PATH), {schemaVersion: 1, toolkitRoot: TOOLKIT_RELATIVE_PATH, managedPaths} satisfies PipelineConfig);
+	writeJson(join(projectRoot, CONFIG_RELATIVE_PATH), {schemaVersion: 2, toolkitRoot: TOOLKIT_RELATIVE_PATH, managedPaths, managedHooks} satisfies PipelineConfig);
 	const errors = check(projectRoot);
 	if (errors.length) console.error(`pipeline: initialized with required follow-up:\n${errors.map((error) => `- ${error}`).join("\n")}`);
 	else console.error("pipeline: initialized and ready");
 };
 
 const forward = (packagePath: string, args: string[]): never => {
-	const result = spawnSync("node", [join(sourceToolkitRoot, packagePath), ...args], {stdio: "inherit"});
+	const result = spawnSync("node", ["--experimental-strip-types", join(sourceToolkitRoot, packagePath), ...args], {stdio: "inherit"});
 	process.exit(result.status ?? 1);
 };
 

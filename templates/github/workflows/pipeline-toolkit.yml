@@ -17,7 +17,7 @@ jobs:
           submodules: recursive
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.6.0
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -29,5 +29,3 @@ jobs:
         run: pnpm --dir .pipeline/toolkit --filter @kampus/pipeline test
       - name: Test pipeline CLI
         run: pnpm --dir .pipeline/toolkit --filter @kampus/pipeline-cli test
-      - name: Test crew runtime
-        run: pnpm --dir .pipeline/toolkit --filter @kampus/pipeline-crew-mcp test

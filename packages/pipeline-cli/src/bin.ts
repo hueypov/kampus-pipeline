@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+export {};
+
 /**
  * Local router for the private toolkit CLI.
  *

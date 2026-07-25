@@ -1,16 +1,17 @@
 import {readdirSync, readFileSync, statSync} from "node:fs";
 import {join} from "node:path";
 import {describe, expect, it} from "vitest";
+import {CORE_SKILL_NAMES} from "./payload.ts";
 
 const root = join(process.cwd(), "../..");
 const portablePaths = [
 	"bin/pipeline",
 	"packages/pipeline/src/bin.ts",
+	"packages/pipeline/src/payload.ts",
+	"templates/glossary",
 	"templates/github/workflows",
 	"claude-plugins/kampus-pipeline/hooks",
-	"claude-plugins/pipeline-crew/agents",
-	"claude-plugins/pipeline-crew/commands",
-	"claude-plugins/pipeline-crew/crew.config.template.jsonc",
+	...Array.from(CORE_SKILL_NAMES, (name) => `claude-plugins/kampus-pipeline/skills/${name}`),
 ];
 const forbidden = new RegExp(
 	["pnpm dlx @kampus/pipeline-cli", "npm install @kampus/pipeline-cli", "publish .*pipeline-cli", "pho" + "enix", "cloud" + "flare", "cf-utils", "apps/web"].join("|"),

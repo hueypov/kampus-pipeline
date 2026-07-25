@@ -9,13 +9,13 @@ a global `pipeline` executable.
 Run these two commands once in the root of the repository adopting the toolkit:
 
 ```bash
-git submodule add git@github.com:hueypov/kampus-pipeline.git .pipeline/toolkit
+git submodule add <toolkit-remote> .pipeline/toolkit
 ./.pipeline/toolkit/bin/pipeline init
 ```
 
 `git submodule add` both records and initializes the submodule. The first
 `pipeline init` installs only the pinned toolkit workspace, writes the
-project-local Claude wiring, creates `.claude/crew.config.template.jsonc`, and
+project-local Claude wiring, seeds neutral architecture and domain glossaries, and
 adds the `pipeline` script to the adopting repository's `package.json`.
 
 From this point onward, use one consistent command interface:
@@ -24,34 +24,22 @@ From this point onward, use one consistent command interface:
 pnpm pipeline <command>
 ```
 
-## Configure and validate the crew
+## Optional integrations
 
-The template is deliberately not a live configuration. Create the ignored,
-operator-owned copy and fill its values:
+The default payload is intentionally limited to generic architecture and writing
+workflows. It does not install a crew, a release platform, or application-specific
+skills. Those capabilities need a repository-owned adapter with its own configuration
+and validation; they are not implied by `pipeline init`.
 
-```bash
-cp .claude/crew.config.template.jsonc .claude/crew.config.jsonc
-# Fill the operator, roles, channels, and optional Claude Code version.
-
-pnpm pipeline crew check-config
-pnpm pipeline init --check
-```
-
-`crew check-config` validates the fields used to launch the crew without
-starting tmux, a tracker, or any crew session. `init --check` verifies the
-toolkit submodule, generated project wiring, required local commands, and the
-absence of template placeholders.
+`pnpm pipeline init --check` verifies the pinned submodule and the generated core
+wiring. It requires Node.js 22.6 or later and pnpm, but not GitHub authentication,
+tmux, or a user-level Claude configuration.
 
 ## Daily use
 
 ```bash
-# Start or stop the configured crew.
-pnpm pipeline crew stand-up
-pnpm pipeline crew stand-down
-
-# Run a pipeline CLI tool or another crew lifecycle command.
+# Run a local toolkit command.
 pnpm pipeline cli <tool> ...
-pnpm pipeline crew <command> ...
 ```
 
 ## Clone an adopting repository

@@ -12,10 +12,9 @@ This file is **two layers**:
    depth / seam / adapter / leverage / locality, the deletion test, and the other
    principles. Evergreen and project-agnostic; it ports the vocabulary the
    architecture-audit work is grounded in.
-2. **The structural terms** — the project's own named structures (the test
-   tiers, the fate loader/resolver split, the LiveDO roles), each anchored to the
-   ADR that decided it. These are what the general vocabulary *names* when applied to
-   this codebase.
+2. **The domain terms** — names owned by the adopting project. Add them to
+   `.glossary/TERMS.md`; this template deliberately does not prescribe any product,
+   storage, deployment, or organization vocabulary.
 
 ---
 
@@ -36,9 +35,9 @@ _Avoid_: API, signature (too narrow — those refer only to the type-level surfa
 
 **Implementation**
 What's inside a module — its body of code. Distinct from **adapter**: a thing can be
-a small adapter with a large implementation (a real D1-backed repository) or a large
-adapter with a small implementation (an in-memory fake). Reach for "adapter" when the
-seam is the topic; "implementation" otherwise.
+a small adapter with a large implementation or a large adapter with a small
+implementation. Reach for "adapter" when the seam is the topic; "implementation"
+otherwise.
 
 **Depth**
 Leverage at the interface — the amount of behaviour a caller (or test) can exercise
@@ -98,17 +97,10 @@ at one place rather than spreading across callers. Fix once, fixed everywhere.
 
 ---
 
-> This is the brand-noun seed. The full domain-noun glossary (the entities and their
-> precise definitions) lives in its own `.glossary/TERMS.md`; this table fixes only the
-> product/brand spellings and the Turkish-vs-English rule so they aren't duplicated in
-> `CLAUDE.md`.
+> This file contains only architecture vocabulary. The adopting project owns its
+> domain-noun glossary in `.glossary/TERMS.md`.
 
 ---
 
-## See also
-
-- [`.decisions/`](../.decisions/) — the *why* and the history behind every term
-  here (an ADR is the source for each structural term).
-- [`.patterns/`](../.patterns/index.md) — how the current code is shaped (the loader
-  contract, the test seams, the DO wiring).
-- [`CLAUDE.md`](../CLAUDE.md) — points here for the canonical vocabulary.
+Projects may link their own ADR, pattern, or contributor documentation here after
+adopting the toolkit.

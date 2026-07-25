@@ -129,7 +129,7 @@ describe("heal-item marker round-trip (the idempotency read/write pair)", () => 
 
 describe("heal-item rendering", () => {
 	it("titles the heal-item deterministically", () => {
-		expect(healItemTitle(3501)).toBe("heal red CI on the originating pull request");
+		expect(healItemTitle(3501)).toBe("heal red CI on PR #3501");
 	});
 
 	it("body links the PR, names the failing check, and cites the boundary ruling", () => {

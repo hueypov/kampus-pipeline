@@ -13,7 +13,7 @@ const write = (path: string, text: string, executable = false): void => {
 };
 
 const command = (cwd: string, args: string[], path: string) =>
-	spawnSync(process.execPath, [join(process.cwd(), "src/bin.ts"), ...args], {
+	spawnSync(join(process.cwd(), "../../bin/pipeline"), args, {
 		cwd,
 		encoding: "utf8",
 		env: {...process.env, PATH: `${path}:${process.env.PATH}`},
@@ -31,11 +31,11 @@ const fixture = (): {consumer: string; mockBin: string} => {
 	write(join(toolkit, "packages/pipeline-cli/src/bin.ts"), "export {};\n");
 	write(join(toolkit, "packages/pipeline-crew-mcp/src/bin.ts"), "export {};\n");
 	write(join(toolkit, "templates/glossary/LANGUAGE.md"), "# Fixture language\n");
+	write(join(toolkit, "templates/glossary/TERMS.md"), "# Fixture terms\n");
 	write(join(toolkit, "templates/github/workflows/pipeline-toolkit.yml"), "name: Fixture toolkit\n");
 	write(join(toolkit, "templates/github/workflows/pipeline-doc-safety.yml"), "name: Fixture docs\n");
 	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/example/SKILL.md"), "# Example\n");
-	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/report/SKILL.md"), "# Report\n");
-	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/triage/SKILL.md"), "# Triage\n");
+	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/deslop-comments/SKILL.md"), "# Deslop\n");
 	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/release/SKILL.md"), "# Release\n");
 	write(join(toolkit, "claude-plugins/kampus-pipeline/agents/reviewer.md"), "# Reviewer\n");
 	write(join(toolkit, "claude-plugins/pipeline-crew/agents/crew-chief-of-staff.md"), "# Chief\n");
@@ -82,18 +82,18 @@ describe("pipeline init", () => {
 		expect(existsSync(join(consumer, ".pipeline/pipeline.json"))).toBe(true);
 		expect(readFileSync(join(consumer, ".glossary/LANGUAGE.md"), "utf8")).toBe("# Fixture language\n");
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"))).toBe(false);
-		expect(existsSync(join(consumer, "claude-plugins/kampus-pipeline/skills/example/SKILL.md"))).toBe(true);
-		expect(existsSync(join(consumer, "claude-plugins/pipeline-crew/commands/stand-up.md"))).toBe(true);
-		expect(existsSync(join(consumer, ".claude/skills/example"))).toBe(true);
-		expect(existsSync(join(consumer, ".claude/skills/report"))).toBe(true);
-		expect(existsSync(join(consumer, ".claude/skills/triage"))).toBe(true);
-		expect(existsSync(join(consumer, ".claude/skills/release"))).toBe(true);
-		expect(existsSync(join(consumer, ".claude/agents/reviewer.md"))).toBe(true);
-		expect(existsSync(join(consumer, ".claude/agents/crew-chief-of-staff.md"))).toBe(true);
-		expect(existsSync(join(consumer, ".claude/commands/stand-up.md"))).toBe(true);
-		expect(readFileSync(join(consumer, ".claude/crew.config.template.jsonc"), "utf8")).toBe('{"value":"<placeholder>"}\n');
-		expect(existsSync(join(consumer, ".claude/crew.config.jsonc"))).toBe(false);
+		expect(existsSync(join(consumer, ".claude/skills/deslop-comments"))).toBe(true);
+		expect(existsSync(join(consumer, ".claude/skills/release"))).toBe(false);
+		expect(readFileSync(join(consumer, ".glossary/TERMS.md"), "utf8")).toBe("# Fixture terms\n");
+		const settingsPath = join(consumer, ".claude/settings.json");
+		const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as {hooks: Record<string, unknown[]>};
+		settings.hooks.SessionStart?.push({
+			matcher: "startup|resume",
+			hooks: [{type: "command", command: "old/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-sweep --execute"}],
+		});
+		writeFileSync(settingsPath, `${JSON.stringify(settings)}\n`);
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		expect(readFileSync(settingsPath, "utf8")).not.toContain("worktree-sweep");
 		write(join(consumer, ".glossary/LANGUAGE.md"), "# Consumer language\n");
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
 		expect(readFileSync(join(consumer, ".glossary/LANGUAGE.md"), "utf8")).toBe("# Consumer language\n");
@@ -102,25 +102,21 @@ describe("pipeline init", () => {
 		write(join(consumer, ".github/workflows/pipeline-toolkit.yml"), "name: Consumer workflow\n");
 		expect(command(consumer, ["sync"], mockBin).status).toBe(0);
 		expect(readFileSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"), "utf8")).toBe("name: Consumer workflow\n");
-		const check = command(consumer, ["init", "--check"], mockBin);
-		expect(check.status).toBe(1);
-		expect(check.stderr).toContain("copy .claude/crew.config.template.jsonc and fill every placeholder");
-		write(join(consumer, ".claude/crew.config.jsonc"), '{"value":"configured"}\n');
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
-	});
+	}, 20_000);
 
 	it("refuses an unmanaged conflict unless force replaces a prior managed path", () => {
 		const {consumer, mockBin} = fixture();
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
-		rmSync(join(consumer, ".claude/commands/stand-up.md"), {recursive: true});
-		write(join(consumer, ".claude/commands/stand-up.md"), "user content\n");
+		rmSync(join(consumer, ".claude/skills/deslop-comments"), {recursive: true});
+		write(join(consumer, ".claude/skills/deslop-comments"), "user content\n");
 		expect(command(consumer, ["init"], mockBin).status).toBe(1);
 		expect(command(consumer, ["init", "--force"], mockBin).status).toBe(0);
-		expect(existsSync(join(consumer, ".claude/commands/stand-up.md"))).toBe(true);
+		expect(existsSync(join(consumer, ".claude/skills/deslop-comments"))).toBe(true);
 	});
 
 	it("requires a CLI tool name", () => {
-		const result = spawnSync(process.execPath, [join(process.cwd(), "src/bin.ts"), "cli"], {
+	const result = spawnSync(join(process.cwd(), "../../bin/pipeline"), ["cli"], {
 			cwd: process.cwd(),
 			encoding: "utf8",
 		});

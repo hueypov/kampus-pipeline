@@ -367,25 +367,16 @@ export interface RegisterCrewProjectScopeInput {
 	readonly settingsPath?: string;
 }
 
-/**
- * Register the whole crew's project-scope visibility + boot gates: guard the shared ancestors, emit
- * every pane's leaf `.mcp.json`, ensure the git-root folder is trusted (`~/.claude.json`), and approve
- * the crew server (`~/.claude/settings.json`). Fails closed at the first failing step (the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure).
- */
+/** Register only project-owned crew configuration; host trust is always operator-owned. */
 export const registerCrewProjectScope = (
 	input: RegisterCrewProjectScopeInput,
 ): Effect.Effect<void, ProjectScopeWriteError> =>
-	Effect.gen(function* () {
-		yield* writeCrewMcpJson(input.projectRoot, input.runId, input.entries);
-		yield* ensureFolderTrusted(resolveGitRoot(input.projectRoot), {configPath: input.configPath});
-		yield* enableCrewServerApproval(input.serverName, {settingsPath: input.settingsPath});
-	});
+	writeCrewMcpJson(input.projectRoot, input.runId, input.entries);
 
 /**
  * Tear this project's crew registration down (symmetric teardown + start-of-stand-up reaper): remove
- * the launcher-owned crew-run dir tree (every pane's leaf `.mcp.json` with it) and surgically revoke
- * the crew server's approval. Removal is safe even while a crew is live — a booted stdio server is
- * never re-read against its `.mcp.json`. Idempotent: a second reap is a clean no-op.
+ * the launcher-owned crew-run dir tree (every pane's leaf `.mcp.json` with it). Removal is safe even
+ * while a crew is live — a booted stdio server is never re-read against its `.mcp.json`.
  */
 export const reapCrewProjectScopeFor = (
 	projectRoot: string,
@@ -402,5 +393,4 @@ export const reapCrewProjectScopeFor = (
 					reason: `cannot remove crew-run dir ${runRoot}: ${String(cause)}`,
 				}),
 		});
-		yield* disableCrewServerApproval(serverName, {settingsPath: opts.settingsPath});
 	});

@@ -39,14 +39,6 @@
 import {execFileSync} from "node:child_process";
 import {existsSync, readFileSync, statSync} from "node:fs";
 import {resolve} from "node:path";
-import {
-	appendRecord,
-	defaultLogPath,
-} from "../primary-index-guard/tripwire.ts";
-import {
-	decideBashStagingAttribution,
-	renderBashStagingNote,
-} from "../primary-index-guard/bash-attribution.ts";
 import {Console, Effect, Option} from "effect";
 import * as Schema from "effect/Schema";
 import {Command, Flag} from "effect/unstable/cli";
@@ -83,33 +75,6 @@ const onPrimaryCheckout = (cwd: string): boolean => {
 		return gitDir === commonDir;
 	} catch {
 		return false;
-	}
-};
-
-/**
- * Run-time the originating work item attribution (the originating work item, part 2): record — never block — a bulk-staging Bash command at
- * the `pre-bash` boundary, where the offending COMMAND string + cwd are still in hand (the
- * pre-commit tripwire sees only post-hoc index state). Best-effort and total: any failure is
- * swallowed so it can NEVER perturb the pin decision this hook actually emits. Writes through the
- * same out-of-repo log the read-only `primary-index-tripwire record` bin uses (no second surface).
- */
-const recordBashStaging = (command: string, cwd: string): void => {
-	// biome-ignore lint/plugin: best-effort attribution — any recording failure is swallowed so it can never perturb the pin decision, never E (see file header).
-	try {
-		const decision = decideBashStagingAttribution({
-			command,
-			cwd,
-			onPrimaryCheckout: onPrimaryCheckout(cwd),
-			agentType: process.env.CLAUDE_CODE_AGENT ?? "",
-			sessionId: process.env.CLAUDE_CODE_SESSION_ID ?? "",
-			worktreeRoot: WORKTREE_ROOT,
-			at: new Date().toISOString(),
-		});
-		if (decision.kind !== "record") return;
-		appendRecord(defaultLogPath(), `${JSON.stringify(decision.record)}\n`);
-		process.stderr.write(`${renderBashStagingNote(decision.record)}\n`);
-	} catch {
-		// Attribution is best-effort; a recording failure must never affect the pin decision.
 	}
 };
 
@@ -219,9 +184,6 @@ const preBash = Command.make(
 		const toolInput = (field(input, "tool_input") as Record<string, unknown>) ?? {};
 		const command = str(toolInput.command);
 		const cwd = str(field(input, "cwd"));
-		// Run-time the originating work item attribution (the originating work item): record a bulk-staging op before deciding the pin. Purely
-		// additive and best-effort — it never changes the pin decision emitted below.
-		recordBashStaging(command, cwd);
 		const decision = pinBash({
 			worktreeRoot: WORKTREE_ROOT,
 			command,

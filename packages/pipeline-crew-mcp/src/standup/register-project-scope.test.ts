@@ -317,14 +317,12 @@ describe("register-project-scope — boot-gate seeds (injected temp paths, never
 
 describe("register-project-scope — register + reap round-trip (injected temp paths)", () => {
 	it.live(
-		"registerCrewProjectScope emits leaves + seeds trust + approval; reap tears them back out",
+		"registerCrewProjectScope emits only project-owned leaves and reap removes them",
 		() =>
 			Effect.gen(function* () {
 				const projectRoot = mkdtempSync(join(tmpdir(), "crew-proj-"));
 				mkdirSync(join(projectRoot, ".git")); // so resolveGitRoot keys trust under projectRoot
-				const configPath = tempJson({});
-				const settingsPath = tempJson({});
-				try {
+					try {
 					const runId = "run0";
 					const cwdA = ensurePaneCwd(projectRoot, runId, "chief-of-staff");
 					const cwdB = ensurePaneCwd(projectRoot, runId, "engineering-manager");
@@ -333,31 +331,20 @@ describe("register-project-scope — register + reap round-trip (injected temp p
 						runId,
 						serverName: SERVER,
 						entries: [entry(cwdA, "cos"), entry(cwdB, "em")],
-						configPath,
-						settingsPath,
 					});
 
-					// every pane got its own leaf; trust + approval were seeded.
+					// every pane got its own project-owned leaf; host config remains untouched.
 					assert.deepStrictEqual(readJson(mcpJsonPath(cwdA)), {mcpServers: {[SERVER]: cfg("cos")}});
 					assert.deepStrictEqual(readJson(mcpJsonPath(cwdB)), {mcpServers: {[SERVER]: cfg("em")}});
-					const gitRoot = realpathSync(projectRoot);
-					const projects = readJson(configPath).projects as Record<string, Record<string, unknown>>;
-					assert.strictEqual(projects[gitRoot]?.hasTrustDialogAccepted, true);
-					assert.deepStrictEqual(readJson(settingsPath).enabledMcpjsonServers, [SERVER]);
 
-					// reap removes the crew-run dirs (the leaves with them) + revokes the approval.
-					yield* reapCrewProjectScopeFor(projectRoot, SERVER, {settingsPath});
+					// reap removes the crew-run dirs (and their leaves).
+					yield* reapCrewProjectScopeFor(projectRoot, SERVER);
 					assert.isFalse(existsSync(crewRunRoot(projectRoot)), "crew-run dir tree removed");
-					assert.notProperty(readJson(settingsPath), "enabledMcpjsonServers");
-					// trust is intentionally left in place (harmless) — reap never touches ~/.claude.json.
-					assert.strictEqual(projects[gitRoot]?.hasTrustDialogAccepted, true);
 
 					// idempotent — a second reap over an already-torn-down project is a clean no-op.
-					yield* reapCrewProjectScopeFor(projectRoot, SERVER, {settingsPath});
+					yield* reapCrewProjectScopeFor(projectRoot, SERVER);
 				} finally {
 					rmSync(projectRoot, {recursive: true, force: true});
-					rmSync(configPath, {recursive: true, force: true});
-					rmSync(settingsPath, {recursive: true, force: true});
 				}
 			}),
 	);

@@ -8,9 +8,9 @@ plugin. An adopting repository pins a particular toolkit revision as a Git
 submodule, initializes local wiring once, and runs everything from that pinned
 checkout.
 
-The intended outcome is that a repository can use a consistent set of agent
-workflows and an optional coordinated crew without taking a dependency on the
-Phoenix repository, its deployment stack, or an npm publication.
+The intended outcome is that a repository can use a consistent set of generic
+agent workflows without taking a dependency on the Phoenix repository, its
+deployment stack, a host-level Claude configuration, or an npm publication.
 
 ```text
 adopting Git repository
@@ -19,11 +19,8 @@ adopting Git repository
 ├── .pipeline/pipeline.json        generated managed-file manifest
 └── .claude/
     ├── settings.json              existing settings plus pipeline-owned hooks
-    ├── skills/                    links to toolkit skills
-    ├── agents/                    links to toolkit and crew agents
-    ├── commands/                  links to crew commands
-    ├── crew.config.template.jsonc generated placeholder template
-    └── crew.config.jsonc          operator-owned filled copy (ignored)
+    ├── skills/                    links to the portable core skills
+    └── (consumer-owned integration configuration, if any)
 ```
 
 The command that owns this setup is:
@@ -37,9 +34,8 @@ The command that owns this setup is:
 - **Private distribution only.** Every workspace package is marked `private`.
   The supported distribution mechanism is a private Git repository and a
   submodule pointer committed by each consumer.
-- **Project-local execution.** Hooks, Claude commands, and crew commands invoke
-  `.pipeline/toolkit/bin/pipeline`; they do not resolve `pipeline-cli` or
-  `pipeline-crew-mcp` from npm.
+- **Project-local execution.** Hooks and any explicitly enabled integration invoke
+  `.pipeline/toolkit/bin/pipeline`; they do not resolve toolkit packages from npm.
 - **Pinned upgrades.** A consumer updates the submodule commit deliberately,
   commits that pointer, and runs `pipeline sync`. Nothing silently updates from
   a remote registry or branch.
@@ -47,8 +43,9 @@ The command that owns this setup is:
   into existing `.claude/settings.json`, records managed links in
   `.pipeline/pipeline.json`, and refuses to overwrite unknown files. `--force`
   is limited to paths already recorded as managed.
-- **Keep operator data local.** The crew template contains placeholders only.
-  The filled `.claude/crew.config.jsonc` and `.claude/crew-run/` are ignored.
+- **Explicit integrations.** Crew, release-platform, product-UI, and organization
+  policy integrations are not installed by default. An adopting repository owns an
+  explicit adapter and its configuration when it needs one.
 - **No implied global install.** The project-local submodule flow in this file
   is authoritative for this repository, even where copied source documents
   mention an older marketplace-based installation path.
@@ -58,11 +55,11 @@ The command that owns this setup is:
 | Path | Responsibility |
 |---|---|
 | `bin/pipeline` | Shell entry point that starts the bootstrap package with Node. |
-| `packages/pipeline` | Private bootstrap: discovers the consumer repository, validates the submodule, installs/builds the toolkit workspace, generates Claude wiring, and forwards CLI/crew requests. |
+| `packages/pipeline` | Private bootstrap: discovers the consumer repository, validates the submodule, installs/builds the portable core, generates Claude wiring, and forwards local CLI requests. |
 | `packages/pipeline-cli` | Private TypeScript command router and its implementation/test suite for pipeline automation and guard tools. |
 | `packages/pipeline-crew-mcp` | Private TypeScript crew substrate: tracker, peer/channel protocol, MCP edge, validated configuration, tmux launcher, and role lifecycle. |
-| `claude-plugins/kampus-pipeline` | The issue-pipeline plugin: skills, agents, hooks, helper scripts, and its source documentation. |
-| `claude-plugins/pipeline-crew` | The crew plugin: role definitions, user commands, configuration template, and operator documentation. |
+| `claude-plugins/kampus-pipeline` | Candidate workflow material; only the audited portable-core skills are linked by default. |
+| `claude-plugins/pipeline-crew` | Optional crew implementation material, not part of the default installation. |
 | `templates/github/workflows` | Optional, project-agnostic GitHub Actions workflow pack installed only on request. |
 | `pnpm-workspace.yaml`, `pnpm-lock.yaml` | The only workspace dependency definition and reproducibility lock for the private toolkit. |
 
@@ -73,55 +70,42 @@ The command that owns this setup is:
 In the adopting repository:
 
 ```bash
-git submodule add git@github.com:hueypov/kampus-pipeline.git .pipeline/toolkit
+git submodule add <toolkit-remote> .pipeline/toolkit
 git submodule update --init --recursive
 ./.pipeline/toolkit/bin/pipeline init
 # Optional: also install the generic GitHub Actions workflow pack.
 ./.pipeline/toolkit/bin/pipeline init --with-github-actions
 ```
 
-`pipeline init` requires a Git repository and an initialized
-`.pipeline/toolkit` submodule. It also checks for Node, pnpm, Claude Code,
-authenticated GitHub CLI access, and tmux.
+`pipeline init` requires a Git repository, an initialized `.pipeline/toolkit`
+submodule, Node.js 22.6 or later, and pnpm. GitHub authentication, tmux, a crew
+configuration, and user-level Claude configuration are integration-specific rather
+than bootstrap requirements.
 
 ### 2. What `pipeline init` does
 
 1. Installs dependencies only in the toolkit workspace from its lockfile.
-2. Builds `@kampus/pipeline-cli` and typechecks `@kampus/pipeline-crew-mcp`.
+2. Builds `@kampus/pipeline-cli` from the pinned lockfile.
 3. Merges pipeline hook entries into `.claude/settings.json` without removing
    unrelated existing settings.
-4. Creates `.glossary/LANGUAGE.md` from the toolkit's source template when the
-   consumer does not already own that file; it never replaces an existing copy.
-5. Creates managed links for every extracted `kampus-pipeline` skill and agent,
-   then every `pipeline-crew` agent and command.
-6. Creates `.claude/crew.config.template.jsonc` from the placeholder-only
-   toolkit template when it does not already exist. It never creates the
-   runtime config automatically.
-7. Adds `crew.config.jsonc` and `crew-run/` to `.claude/.gitignore`.
-8. Adds a project-local `pipeline` script to `package.json`, preserving all
+4. Creates neutral `.glossary/LANGUAGE.md` and `.glossary/TERMS.md` templates
+   when the consumer does not already own those files; it never replaces an
+   existing copy.
+5. Creates managed links only for the audited, portable core skills.
+6. Adds a project-local `pipeline` script to `package.json`, preserving all
    existing scripts and refusing to replace a conflicting `pipeline` script.
    If the repository has no `package.json`, it creates a minimal private one.
-9. Records all managed links in `.pipeline/pipeline.json`.
+7. Records all managed links and owned hooks in `.pipeline/pipeline.json`.
 
 `--with-github-actions` additionally writes the optional generic workflows into
 `.github/workflows/` when those paths do not already exist. Once installed,
 `pipeline sync` preserves them and never replaces consumer edits.
 
-Run the following after filling the crew configuration:
-
-```bash
-cp .claude/crew.config.template.jsonc .claude/crew.config.jsonc
-# fill every <placeholder> in .claude/crew.config.jsonc
-./.pipeline/toolkit/bin/pipeline crew check-config
-./.pipeline/toolkit/bin/pipeline init --check
-```
-
 After this first initialization, the `package.json` script provides the shorter
 project-local form. It is still not a global executable:
 
 ```bash
-pnpm pipeline crew check-config
-pnpm pipeline crew stand-up
+pnpm pipeline cli commands compact
 ```
 
 `pipeline sync` currently performs the same reconciliation as `init`; use it
@@ -146,157 +130,25 @@ tests and deployment workflows without changing toolkit-managed files.
 # Pipeline CLI command router
 ./.pipeline/toolkit/bin/pipeline cli <tool> [arguments]
 
-# Crew runtime
-./.pipeline/toolkit/bin/pipeline crew stand-up
-./.pipeline/toolkit/bin/pipeline crew spawn-role <role>
-./.pipeline/toolkit/bin/pipeline crew stand-down
 ```
 
 The local hook wrapper resolves the same submodule from
 `$CLAUDE_PROJECT_DIR/.pipeline/toolkit`. If the checkout is absent during a
 partial bootstrap, guards fail open instead of blocking a Claude session.
 
-## Plugin: `kampus-pipeline`
+## Quarantined source material
 
-This plugin describes an issue-driven agent workflow. Its core conveyor belt is:
+The repository still contains copied workflow, CLI, and crew code for reference
+and future adapter work. It is **not** the portable payload and must not be
+treated as a supported consumer contract. In particular, issue-pipeline policy,
+organization-specific reviews, release operations, product UI checks, and the
+multi-session crew require a repository-owned integration with its own
+configuration and validation.
 
-```text
-report → triage → plan-epic → review-plan → write-code
-       → review-code / review-doc / review-skill → ship-it
-```
-
-Its durable hand-offs are GitHub issues, labels, comments, pull requests, and
-review verdicts rather than private agent memory. That lets a new agent resume a
-stage from repository state.
-
-### Included material
-
-- **Agents:** ADR, canon, coder, planner, reporter, reviewer, shipper, and
-  triager roles.
-- **Workflow skills:** `report`, `triage`, `plan-epic`, `review-plan`,
-  `write-code`, `review-code`, `review-doc`, `review-skill`, `review-design`,
-  `review-trivial`, and `ship-it`.
-- **Supporting skills:** `adr`, `architecture-audit`, `author-skill`,
-  `campaign`, `canon`, `deslop-comments`, `diataxis`, `doctor`, `glossary`,
-  `heal-ci`, `release`, `rite-audit`, `wayfinder`, `what-shipped`, and
-  `writing-clearly-and-concisely`.
-- **Shared contracts and validation:** GitHub intake formats, cycle/gate/skill
-  validators, the doctor helper, report footer, and rite-audit assets.
-- **Hooks:** session-start readiness checks, pre-tool worktree/spawn guards,
-  worktree reaping, and a custom worktree creator.
-
-The hooks execute local CLI guards such as `worktree-guard`, `worktree-sweep`,
-and `spawn-guard`. The worktree creator fetches the target repository's `main`
-and creates an isolated worktree under `.claude/worktrees/`.
-
-## Plugin: `pipeline-crew`
-
-`pipeline-crew` turns the workflow into a configurable multi-session operating
-model. The plugin itself is intentionally thin: its commands and agents explain
-how to operate the crew, while the runtime mechanics live in
-`@kampus/pipeline-crew-mcp`.
-
-### Roles
-
-| Role | Kind | Purpose |
-|---|---|---|
-| Chief of staff | singleton bridge | Coordinates the operator-facing seam. |
-| Cartographer | singleton, on-demand | Human-in-the-loop exploration and wayfinding; not started by the standing roster. |
-| Intake desk | singleton bridge | Owns intake/triage-facing coordination. |
-| Engineering manager | scalable engine | Executes independent work lanes; `count` and WIP caps come from configuration. |
-
-`crew-investigator.md` is an available agent definition, but it is not one of
-the four runtime roster roles declared by `pipeline-crew-mcp`.
-
-### How the crew workflow runs
-
-The crew is a continuous **backlog-to-merged-work loop**. Its durable source of
-truth is the target repository's GitHub state: issues, labels, plans, pull
-requests, review verdicts, and merge state. MCP channel messages are only
-delivery/wake-up signals; an acknowledgement means a message reached an inbox,
-not that a role read it or that its contents are true.
-
-```text
-fuzzy direction ──> cartographer ──> wayfinder map/frontier ──┐
-                                                               │
-new observation / issue ───────────────────────────────────> intake desk
-                                                               │
-                              report → triage → plan          ▼
-                                                   GitHub-ready backlog
-                                                               │
-                                         claim one lane        ▼
-                                              engineering manager × N
-                                                               │
-                                         coder → reviewer → shipper
-                                                ▲       │        │
-                                      review FAIL ──────┘        ▼
-                                                       merged PR / closed issue
-                                                               │
-chief of staff <──── verifies live GitHub state ───────────────┘
-        │
-        └── verified update to the operator or approval request to the approver
-```
-
-The roles deliberately have narrow responsibilities:
-
-1. **Cartographer — discover work, not implementation.** It is launched on
-   demand when the operator has a fuzzy destination. It runs `wayfinder` to
-   turn that uncertainty into a map and concrete frontier tickets. When work is
-   ready for the normal queue it sends an `IntakePing` to the intake desk. It
-   never routes work straight to an engineering manager, because that would
-   bypass triage.
-2. **Intake desk — make work actionable.** It watches incoming observations and
-   charted work, then uses the issue pipeline (`report`, `triage`, and planning
-   when required) to produce a classified, scoped, pickable backlog item. Its
-   output is repository state, not a private conversation.
-3. **Engineering manager — drain ready work.** Each engine instance claims one
-   available lane through the tracker before working it, which prevents two
-   engines from taking the same lane. It drives the execution chain by spawning
-   implementation, review, and shipping work. The configured engine count and
-   WIP caps limit how much can run concurrently.
-4. **Coder, reviewer, shipper — execute one lane safely.** A coder prepares the
-   branch and pull request. An independent reviewer records a verdict for the
-   current PR head. A FAIL returns to the coder on the same lane; only a PASS
-   allows the shipper to enqueue or merge according to the repository's rules.
-5. **Chief of staff — report verified reality.** It reads the board and PR state
-   before communicating with humans. It does not treat a peer's message as
-   proof. For approval-gated work, it brings the current PR to the configured
-   approver; the shipping path resumes only after the required approval is on
-   the current commit.
-
-The standing `stand-up` roster starts the chief of staff, intake desk, and the
-configured number of engineering managers. The cartographer is intentionally
-human-in-the-loop and starts only through `spawn-role cartographer`; it comes up
-idle until the operator gives it a mapping task.
-
-If a channel message fails, the receiving role can still find the work by
-reading the GitHub board on its next loop. That makes channels a latency
-optimization rather than a correctness dependency.
-
-### Operator configuration
-
-Copy `.claude/crew.config.template.jsonc` to the ignored, operator-owned
-`.claude/crew.config.jsonc`. The filled runtime configuration must supply:
-
-- operator and control-plane approver identities;
-- model tier and engine count/WIP caps for roles;
-- notification commands and handles;
-- optional exact Claude Code version pin;
-- channel mode, server references, and allowed channel plugins.
-
-The crew commands are:
-
-- `check-config` — read and fully validate the crew launch configuration without
-  starting a tracker, tmux window, or crew session. It honors `$CREW_CONFIG` when
-  set, otherwise it reads `.claude/crew.config.jsonc`.
-- `stand-up` — validate configuration, ensure the per-project tracker, derive
-  the configured roster, register project-scoped channel configuration, and
-  launch the complete roster in tmux. It aborts before launching any session
-  when a precondition fails.
-- `spawn-role <role>` — add one role to an already-running crew, including the
-  on-demand cartographer or an additional engine.
-- `stand-down` — remove launcher-owned project-scope configuration and tear
-  down the crew registration.
+The default installation contains only the core skills enumerated in
+`packages/pipeline/src/payload.ts`, neutral glossary templates, and
+project-local hook reconciliation. No crew configuration is generated, linked,
+or written to user-level Claude settings.
 
 ## Package: `@kampus/pipeline`
 
@@ -310,31 +162,16 @@ Its commands are:
 | `init [--project-root <path>] [--force] [--check]` | Install/validate the toolkit and generate or reconcile project-local wiring. |
 | `sync` | Alias for initialization/reconciliation after changing the pinned submodule revision. |
 | `check [path]` | Validate prerequisites and generated configuration without changing files. |
-| `cli <tool> …` | Forward to the copied `pipeline-cli` command router. |
-| `crew <command> …` | Forward to the crew MCP runtime. |
+| `cli <tool> …` | Forward to locally retained CLI material. Its individual tools are not part of the portable-core contract unless an adapter documents them. |
+| `crew <command> …` | Forward to the crew MCP runtime for an explicitly configured integration; it is not initialized by default. |
 
 ## Package: `@kampus/pipeline-cli`
 
-This package is the single command router for pipeline automation. It uses a
-registry of Effect CLI commands; `commands compact` is the authoritative runtime
-index after dependencies are installed.
-
-The copied command set includes these broad groups:
-
-| Group | Examples |
-|---|---|
-| Issue and planning operations | `tracker`, `claim`, `intake-dedup`, `intake-compose`, `split-guard`, `epic-lock`, `epic-ledger`, `epic-splice`, `wayfinder-map`, `roadmap` |
-| Review and merge gates | `verdict`, `review-head`, `unresolved-threads-guard`, `leak-guard`, `trivial-diff`, `class-probe`, `ci-required`, `merge-queue-classify` |
-| Worktree and agent safety | `worktree-guard`, `worktree-sweep`, `spawn-guard`, `ref-guard`, `main-sync`, `resume-policy`, `token-spend` |
-| Documentation and repository rules | `decisions-index`, `glossary-drift`, `readme-guard`, `catalog-guard`, `patch-guard`, `settings-env-guard`, `workflow-contract` |
-| Control-plane and workflow analysis | `control-plane-paths`, `cp-cardinality`, `codeowners-cp`, `reachability-guard`, `fanout-guard`, `crew-fanout-guard` |
-| Reporting and diagnostics | `commands`, `version`, `eval-harness`, `failure-classifier`, `ship-digest`, `changelog-derive`, `orphan-heal` |
-| Design and adoption checks | `design-inventory`, `design-token-guard`, `adoption-lint`, `campaign`, `change-detect-guard`, `pointer-guard`, `primary-index-guard` |
-
-Most tools have a pure, unit-tested decision core and a thin Git/GitHub/CLI
-boundary. Several make GitHub REST calls through `gh`; any command that changes
-issues, labels, comments, branches, PRs, or merge state should be treated as an
-intentional workflow action, not a background side effect.
+This package is the local command router for both core hooks and quarantined
+source utilities. `commands compact` is the authoritative runtime index, but it
+is not a list of portable features. A consumer should invoke an additional CLI
+tool only through a repository-owned adapter that documents its dependencies,
+authority, and compatibility assumptions.
 
 ## Package: `@kampus/pipeline-crew-mcp`
 
@@ -354,29 +191,16 @@ tmux, a working Claude CLI, and a complete crew config before it will launch.
 
 ## Current extraction state
 
-This repository now contains **complete verbatim copies** of the two plugin
-payloads and the two implementation packages from Phoenix (dependency caches
-are deliberately excluded). That preserves every skill, agent, command,
-supporting document, test, and runtime source file while the portable project is
-being established.
-
-This also means some copied source prose and tools still refer to inherited
-workflow policy, labels, paths, marketplaces, release behavior, or other
-source-repository conventions. Those copied files are not yet proof that every
-workflow is portable or generic. The project-local bootstrap and runtime path
-are the portable layer; extracting and deciding which inherited policies should
-remain is a separate, deliberate follow-up.
+This repository retains copied source material while its portable core is being
+established. Copied workflows are not evidence of portability: source-specific
+release, UI, organization, and crew policy remains outside the default payload until
+it is redesigned as an explicit repository-owned adapter.
 
 ### Important current validation gap
 
-The complete package extraction added the CLI's `fast-xml-parser` and `yaml`
-catalog entries. The workspace lockfile and local dependency tree still need a
-fresh approved `pnpm install` before the copied CLI and crew package typechecks
-can be run end-to-end. Until then, `pipeline init`'s frozen-lockfile install may
-fail on a clean consumer checkout.
-
-Do not solve this by publishing packages or installing them globally. Regenerate
-and commit the private toolkit's lockfile, then validate the workspace locally.
+The workspace lockfile includes the copied CLI dependencies. `pipeline init` uses
+that lockfile with `--frozen-lockfile`; a clean consumer fixture remains the
+verification target for every change.
 
 ## Definition of done for the portable toolkit
 
@@ -387,9 +211,9 @@ The portable v1 is complete when all of the following are true:
    pipeline packages themselves.
 2. Initialization is repeatable, preserves unrelated `.claude` content, and
    records every managed path.
-3. `pipeline init --check` passes after valid crew configuration is supplied.
-4. Generated hooks, commands, skills, agents, and crew launch paths resolve the
-   pinned local toolkit only.
+3. `pipeline init --check` passes for a clean unrelated repository without a
+   crew, GitHub login, or host-level Claude mutation.
+4. Generated hooks and core skills resolve the pinned local toolkit only.
 5. Every retained workflow and CLI tool has been reviewed for generic behavior;
 source-repository-specific policy has either been removed, isolated behind an
 explicit profile, or intentionally retained and documented.
