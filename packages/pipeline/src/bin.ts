@@ -9,15 +9,6 @@ const CONFIG_RELATIVE_PATH = ".pipeline/pipeline.json";
 const SETTINGS_RELATIVE_PATH = ".claude/settings.json";
 const CREW_CONFIG_RELATIVE_PATH = ".claude/crew.config.jsonc";
 const MANAGED_IGNORE_RELATIVE_PATH = ".claude/.gitignore";
-const PORTABLE_SKILL_NAMES = new Set([
-	"adr",
-	"canon",
-	"deslop-comments",
-	"diataxis",
-	"glossary",
-	"report",
-	"writing-clearly-and-concisely",
-]);
 const PORTABLE_CLI_TOOLS = new Set([
 	"version",
 	"decisions-index",
@@ -215,7 +206,8 @@ const init = (args: string[]): void => {
 	const prior = new Map((readConfig(projectRoot)?.managedPaths ?? []).map((entry) => [entry.path, entry.target]));
 	mergeSettings(projectRoot, toolkitRoot);
 	const managedPaths = [
-		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/skills", ".claude/skills", (name) => PORTABLE_SKILL_NAMES.has(name) && existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name, "SKILL.md")), force, prior),
+		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/skills", ".claude/skills", (name) => existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name, "SKILL.md")), force, prior),
+		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/agents", ".claude/agents", (name) => name.endsWith(".md"), force, prior),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/pipeline-crew/agents", ".claude/agents", (name) => name.endsWith(".md"), force, prior),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/pipeline-crew/commands", ".claude/commands", (name) => name.endsWith(".md"), force, prior),
 	];
