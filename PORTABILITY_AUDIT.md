@@ -22,27 +22,14 @@ than one category.
 
 ## Progress after the baseline
 
-The following capabilities have been restored and generalized without being
-deleted:
+The detailed originals for `campaign`, `release`, `what-shipped`, and
+`rite-audit` have been restored. They remain in the audit inventory until each
+is adapted without losing its workflow steps, examples, or supporting
+dimensions.
 
-- `release` now requires explicit human authority and follows the target
-  repository’s documented release contract instead of Cloudflare/Flagship and
-  release-queue labels.
-- `what-shipped` now reports Git/GitHub evidence and repository-defined
-  deployment/release evidence; absent evidence is reported as `unknown`.
-- `rite-audit` is now a non-production, repository-defined acceptance audit
-  with generic functional, accessibility, and isolation dimensions.
-- `pipeline-cli/README.md` now documents project-local private use rather than
-  npm publication or global installation.
-- `architecture-audit` now uses repository-neutral paths and direct current-repo
-  resolution; it no longer carries copied Phoenix examples or policy references.
-- `campaign` now preserves initiative coordination through a repository-owned
-  campaign contract rather than Phoenix milestones, labels, roadmap rows, or
-  `origin/main`.
-
-The counts below remain the **baseline inventory** until the full scan is
-re-run after each extraction slice. Entries for these four repaired areas are
-retained as history and should be removed from the next refreshed inventory.
+`pipeline-cli/README.md` and `architecture-audit` are the only completed
+genericization slices so far. The counts below remain the **baseline inventory**
+until the full scan is re-run after each completed slice.
 
 ## Scan markers and counts
 
