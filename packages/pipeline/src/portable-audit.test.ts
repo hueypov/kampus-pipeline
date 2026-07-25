@@ -12,6 +12,7 @@ const portablePaths = [
 	"claude-plugins/kampus-pipeline/skills/deslop-comments",
 	"claude-plugins/kampus-pipeline/skills/diataxis",
 	"claude-plugins/kampus-pipeline/skills/glossary",
+	"claude-plugins/kampus-pipeline/skills/report",
 	"claude-plugins/kampus-pipeline/skills/writing-clearly-and-concisely",
 	"claude-plugins/pipeline-crew/agents",
 	"claude-plugins/pipeline-crew/commands",

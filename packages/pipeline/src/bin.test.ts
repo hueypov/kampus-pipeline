@@ -31,6 +31,7 @@ const fixture = (): {consumer: string; mockBin: string} => {
 	write(join(toolkit, "packages/pipeline-cli/src/bin.mjs"), "export {};\n");
 	write(join(toolkit, "packages/pipeline-crew-mcp/src/bin.ts"), "export {};\n");
 	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/example/SKILL.md"), "# Example\n");
+	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/report/SKILL.md"), "# Report\n");
 	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/release/SKILL.md"), "# Release\n");
 	write(join(toolkit, "claude-plugins/kampus-pipeline/agents/reviewer.md"), "# Reviewer\n");
 	write(join(toolkit, "claude-plugins/pipeline-crew/agents/crew-chief-of-staff.md"), "# Chief\n");
@@ -72,6 +73,7 @@ describe("pipeline init", () => {
 		expect(JSON.parse(readFileSync(join(consumer, ".claude/settings.json"), "utf8"))).toMatchObject({custom: true, hooks: expect.any(Object)});
 		expect(existsSync(join(consumer, ".pipeline/pipeline.json"))).toBe(true);
 		expect(existsSync(join(consumer, ".claude/skills/example"))).toBe(false);
+		expect(existsSync(join(consumer, ".claude/skills/report"))).toBe(true);
 		expect(existsSync(join(consumer, ".claude/skills/release"))).toBe(false);
 		expect(existsSync(join(consumer, ".claude/agents/crew-chief-of-staff.md"))).toBe(true);
 		expect(existsSync(join(consumer, ".claude/commands/stand-up.md"))).toBe(true);

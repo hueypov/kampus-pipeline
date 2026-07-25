@@ -15,6 +15,7 @@ const PORTABLE_SKILL_NAMES = new Set([
 	"deslop-comments",
 	"diataxis",
 	"glossary",
+	"report",
 	"writing-clearly-and-concisely",
 ]);
 const PORTABLE_CLI_TOOLS = new Set([
