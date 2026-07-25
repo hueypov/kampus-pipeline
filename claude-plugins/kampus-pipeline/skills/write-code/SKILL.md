@@ -164,8 +164,8 @@ ME=$(gh api user --jq '.login')
 # resolve the verdict CLI once — in-repo-first, published-fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic <related work item>).
 # Each per-(PR, gate) FAIL-bound-to-head resolution below delegates to `pipeline-cli verdict read`
 # (ACL author-gate + latest-wins + SHA-staleness, the authorization rule that accepts privileged actions only from repository members; its unit tests are the contract).
-if [ -f packages/pipeline-cli/src/bin.ts ]; then
-  VERDICT="node packages/pipeline-cli/src/bin.ts verdict"   # the adopting repository-local: the in-repo consolidated bin
+if [ -x .pipeline/toolkit/bin/pipeline ]; then
+  VERDICT="pnpm pipeline cli verdict"   # the adopting repository-local: the in-repo consolidated bin
 else
   VERDICT=".pipeline/toolkit/bin/pipeline cli verdict"     # portable private toolkit
 fi
@@ -1722,8 +1722,8 @@ PR=<the PR number you were handed>
 # The per-(PR, gate) FAIL-bound-to-head resolution delegates to `pipeline-cli verdict read`: the
 # the authorization rule that accepts privileged actions only from repository members write+ author-gate, the latest-wins pick, and the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA SHA-staleness test folded into
 # one exit code (its unit tests are the contract, <related work item>) — the same resolution ship-it Step 2 reads.
-if [ -f packages/pipeline-cli/src/bin.ts ]; then
-  VERDICT="node packages/pipeline-cli/src/bin.ts verdict"   # the adopting repository-local: the in-repo consolidated bin
+if [ -x .pipeline/toolkit/bin/pipeline ]; then
+  VERDICT="pnpm pipeline cli verdict"   # the adopting repository-local: the in-repo consolidated bin
 else
   VERDICT=".pipeline/toolkit/bin/pipeline cli verdict"     # portable private toolkit
 fi

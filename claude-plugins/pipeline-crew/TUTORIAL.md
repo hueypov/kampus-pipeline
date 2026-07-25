@@ -44,21 +44,19 @@ Nothing else is hand-run. Every mechanical step below is a single command; the c
   human-in-the-loop cartographer — you spawn that one on demand. Then the crew drains the board
   on its own.
 
-## Step 1 — install the plugin
+## Step 1 — initialize the private toolkit
 
-Add the <marketplace> marketplace and install both plugins — the crew *conducts* the
-the companion pipeline skill suite's skills, so you want the pair:
+Add the one private toolkit submodule. It contains both the crew and companion
+pipeline payloads:
 
+```bash
+git submodule add git@github.com:hueypov/kampus-pipeline.git .pipeline/toolkit
+./.pipeline/toolkit/bin/pipeline init
 ```
-/plugin marketplace add <owner>/<repository>
-/plugin install pipeline-crew@<marketplace>
-/plugin install pipeline@<marketplace>
-```
 
-Neither plugin carries a `version` — they are content-addressed by commit SHA
-(the update rule: omit a plugin version so commit-addressed installations can receive updates), so def edits
-reach you on the normal update path. Installing gives you the four agent defs, the two commands
-(`/stand-up`, `/spawn-role`), and the config template you fill next.
+Initialization gives the repository the four crew agent definitions, crew
+commands, the companion pipeline skills, and the placeholder configuration
+template. From now on, use `pnpm pipeline …` rather than a marketplace command.
 
 ## Step 2 — fill your operator config
 
@@ -67,7 +65,7 @@ The shipped template holds only `<placeholders>`. Copy it to an operator-owned c
 
 ```bash
 # Copy the placeholder-only template to the default config path.
-cp "${CLAUDE_PLUGIN_ROOT}/crew.config.template.jsonc" .claude/crew.config.jsonc
+cp .claude/crew.config.template.jsonc .claude/crew.config.jsonc
 # Git-ignore your copy — it holds your operator data and must never be committed.
 echo ".claude/crew.config.jsonc" >> .gitignore
 ```
@@ -164,7 +162,7 @@ You took a repo from zero crew to a standing operation:
 
 | Move | Command | What it established |
 |---|---|---|
-| Install | `/plugin install pipeline-crew@<marketplace>` | the four agent defs + the two commands + the config template |
+| Initialize | `pipeline init` | the four agent defs + the two commands + the config template |
 | Personalize | `cp … crew.config.jsonc` + fill | your one operator config — the whole per-install seam |
 | Stand up | `/stand-up` | the tracker + self-driving bridges + N engines, live and channel-bound |
 | Scale / HITL | [`/spawn-role <role>`](commands/spawn-role.md) | one on-demand role (the cartographer, or an extra engine) into the running crew |

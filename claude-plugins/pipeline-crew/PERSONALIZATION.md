@@ -25,11 +25,10 @@ not intuition. Document every deliberate deviation from that host plugin specifi
   are the *same bytes* for every operator who installs the plugin, so by construction
   they cannot carry one operator's personal data. Per-operator values must live
   **outside** plugin content.
-- **The one per-install variable the spec exposes to plugin components is
-  `${CLAUDE_PLUGIN_ROOT}`** (Plugins reference, the environment variables available to
-  hooks/commands — already used by `companion pipeline skill suite`'s `hooks.json`). But it resolves to
-  the plugin's *own* (shared) install directory, so it is where plugin code lives, **not**
-  where operator config goes.
+- **The toolkit path is fixed by `.pipeline/pipeline.json` and the managed
+  `claude-plugins/` links.** It identifies shared toolkit code, never operator data. Operator
+  config therefore lives outside the toolkit at `.claude/crew.config.jsonc` (or the
+  `$CREW_CONFIG` override).
 - **The spec has no install-time settings prompt** that would inject per-operator values
   into agent-def prose. So operator config is supplied the same way companion pipeline skill suite
   already supplies its one piece of host config — a **read-at-runtime, operator-owned
@@ -62,7 +61,7 @@ reference these keys, never a literal.
 |---|---|---|---|
 | Operator / founder | `operator.name`, `operator.handle` | The human the crew serves and addresses — the founder/operator identity every role reports to. | `<operator-name>`, `<operator-handle>` |
 | Control-plane approver identity | `controlPlaneApprover.name`, `controlPlaneApprover.login` | Who reviews/approves/merges control-plane (§CP) PRs — the human the engine banks §CP work for on the board (assigning the banked PR to this `login`) and the chief-of-staff carries out to (the control-plane rule: a non-author must approve the current head before the pipeline enqueues the change). This is the *identity*; the *transport* that pings them is the notification row below. | `<control-plane-approver-name>`, `<control-plane-approver-login>` |
-| Role map | `roles.<role>.{tier, count?, wipCap?}` | **One map, keyed by the role kinds** in [`crew/roles.ts`](../../packages/pipeline-crew-mcp/src/crew/roles.ts) — a roster change is one map edit, not N key-family edits. Each entry carries the role's `tier` (its session's model tier — a role never silently downgrades a spawned subagent); an *engine* also carries `count` (its pool size) and `wipCap` (its concurrent-lane cap). A *bridge* is singleton, so it takes neither — cardinality falls out of the kind. | see the per-field rows below |
+| Role map | `roles.<role>.{tier, count?, wipCap?}` | **One map, keyed by the role kinds** in `.pipeline/toolkit/packages/pipeline-crew-mcp/src/crew/roles.ts` — a roster change is one map edit, not N key-family edits. Each entry carries the role's `tier` (its session's model tier — a role never silently downgrades a spawned subagent); an *engine* also carries `count` (its pool size) and `wipCap` (its concurrent-lane cap). A *bridge* is singleton, so it takes neither — cardinality falls out of the kind. | see the per-field rows below |
 | — role model tier | `roles.<role>.tier` | The model tier each role's session runs on — the planning-tier bridges (`chief-of-staff`, `cartographer`, `intake-desk`) vs the execution/build-tier engine (`engineering-manager`). | `<chief-of-staff-model-tier>`, `<cartographer-model-tier>`, `<intake-desk-model-tier>`, `<engineering-manager-model-tier>` |
 | — engine count | `roles.engineering-manager.count` | How many `engineering-manager` engines the stand-up boots — the engine is kind `engine` (cardinality N); a positive integer. Bridges omit `count` (they are cardinality 1). | `<engine-count>` |
 | — engine WIP cap | `roles.engineering-manager.wipCap.{productLanes, platformLanes}` | A conductor engine's bounded concurrent-lane count, lane-partitioned — how many product vs platform/pipeline coders one engine drives at once before queueing the rest. The overall cap is the split's sum; the borrow/rebalance behavior is doctrine shipped in the engineering-manager def (the seam carries only the per-install values). | `<wip-cap-product-lanes>`, `<wip-cap-platform-lanes>` |
@@ -81,7 +80,7 @@ The launch dimensions — the engine `count`, `cliVersion`, and `channels` — a
 stand-up launcher reads, not prose an agent def binds. They resolve through the **same**
 order as every other seam key (`$CREW_CONFIG` → `.claude/crew.config.jsonc`) but are
 consumed by a typed launcher configuration reader,
-[`packages/pipeline-crew-mcp/src/standup/config.ts`](../../packages/pipeline-crew-mcp/src/standup/config.ts),
+`.pipeline/toolkit/packages/pipeline-crew-mcp/src/standup/config.ts`,
 which validates them and **fails closed** — a missing or malformed dimension (an unknown
 channel mode, a channel ref off-grammar, a non-positive engine count, or a present-but-non-version
 CLI pin) stops the launch with an error naming that dimension, never a silent default. The lone
@@ -116,7 +115,7 @@ The wayfinder map (the crew-architecture map) flagged three seam questions to re
 
 ```bash
 # 1. Copy the placeholder-only template to your operator-owned config (default path).
-cp "${CLAUDE_PLUGIN_ROOT}/crew.config.template.jsonc" .claude/crew.config.jsonc
+cp .claude/crew.config.template.jsonc .claude/crew.config.jsonc
 #    (or keep it anywhere and point $CREW_CONFIG at it).
 
 # 2. Fill EVERY <placeholder> with your own people and machine. Leave no <...> behind.

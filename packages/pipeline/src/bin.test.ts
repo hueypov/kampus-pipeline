@@ -82,6 +82,8 @@ describe("pipeline init", () => {
 		expect(existsSync(join(consumer, ".pipeline/pipeline.json"))).toBe(true);
 		expect(readFileSync(join(consumer, ".glossary/LANGUAGE.md"), "utf8")).toBe("# Fixture language\n");
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"))).toBe(false);
+		expect(existsSync(join(consumer, "claude-plugins/kampus-pipeline/skills/example/SKILL.md"))).toBe(true);
+		expect(existsSync(join(consumer, "claude-plugins/pipeline-crew/commands/stand-up.md"))).toBe(true);
 		expect(existsSync(join(consumer, ".claude/skills/example"))).toBe(true);
 		expect(existsSync(join(consumer, ".claude/skills/report"))).toBe(true);
 		expect(existsSync(join(consumer, ".claude/skills/triage"))).toBe(true);

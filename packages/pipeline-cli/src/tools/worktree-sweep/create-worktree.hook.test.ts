@@ -70,16 +70,16 @@ describe("create-worktree.sh — WorktreeCreate hook against the golden real pay
 
 	beforeAll(() => {
 		mainRepo = mkdtempSync(join(tmpdir(), "wtc-main-"));
-		git(mainRepo, "init", "-q", "-b", "main");
+		git(mainRepo, "init", "-q", "-b", "trunk");
 		git(mainRepo, "config", "user.email", "t@t.t");
 		git(mainRepo, "config", "user.name", "t");
 		writeFileSync(join(mainRepo, "README.md"), "x");
 		git(mainRepo, "add", ".");
 		git(mainRepo, "commit", "-q", "-m", "init");
-		// The real payload carries no base_ref, so the hook defaults to origin/main — point
-		// origin at self so origin/main resolves inside the throwaway repo.
+		// Exercise a non-`main` upstream branch: the hook must derive it from Git.
 		git(mainRepo, "remote", "add", "origin", mainRepo);
 		git(mainRepo, "fetch", "-q", "origin");
+		git(mainRepo, "branch", "--set-upstream-to", "origin/trunk", "trunk");
 	});
 
 	afterAll(() => rmSync(mainRepo, {recursive: true, force: true}));
@@ -123,7 +123,7 @@ describe("create-worktree.sh — WorktreeCreate hook against the golden real pay
 		assert.isTrue(existsSync(expected), "the worktree must actually be created");
 		assert.isTrue(
 			existsSync(join(expected, "README.md")),
-			"origin/main's tree must be checked out",
+			"the configured upstream tree must be checked out",
 		);
 	});
 
@@ -135,7 +135,7 @@ describe("create-worktree.sh — WorktreeCreate hook against the golden real pay
 		const bindir = mkdtempSync(join(tmpdir(), "wtc-nojq-bin-"));
 		const which = (tool: string) =>
 			execFileSync("bash", ["-lc", `command -v ${tool}`], {encoding: "utf8"}).trim();
-		for (const tool of ["bash", "cat", "grep", "sed", "head", "git", "printf"]) {
+		for (const tool of ["bash", "cat", "grep", "sed", "head", "git", "mkdir", "dirname", "printf"]) {
 			try {
 				symlinkSync(which(tool), join(bindir, tool));
 			} catch {
@@ -152,8 +152,8 @@ describe("create-worktree.sh — WorktreeCreate hook against the golden real pay
 				input: goldenPayloadFor(mainRepo, name),
 				encoding: "utf8",
 				// env -i: PATH=bindir ONLY (jq-free — no /usr/bin, which carries jq on Linux) so
-				// the parse deterministically takes the fallback; the script re-adds the standard
-				// toolchain dirs AFTER parsing, so git still resolves for `worktree add`.
+				// the parser deterministically takes the fallback while every required Git/core
+				// utility is provided explicitly by this fixture.
 				env: {PATH: bindir, HOME: mainRepo},
 			});
 		} catch (e) {
@@ -186,45 +186,47 @@ describe("create-worktree.sh — WorktreeCreate hook against the golden real pay
 		assert.notStrictEqual(code, 0, "a payload with no cwd must be rejected");
 	});
 
-	it("fail-closes (non-zero) when the fetch fails (no origin → possibly-stale base) — #3621", () => {
-		// A fresh repo with NO origin: the hook fetches origin/main BEFORE branching (the originating work item), so
-		// the missing origin makes `git fetch origin main` fail → the hook fail-closes at the fetch
-		// rather than silently branching from a possibly-stale base.
+	it("uses the current HEAD when a local repository has no remote", () => {
+		// A generic local repository has no upstream to refresh, but remains a valid
+		// source for an isolated checkout. The hook must not invent an `origin/main`.
 		const bare = mkdtempSync(join(tmpdir(), "wtc-noorigin-"));
-		git(bare, "init", "-q", "-b", "main");
+		git(bare, "init", "-q", "-b", "release");
 		git(bare, "config", "user.email", "t@t.t");
 		git(bare, "config", "user.name", "t");
 		writeFileSync(join(bare, "README.md"), "x");
 		git(bare, "add", ".");
 		git(bare, "commit", "-q", "-m", "init");
-		const name = "agent-badbase01";
-		const {code} = run(bare, goldenPayloadFor(bare, name));
+		const name = "agent-localbase01";
+		const expected = join(bare, ".claude", "worktrees", name);
+		const {code, stdout} = run(bare, goldenPayloadFor(bare, name));
+		assert.strictEqual(code, 0, "a local-only Git repository is supported");
+		assert.strictEqual(stdout.trim(), expected);
+		assert.isTrue(existsSync(join(expected, "README.md")));
 		rmSync(bare, {recursive: true, force: true});
-		assert.notStrictEqual(code, 0, "a failed fetch must fail-close, blocking creation");
 	});
 
-	// THE the originating work item regression: reproduce the stale-local-main trap and prove the hook fetches fresh.
-	// A consumer whose cached origin/main AND local main both predate a sibling lane's merge must
+	// Reproduce the stale-local-branch trap and prove the hook fetches the configured upstream.
+	// A consumer whose cached upstream and local branch both predate a sibling lane's merge must
 	// still base its new worktree on a tip that INCLUDES that merge — and must do so WITHOUT moving
-	// the primary's local main (the documented failure/the originating work item primary-main-corruption constraint).
-	it("fetches origin BEFORE branching so the base includes a sibling's just-merged commit, never moving local main (#3621)", () => {
+	// the primary's local branch.
+	it("fetches the configured upstream before branching without moving the local branch", () => {
 		const originRepo = mkdtempSync(join(tmpdir(), "wtc-origin-"));
-		git(originRepo, "init", "-q", "-b", "main");
+		git(originRepo, "init", "-q", "-b", "trunk");
 		git(originRepo, "config", "user.email", "t@t.t");
 		git(originRepo, "config", "user.name", "t");
 		writeFileSync(join(originRepo, "README.md"), "x");
 		git(originRepo, "add", ".");
 		git(originRepo, "commit", "-q", "-m", "init");
 
-		// Consumer tracks origin at the init commit — its origin/main AND local main both point there.
+		// Consumer tracks the non-default-named upstream at the init commit.
 		const consumer = mkdtempSync(join(tmpdir(), "wtc-consumer-"));
-		git(consumer, "init", "-q", "-b", "main");
+		git(consumer, "init", "-q", "-b", "trunk");
 		git(consumer, "config", "user.email", "t@t.t");
 		git(consumer, "config", "user.name", "t");
 		git(consumer, "remote", "add", "origin", originRepo);
 		git(consumer, "fetch", "-q", "origin");
-		git(consumer, "checkout", "-q", "-B", "main", "origin/main");
-		const staleTip = git(consumer, "rev-parse", "main").trim();
+		git(consumer, "checkout", "-q", "-B", "trunk", "origin/trunk");
+		const staleTip = git(consumer, "rev-parse", "trunk").trim();
 
 		// A sibling lane merges to origin AFTER the consumer last fetched — the exact stale window.
 		writeFileSync(join(originRepo, "sibling.txt"), "merged-by-sibling");
@@ -242,7 +244,7 @@ describe("create-worktree.sh — WorktreeCreate hook against the golden real pay
 		assert.strictEqual(
 			wtHead,
 			freshTip,
-			"the worktree base must be the FRESH remote tip (fetched), not the stale local/origin main",
+			"the worktree base must be the freshly fetched upstream tip, not the stale local branch",
 		);
 		assert.isTrue(
 			existsSync(join(expected, "sibling.txt")),
@@ -251,12 +253,12 @@ describe("create-worktree.sh — WorktreeCreate hook against the golden real pay
 		assert.notStrictEqual(wtHead, staleTip, "the base must NOT be the pre-merge stale tip");
 
 		// The load-bearing no-corruption constraint: the fetch advances only remote-tracking refs,
-		// never the primary's local main HEAD (the related failure modes).
-		const consumerLocalMain = git(consumer, "rev-parse", "main").trim();
+		// never the primary's local branch HEAD.
+		const consumerLocalBranch = git(consumer, "rev-parse", "trunk").trim();
 		assert.strictEqual(
-			consumerLocalMain,
+			consumerLocalBranch,
 			staleTip,
-			"the hook must NOT move the primary's local main — only remote-tracking refs (#2143/#2144)",
+			"the hook must NOT move the primary's local branch — only remote-tracking refs",
 		);
 
 		rmSync(consumer, {recursive: true, force: true});

@@ -10,7 +10,7 @@ Capture one decision per file in `.decisions/`. There is no committed index (the
 ## Steps
 
 1. **Claim the next number with an in-flight reservation lock** (the ADR-number rule that reserves numbers across merged decisions and open decision PRs, failing rather than guessing) — not next-free-on-disk. Numbers are 4-digit zero-padded, monotonic. Compute the next number from the **union of two sets** and take `max(union) + 1`:
-   - **Merged set** — the `NNNN` on the base ref, read from the `.decisions/NNNN-*.md` *filenames* (the authority; there is no committed index to consult — the applicable safety invariant). Don't eyeball this — run **`pipeline-cli decisions-index next`** (the adopting repository-local: `node packages/pipeline-cli/src/bin.ts decisions-index next`), the deterministic allocator (<related work item>): it reuses the same frontmatter parse `validate` runs and prints `max(id) + 1` zero-padded (e.g. `0155`). That kills the stale-guess case (a local checkout reading `0150` while origin/main is `0151`); run it against a **freshly fetched** base ref so the merged set is current. Take the `max` of *its* output and the in-flight set below.
+   - **Merged set** — the `NNNN` on the base ref, read from the `.decisions/NNNN-*.md` *filenames* (the authority; there is no committed index to consult — the applicable safety invariant). Don't eyeball this — run **`pipeline-cli decisions-index next`** (the adopting repository-local: `pnpm pipeline cli decisions-index next`), the deterministic allocator (<related work item>): it reuses the same frontmatter parse `validate` runs and prints `max(id) + 1` zero-padded (e.g. `0155`). That kills the stale-guess case (a local checkout reading `0150` while origin/main is `0151`); run it against a **freshly fetched** base ref so the merged set is current. Take the `max` of *its* output and the in-flight set below.
    - **In-flight set** — the `NNNN` **claimed by open ADR PRs**. An open PR that adds a `.decisions/NNNN-*.md` file *is* the reservation for `NNNN` (no separate artifact, exactly as the planning lock that gives one active planner ownership and releases on completion or expiry's `status:planning` label *is* the epic lock — opening the PR reserves, merging/closing releases). Enumerate via **`gh api` REST, never GraphQL** (the org's Projects-classic integration breaks GraphQL):
      ```bash
      # NNNN claimed by any open PR that ADDS a .decisions/00NN-*.md file (REST, per-PR files endpoint)
@@ -28,8 +28,8 @@ Capture one decision per file in `.decisions/`. There is no committed index (the
 4. **The ADR PR is purely additive — add only `.decisions/NNNN-slug.md`** (plus the superseded file's status edit when superseding). There is no committed `.decisions/index.md` to regenerate or commit (the applicable safety invariant); discovery is the CLAUDE.md contract — `ls .decisions/` + frontmatter, with `compact` on demand (the discovery rule that reads decision files and frontmatter directly instead of a committed index) — so nothing else changes. Because ADR PRs carry no shared generated file, two concurrent ADR PRs can't collide — adding an ADR is conflict-free. To **render** the compact map locally you may run the CLI, but there is no index file to stage:
    ```bash
    # OPTIONAL local render of the on-demand compact map — nothing to `git add` (no committed index)
-   if [ -f packages/pipeline-cli/src/bin.ts ]; then
-     node packages/pipeline-cli/src/bin.ts decisions-index compact   # the adopting repository-local: the in-repo consolidated bin
+   if [ -x .pipeline/toolkit/bin/pipeline ]; then
+     pnpm pipeline cli decisions-index compact   # the adopting repository-local: the in-repo consolidated bin
    else
      .pipeline/toolkit/bin/pipeline cli decisions-index compact      # portable private toolkit
    fi
@@ -123,4 +123,4 @@ On a **PR**, `.github/workflows/decisions-index.yml` runs `decisions-index valid
 - Date is today (`date` command if unsure).
 - Never edit an accepted ADR's decision text after the fact — supersede instead.
 - **Always resolve the vocabulary-impact outcome** (Step 5 / [§Vocabulary impact](#vocabulary-impact--catch-a-coined-or-redefined-term-at-its-source)): every ADR ends with *either* a term surfaced to `.glossary/TERMS.md` *or* an explicit recorded "no vocabulary impact." Never leave it unstated — the explicit "none" is a real outcome, not a skip.
-- Your PR adds only the ADR file (plus the superseded file's status edit); there is no committed index. Optional local render of the on-demand compact map (nothing to stage): `node packages/pipeline-cli/src/bin.ts decisions-index compact` when the consolidated bin is on disk, else `.pipeline/toolkit/bin/pipeline cli decisions-index compact`.
+- Your PR adds only the ADR file (plus the superseded file's status edit); there is no committed index. Optional local render of the on-demand compact map (nothing to stage): `pnpm pipeline cli decisions-index compact` when the consolidated bin is on disk, else `.pipeline/toolkit/bin/pipeline cli decisions-index compact`.

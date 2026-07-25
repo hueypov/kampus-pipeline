@@ -138,8 +138,8 @@ re-implementing ~50 lines of `jq` inline. Resolve the tool in-repo first, publis
 
 ```bash
 # Resolve the epic-lock CLI once — in-repo first, published fallback (the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package; epic <related work item>).
-if [ -f packages/pipeline-cli/src/bin.ts ]; then
-  LOCK="node packages/pipeline-cli/src/bin.ts epic-lock"   # the adopting repository-local: the in-repo consolidated bin
+if [ -x .pipeline/toolkit/bin/pipeline ]; then
+  LOCK="pnpm pipeline cli epic-lock"   # the adopting repository-local: the in-repo consolidated bin
 else
   LOCK=".pipeline/toolkit/bin/pipeline cli epic-lock"     # portable private toolkit
 fi
@@ -887,7 +887,7 @@ for attempt in 1 2 3; do
   #    by hand rather than blind-write. The recheck/freshness/round-trip orchestration around it
   #    stays here (it is live-issue IO, not a text transform).
   PLAN_ARG=(); [ "${REPLAN:-0}" = 1 ] && PLAN_ARG=(--plan-file "$RUN_SCRATCH/plan.md")
-  if ! node packages/pipeline-cli/src/bin.ts epic-splice apply \
+  if ! pnpm pipeline cli epic-splice apply \
         --body-file "$RUN_SCRATCH/live.md" \
         --deps-file "$RUN_SCRATCH/deps.md" \
         "${PLAN_ARG[@]}" > "$RUN_SCRATCH/body.md"; then

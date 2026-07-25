@@ -5,6 +5,7 @@ import {dirname, join, relative, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 
 const TOOLKIT_RELATIVE_PATH = ".pipeline/toolkit";
+const PLUGIN_ROOTS = ["kampus-pipeline", "pipeline-crew"] as const;
 const CONFIG_RELATIVE_PATH = ".pipeline/pipeline.json";
 const PACKAGE_JSON_RELATIVE_PATH = "package.json";
 const PIPELINE_PACKAGE_SCRIPT = "./.pipeline/toolkit/bin/pipeline";
@@ -52,6 +53,9 @@ const assertToolkit = (projectRoot: string): string => {
 	if (!existsSync(join(toolkit, "package.json"))) fail(`missing initialized toolkit at ${TOOLKIT_RELATIVE_PATH}`);
 	if (!existsSync(join(toolkit, "packages/pipeline-cli/src/bin.ts"))) fail("toolkit is missing packages/pipeline-cli");
 	if (!existsSync(join(toolkit, "packages/pipeline-crew-mcp/src/bin.ts"))) fail("toolkit is missing packages/pipeline-crew-mcp");
+	for (const plugin of PLUGIN_ROOTS) {
+		if (!existsSync(join(toolkit, "claude-plugins", plugin))) fail(`toolkit is missing claude-plugins/${plugin}`);
+	}
 	if (!existsSync(join(toolkit, CREW_CONFIG_SOURCE_TEMPLATE_RELATIVE_PATH))) fail(`toolkit is missing ${CREW_CONFIG_SOURCE_TEMPLATE_RELATIVE_PATH}`);
 	if (!existsSync(join(toolkit, LANGUAGE_TEMPLATE_RELATIVE_PATH))) fail(`toolkit is missing ${LANGUAGE_TEMPLATE_RELATIVE_PATH}`);
 	for (const template of GITHUB_WORKFLOW_TEMPLATES) {
@@ -256,6 +260,7 @@ const init = (args: string[]): void => {
 		...(languageVocabulary ? [languageVocabulary] : []),
 		...(crewConfigTemplate ? [crewConfigTemplate] : []),
 		...githubWorkflows,
+		...linkEntries(projectRoot, toolkitRoot, "claude-plugins", "claude-plugins", (name) => PLUGIN_ROOTS.includes(name as (typeof PLUGIN_ROOTS)[number]), force, prior),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/skills", ".claude/skills", (name) => existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name, "SKILL.md")), force, prior),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/agents", ".claude/agents", (name) => name.endsWith(".md"), force, prior),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/pipeline-crew/agents", ".claude/agents", (name) => name.endsWith(".md"), force, prior),

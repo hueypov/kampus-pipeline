@@ -3,7 +3,6 @@ name: pipeline-toolkit
 on:
   pull_request:
   push:
-    branches: [main]
 
 permissions:
   contents: read

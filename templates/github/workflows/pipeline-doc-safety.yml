@@ -42,4 +42,4 @@ jobs:
             echo "No knowledge files changed."
             exit 0
           fi
-          node .pipeline/toolkit/packages/pipeline-cli/src/bin.ts leak-guard scan "${changed[@]}"
+          ./.pipeline/toolkit/bin/pipeline cli leak-guard scan "${changed[@]}"

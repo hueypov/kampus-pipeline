@@ -562,8 +562,8 @@ the post. This is the single-source rule in
 [gh-issue-intake-formats.md](../gh-issue-intake-formats.md#the-guarded-emit-path-is-mandatory--never-hand-post-a-verdict-marker-off-the-guard) — the *why* lives there, not re-derived here.
 
 ```bash
-if [ -f packages/pipeline-cli/src/bin.ts ]; then
-  VERDICT="node packages/pipeline-cli/src/bin.ts verdict"   # the adopting repository-local: the in-repo consolidated bin
+if [ -x .pipeline/toolkit/bin/pipeline ]; then
+  VERDICT="pnpm pipeline cli verdict"   # the adopting repository-local: the in-repo consolidated bin
 else
   VERDICT=".pipeline/toolkit/bin/pipeline cli verdict"     # portable private toolkit
 fi

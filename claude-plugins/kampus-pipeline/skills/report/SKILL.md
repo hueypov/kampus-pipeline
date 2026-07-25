@@ -100,7 +100,7 @@ REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOw
    fed your title plus a few keywords:
 
    ```bash
-   node packages/pipeline-cli/src/bin.ts intake-dedup check \
+   pnpm pipeline cli intake-dedup check \
      --query "<the title + a few distinguishing keywords>"
    ```
 

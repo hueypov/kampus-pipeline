@@ -96,7 +96,7 @@ carries `id`/`title`/`status`:
 
 ```bash
 ls .decisions/                                      # the map — one NNNN-slug.md per ADR
-node packages/pipeline-cli/src/bin.ts decisions-index compact   # or: the compact id · title · status map
+pnpm pipeline cli decisions-index compact   # or: the compact id · title · status map
 ```
 
 Treat a recorded decision as decided ground: don't surface a finding that contradicts a

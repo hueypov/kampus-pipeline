@@ -19,7 +19,7 @@ placeholder template. If you have not done this yet, follow the
 [PERSONALIZATION.md](../PERSONALIZATION.md) stand-up steps first:
 
 ```bash
-cp "${CLAUDE_PLUGIN_ROOT}/crew.config.template.jsonc" .claude/crew.config.jsonc
+cp .claude/crew.config.template.jsonc .claude/crew.config.jsonc
 # fill EVERY <placeholder>, then git-ignore your copy
 ```
 

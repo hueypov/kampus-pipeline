@@ -342,7 +342,7 @@ pipeline-cli review-head materialize --pr "$PR" --worktree \
 # clean NOW, before the denylist `rm --cached` below deliberately dirties it. A dirty materialization
 # means a corrupted head checkout, and reviewing a contaminated tree is a false signal. Fail-closed
 # LOUD via the single-sourced, tested helper (packages/pipeline-cli/src/tools/worktree-guard).
-node packages/pipeline-cli/src/bin.ts worktree-guard assert-clean --path "$REVIEW_WT" || {
+pnpm pipeline cli worktree-guard assert-clean --path "$REVIEW_WT" || {
   echo "FATAL: review worktree came up dirty at materialization — aborting (never review a contaminated tree; <related work item>)." >&2
   exit 1
 }
@@ -582,7 +582,7 @@ GUARD_TOUCHING=""
 while IFS= read -r adr; do
   [ -z "$adr" ] && continue
   gh api "repos/$REPO/contents/$adr?ref=$HEAD_SHA" -H 'Accept: application/vnd.github.raw' 2>/dev/null \
-    | node packages/pipeline-cli/src/bin.ts guard-content-probe classify --path "$adr" >/dev/null \
+    | pnpm pipeline cli guard-content-probe classify --path "$adr" >/dev/null \
     && GUARD_TOUCHING="$GUARD_TOUCHING $adr"
 done < <(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename' | grep -E '^\.decisions/.*\.md$' || true)
 # non-empty $GUARD_TOUCHING → §CP-advisory, same as CONTROL_PLANE_TOUCHED above (Step 4a; the applicable safety invariant)
@@ -1324,8 +1324,8 @@ genuinely unavoidable, the body **MUST** first pass `pipeline-cli leak-guard sca
 
 ```bash
 # resolve the verdict CLI once — in-repo-first, published-fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic <related work item>)
-if [ -f packages/pipeline-cli/src/bin.ts ]; then
-  VERDICT="node packages/pipeline-cli/src/bin.ts verdict"   # the adopting repository-local: the in-repo consolidated bin
+if [ -x .pipeline/toolkit/bin/pipeline ]; then
+  VERDICT="pnpm pipeline cli verdict"   # the adopting repository-local: the in-repo consolidated bin
 else
   VERDICT=".pipeline/toolkit/bin/pipeline cli verdict"     # portable private toolkit
 fi
@@ -1517,8 +1517,8 @@ straddle a head move:
 
 ```bash
 # resolve the verdict CLI once — in-repo-first, published-fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic <related work item>)
-if [ -f packages/pipeline-cli/src/bin.ts ]; then
-  VERDICT="node packages/pipeline-cli/src/bin.ts verdict"
+if [ -x .pipeline/toolkit/bin/pipeline ]; then
+  VERDICT="pnpm pipeline cli verdict"
 else
   VERDICT=".pipeline/toolkit/bin/pipeline cli verdict"
 fi

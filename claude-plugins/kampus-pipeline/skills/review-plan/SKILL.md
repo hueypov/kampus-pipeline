@@ -1,6 +1,6 @@
 ---
 name: review-plan
-description: Verify a planned epic's ledger against the deterministic structural floor before its children become pickable — the plan-layer gate, the symmetric twin of review-code one stage earlier. Trigger on "review the plan for epic #N", "gate epic #N", "run review-plan", "verify the ledger for #N", "flip the planned children of #N", or whenever a plan-epic-output epic needs its `status:planned` children gated to `status:triaged`. This is the verification stage between plan-epic and write-code: it consumes the epic ledger plan-epic produced and produces a pass/fail verdict against the `epic-ledger` hard-defect floor — flipping `status:planned → status:triaged` on a clean ledger, posting a per-defect FAIL on a dirty one. The gate is portable: it resolves the in-repo consolidated `packages/pipeline-cli` (`epic-ledger` tool) when present and falls back to the published `@kampus/pipeline-cli` CLI otherwise (the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package, epic <related work item>), so it runs in a foreign install too. It never repairs the ledger and never blocks the flip on a judgment call.
+description: Verify a planned epic's ledger against the deterministic structural floor before its children become pickable. Trigger on "review the plan for epic #N", "gate epic #N", "run review-plan", or "verify the ledger for #N". The private project-local toolkit runs the `epic-ledger` gate through `pnpm pipeline`; it never downloads a published fallback, repairs the ledger, or blocks a flip on a judgment call.
 ---
 
 # review-plan
@@ -123,8 +123,8 @@ in-repo first, published fallback (the shared-CLI rule that provides reusable le
 
 ```bash
 # Resolve the epic-lock CLI once — in-repo first, published fallback (the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package; epic <related work item>).
-if [ -f packages/pipeline-cli/src/bin.ts ]; then
-  LOCK="node packages/pipeline-cli/src/bin.ts epic-lock"   # the adopting repository-local: the in-repo consolidated bin
+if [ -x .pipeline/toolkit/bin/pipeline ]; then
+  LOCK="pnpm pipeline cli epic-lock"   # the adopting repository-local: the in-repo consolidated bin
 else
   LOCK=".pipeline/toolkit/bin/pipeline cli epic-lock"     # portable private toolkit
 fi
@@ -196,35 +196,21 @@ through the `epic-ledger` action's `Github` capability, so there is no free-form
 `gh pr comment` marker post to route through the guard. That structural non-hand-post *is* the
 mandate for this gate — never bypass `runGate` to hand-post a `review-plan` verdict comment yourself.
 
-Invoke it through the package's CLI (the `bin.ts` entry, wired over `NodeRuntime.runMain` +
-`NodeServices.layer` — you run the binary, you don't re-implement the floor in prose). Which
-binary — the in-repo `packages/pipeline-cli/src/bin.ts epic-ledger` or the published
-`@kampus/pipeline-cli` CLI's `epic-ledger` tool — is resolved by the block just below; either
-way the floor is identical.
-
-**Resolve the gate binary — in-repo first, published fallback (the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package; epic <related work item>).**
-`review-plan` is **portable**: the same `epic-ledger` floor runs whether or not the plugin
-is installed in the adopting repository. The gate dependency resolves **in-repo first, published fallback** —
-prefer the on-disk consolidated `packages/pipeline-cli/src/bin.ts` when it exists (the adopting repository-local:
-no network, no published-artifact dependency on the daily pipeline), and otherwise invoke the
-**published** `@kampus/pipeline-cli` CLI's `epic-ledger` tool via `pnpm dlx`. Build the invocation
-once into a `$GATE` command and use it everywhere below, so there is exactly one resolution site:
+Invoke it through the private project-local toolkit command. Do not reproduce its
+floor in prose or substitute a downloaded package. Build the invocation once into a
+`$GATE` command and use it everywhere below:
 
 ```bash
-# resolve the gate command once — in-repo-first, published-fallback (the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package; epic <related work item>)
-if [ -f packages/pipeline-cli/src/bin.ts ]; then
-  GATE="node packages/pipeline-cli/src/bin.ts epic-ledger"   # the adopting repository-local: run the in-repo consolidated bin
-else
-  # foreign install: run the PUBLISHED consolidated CLI. The pin is the single source-of-truth
-  # version (`install.sh`'s PIN + the other skills' published-fallback share it; epic <related work item> / <related work item>);
-  # bump all in lockstep when pipeline-cli releases. Pin a concrete `@<version>` to reproduce a verdict.
-  GATE=".pipeline/toolkit/bin/pipeline cli epic-ledger"
-fi
+# resolve the gate command once — private, project-local toolkit only
+[ -x .pipeline/toolkit/bin/pipeline ] || {
+  echo "review-plan: run pipeline init in this repository first" >&2
+  exit 1
+}
+GATE="pnpm pipeline cli epic-ledger"
 ```
 
-Either branch yields a runnable `$GATE`, so a foreign install **runs** the gate rather than
-degrading — and no raw `ERR_MODULE_NOT_FOUND` can surface, because the in-repo branch is only
-taken when the bin is on disk and the fallback fetches the published package before running.
+The initialized toolkit yields a runnable `$GATE`, so every adopting repository
+runs the gate without a registry dependency.
 Then run the gate through `$GATE`:
 
 ```bash
@@ -474,8 +460,7 @@ This skill is one of a suite (`report` → `triage` → `plan-epic` → **`revie
 shared label semantics and the body/comment/dependency/story formats live in
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md); the gate architecture is
 the applicable safety invariant; the deterministic floor, the gate
-action, and the convergence loop are the `epic-ledger` tool (`packages/pipeline-cli/src/tools/epic-ledger`,
-published as part of `@kampus/pipeline-cli` — the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package, consolidated by the rule that makes enforcement guard code control-plane code wherever it lives). Your
+action, and the convergence loop are the local `epic-ledger` tool in the pinned toolkit. Your
 input is a `plan-epic`-output epic whose children are `status:planned`; your output — the
 `planned → triaged` flip on a clean ledger (or a parked epic on an unfixable one), plus the
 verdict and any advisory caveats — is what makes `write-code`'s existing `status:triaged`
@@ -483,17 +468,8 @@ pick predicate enforce the gate for free. You are the symmetric twin of `review-
 two gates bracket `write-code` on both sides — the plan it consumes is floor-verified going
 in, the PR it produces is AC-verified going out.
 
-### Distribution — portable via the published gate (the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package)
+### Distribution
 
-When the suite ships as an installable plugin, `review-plan` is **repo-agnostic like every
-other skill** — there is no longer a single the adopting repository-pinned exception. Its deterministic gate
-is the `epic-ledger` floor, resolved **in-repo first, published fallback** (Step 1): the adopting repository
-runs the on-disk `packages/pipeline-cli/src/tools/epic-ledger` tool via the `pipeline-cli` bin,
-and a foreign install runs the published `@kampus/pipeline-cli` CLI via `pnpm dlx`. So a
-foreign repository install **runs** the gate instead
-of degrading. The published version tracks the in-repo source (a gate-logic change bumps the
-`package.json` version and cuts a matching `epic-ledger-v*` release in the same change), so
-both worlds gate against the same floor. See the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package,
-which **supersedes the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository §3**
-(the adopting repository-pinned / degrade-with-a-message deferral) and lands the npm-publish follow-up epic
-[<related work item>](<repository URL>).
+The gate always runs from the pinned private submodule. Updating the submodule
+pointer and running `pnpm pipeline sync` upgrades the gate deliberately; no
+registry package is consulted.

@@ -232,8 +232,8 @@ re-deriving the resolver write-code once hand-copied, and keeps only the two thi
 # EXACT way write-code Step R1 does, by delegating each (PR, gate) FAIL-bound-to-head resolution to
 # `pipeline-cli verdict read` (ACL author-gate + latest-wins + SHA-staleness, the authorization rule that accepts privileged actions only from repository members). Resolve
 # the CLI once — in-repo-first, published-fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic <related work item>).
-if [ -f packages/pipeline-cli/src/bin.ts ]; then
-  VERDICT="node packages/pipeline-cli/src/bin.ts verdict"   # the adopting repository-local: the in-repo consolidated bin
+if [ -x .pipeline/toolkit/bin/pipeline ]; then
+  VERDICT="pnpm pipeline cli verdict"   # the adopting repository-local: the in-repo consolidated bin
 else
   VERDICT=".pipeline/toolkit/bin/pipeline cli verdict"     # portable private toolkit
 fi

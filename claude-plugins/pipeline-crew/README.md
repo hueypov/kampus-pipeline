@@ -132,10 +132,10 @@ the substrate resolves the target role's inbox for you:
   names** — they never re-implement, fork, or edit any file under
   the companion pipeline skill suite. The dependency is one-way: you can run the
   pipeline skills by hand with no crew; the crew is the proven way to run them continuously.
-- **The channel substrate is [`@kampus/pipeline-crew-mcp`](../../packages/pipeline-crew-mcp/),
-  a runtime prerequisite** — the tracker + the `channel_send` toolkit the defs address each
-  other through. It is referenced, not bundled (an npm publish is a future unlock); the crew
-  expects it available on `main` HEAD.
+- **The channel substrate is `pipeline-crew-mcp`, a local runtime prerequisite** — the
+  tracker + the `channel_send` toolkit the defs address each other through. It lives in the
+  same pinned private toolkit at `.pipeline/toolkit/packages/pipeline-crew-mcp`; it is never
+  downloaded from a registry.
 
 ### The crew is deliberately outside the §CP boundary
 
@@ -147,17 +147,18 @@ with no extension of the §CP path set to this directory. Edits to the crew defs
 automatically once their review gate passes; PRs that touch companion pipeline skill suite's own §CP surfaces
 still bank for a human merge.
 
-## Install by name from the <marketplace> marketplace
+## Install in a repository
 
-```
-/plugin marketplace add <owner>/<repository>
-/plugin install pipeline-crew@<marketplace>
+The crew and companion pipeline payload are one private toolkit submodule, not
+separately installed plugins. From the adopting repository root:
+
+```bash
+git submodule add git@github.com:hueypov/kampus-pipeline.git .pipeline/toolkit
+./.pipeline/toolkit/bin/pipeline init
 ```
 
-The plugin carries **no `version`** — it is content-addressed by commit SHA (continuous-ship,
-the update rule: omit a plugin version so commit-addressed installations can receive updates), so def edits
-reach installed operators on the normal update path. Install companion pipeline skill suite the same way
-(`/plugin install pipeline@<marketplace>`) — the crew conducts its skills, so you want both.
+This creates managed root `claude-plugins/` symlinks and project-local Claude
+wiring. Afterwards, use `pnpm pipeline crew …` for crew lifecycle commands.
 
 ## Personalize, then stand up
 
@@ -169,7 +170,7 @@ addresses *your* people and machine.
 
 ```bash
 # 1. Copy the placeholder-only template to your operator-owned config (default path).
-cp "${CLAUDE_PLUGIN_ROOT}/crew.config.template.jsonc" .claude/crew.config.jsonc
+cp .claude/crew.config.template.jsonc .claude/crew.config.jsonc
 #    (or keep it anywhere and point $CREW_CONFIG at it).
 # 2. Fill EVERY <placeholder>. Leave no <...> behind.
 # 3. Git-ignore your copy — it holds your operator data and must never be committed.
@@ -193,8 +194,7 @@ closed if no crew is up — `/stand-up` first.
 ## Layout
 
 ```
-pipeline-crew/
-├── .claude-plugin/plugin.json    # manifest (no version — continuous-ship, the update rule: omit a plugin version so commit-addressed installations can receive updates)
+claude-plugins/pipeline-crew/     # managed symlink into .pipeline/toolkit
 ├── agents/
 │   ├── cartographer.md           # inbound-ideation bridge (wayfinder)
 │   ├── intake-desk.md            # intake bridge (report → triage → plan)
@@ -229,8 +229,8 @@ pipeline-crew/
   probe is "unknown", never "down") + the no-bare-`timeout` convention. The conductor defs cite it.
 - the companion pipeline skill suite — the pipeline this crew conducts (the skills +
   ephemeral agents).
-- [`../../packages/pipeline-crew-mcp/`](../../packages/pipeline-crew-mcp/) — the channel
-  substrate (the tracker + `channel_send`) the defs address each other through.
+- `.pipeline/toolkit/packages/pipeline-crew-mcp/` — the local channel substrate (the
+  tracker + `channel_send`) the defs address each other through.
 - the topology rule: each unique-seam bridge is a singleton, while seam-free engines may scale and bridges never execute engine lanes — the crew roster law
   (bridges vs engines, cardinality-from-kind) that governs this roster.
 - the repository-resolution rule: honor the repository override when set, otherwise derive the current working repository — the repo-as-config seam this
