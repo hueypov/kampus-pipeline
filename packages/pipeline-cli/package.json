@@ -1,0 +1,15 @@
+{
+	"name": "@kampus/pipeline-cli",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"bin": {
+		"pipeline-cli": "./src/bin.mjs"
+	},
+	"scripts": {
+		"build": "node --check src/bin.mjs",
+		"typecheck": "node --check src/bin.mjs",
+		"test": "node --test src/bin.test.mjs",
+		"cli": "node src/bin.mjs"
+	}
+}

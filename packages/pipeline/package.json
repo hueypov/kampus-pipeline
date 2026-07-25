@@ -1,0 +1,20 @@
+{
+	"name": "@kampus/pipeline",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"bin": {
+		"pipeline": "./src/bin.ts"
+	},
+	"scripts": {
+		"typecheck": "tsgo -p tsconfig.json",
+		"test": "vitest run",
+		"cli": "node src/bin.ts"
+	},
+	"devDependencies": {
+		"@effect/tsgo": "catalog:",
+		"@types/node": "catalog:",
+		"@typescript/native-preview": "catalog:",
+		"vitest": "catalog:"
+	}
+}

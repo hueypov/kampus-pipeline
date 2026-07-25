@@ -1,0 +1,17 @@
+packages:
+  - packages/*
+
+catalog:
+  '@effect/platform-node': 4.0.0-beta.92
+  '@effect/tsgo': ^0.5.2
+  '@effect/vitest': 4.0.0-beta.92
+  '@types/node': ^25.6.2
+  '@types/proper-lockfile': 4.1.4
+  '@typescript/native-preview': ^7.0.0-dev.20260509.2
+  effect: 4.0.0-beta.92
+  proper-lockfile: 4.1.2
+  typescript: ^6.0.3
+  vitest: ^4.1.5
+
+patchedDependencies:
+  effect@4.0.0-beta.92: patches/effect@4.0.0-beta.92.patch

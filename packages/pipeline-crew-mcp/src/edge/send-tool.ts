@@ -1,0 +1,118 @@
+/**
+ * edge/send-tool — the outbound half of the channel edge: an MCP tool a session calls to
+ * send a typed message to a role, routed through the peer dialer (tracker lookup + dial +
+ * inbox-ack). Generic (crew-agnostic); see the boundary note in `../index.ts`.
+ *
+ * The tool wraps the `ChannelSend` port — the peer's `send` capability (`../peer`) — so the
+ * edge never constructs a peer (the crew composition root does, the composition-boundary rule: generic channel edges consume ports while the crew root owns peer construction). A send to an
+ * offline role surfaces as `PeerUnreachableError`, which the tool returns as an error result
+ * to the caller — never a silent drop (the role-addressing rule: send to a role inbox, and treat delivery as queued rather than read).
+ */
+import {Context, Effect, Schema} from "effect";
+import {Tool, Toolkit} from "effect/unstable/ai";
+import {InboxAck, PeerUnreachableError} from "../peer/index.ts";
+import {crewMessageKinds, payloadSchemaForKind} from "../protocol/index.ts";
+
+/**
+ * A message rejected at the wire because its shape doesn't match the catalog: an unknown
+ * `kind` (not one of the 6 catalog kinds) or a `body` that fails that kind's payload schema.
+ * The gate that makes the typed catalog an invariant, not advice (the advisory-message rule: valid catalog messages may nudge but never assign work) — the sender gets
+ * this typed reject instead of a delivered-to-inbox ack, so a wrong shape never reaches a peer.
+ */
+export class InvalidMessageError extends Schema.TaggedErrorClass<InvalidMessageError>()(
+	"@kampus/pipeline-crew-mcp/InvalidMessageError",
+	{
+		kind: Schema.String,
+		reason: Schema.String,
+	},
+) {
+	// McpServer renders a failed tool call as `Cause.pretty(cause)` (effect-smol McpServer.ts),
+	// which prints an error's `message` — a bare TaggedError's is empty, so `reason` (the actual
+	// why) never reaches the tool output. Fold it into `message` so a decode failure is legible
+	// from the tool result alone, without reading source (the offline-send rule: report an unreachable recipient instead of silently dropping the message AC#4).
+	override get message(): string {
+		return `${this.kind}: ${this.reason}`;
+	}
+}
+
+/** The outbound send capability: dial the live peer serving `targetRole` and deliver `kind`/`body`. */
+export class ChannelSend extends Context.Service<
+	ChannelSend,
+	{
+		readonly send: (
+			targetRole: string,
+			kind: string,
+			body: unknown,
+		) => Effect.Effect<InboxAck, PeerUnreachableError>;
+	}
+>()("@kampus/pipeline-crew-mcp/edge/ChannelSend") {}
+
+/**
+ * Decode `body` against the catalog schema for `kind` and RETURN the decoded struct — the single
+ * boundary normalization for the send path. An unknown kind or a body that fails its kind's schema
+ * short-circuits with an `InvalidMessageError`, so the send never reaches `ChannelSend.send` and the
+ * sender never sees a delivered-to-inbox ack for a malformed message (the advisory-message rule: valid catalog messages may nudge but never assign work).
+ *
+ * Returning the decoded value (not `void`) is load-bearing: the handler forwards THIS struct, so a
+ * body that arrived JSON-stringified is normalized to a struct exactly once here — `bridge`'s
+ * `formatChannelTag` then `JSON.stringify`s a struct, not a string, and the wire is single-encoded.
+ * Forwarding the raw `body` instead double-encoded a string body (the single-encoding rule: encode each notification exactly once before emission defect a).
+ */
+const validateOutbound = (
+	kind: string,
+	body: unknown,
+): Effect.Effect<unknown, InvalidMessageError> => {
+	const schema = payloadSchemaForKind(kind);
+	if (schema === undefined) {
+		return Effect.fail(
+			new InvalidMessageError({
+				kind,
+				reason: `unknown kind — not one of the catalog kinds: ${crewMessageKinds.join(", ")}`,
+			}),
+		);
+	}
+	// The MCP `tools/call` client serializes an unconstrained `body` (the tool's `Schema.Unknown`
+	// parameter has no object shape in the generated JSON schema) as a JSON *string*, so `body`
+	// arrives either as the struct itself OR as that struct stringified — the impedance mismatch
+	// that dead-lettered every kind (the offline-send rule: report an unreachable recipient instead of silently dropping the message). Accept both with a typed string→struct transform
+	// (`Schema.fromJsonString`, grounded in effect-smol Schema.ts) unioned with the raw struct, so
+	// the tolerance is one decode step, not a hand-rolled `typeof body === "string"` JSON.parse.
+	const tolerant = Schema.Union([schema, Schema.fromJsonString(schema)]);
+	return Schema.decodeUnknownEffect(tolerant)(body).pipe(
+		Effect.mapError(
+			(error) =>
+				new InvalidMessageError({
+					kind,
+					reason: `body does not match the "${kind}" schema: ${error}`,
+				}),
+		),
+	);
+};
+
+/** The one send tool: `{targetRole, kind, body}` in, the delivered-to-inbox ack out. */
+export const SendChannelMessage = Tool.make("channel_send", {
+	description:
+		"Send a typed message to the live peer serving a role; returns the delivered-to-inbox ack.",
+	parameters: Schema.Struct({
+		targetRole: Schema.NonEmptyString,
+		kind: Schema.NonEmptyString,
+		body: Schema.Unknown,
+	}),
+	success: InboxAck,
+	failure: Schema.Union([PeerUnreachableError, InvalidMessageError]),
+});
+
+export const ChannelToolkit = Toolkit.make(SendChannelMessage);
+
+/** The toolkit handler: validate the message shape, then route the send through the `ChannelSend` port. */
+export const channelToolHandlers = ChannelToolkit.toLayer(
+	Effect.gen(function* () {
+		const sender = yield* ChannelSend;
+		return {
+			channel_send: ({body, kind, targetRole}) =>
+				validateOutbound(kind, body).pipe(
+					Effect.flatMap((decoded) => sender.send(targetRole, kind, decoded)),
+				),
+		};
+	}),
+);

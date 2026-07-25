@@ -1,0 +1,85 @@
+{
+	"description": "kampus-pipeline project-local guard surface: SessionStart verifies the adopting repository's pinned .pipeline/toolkit checkout, then the hooks dispatch its local CLI. It never installs packages from a registry. The guard wrapper remains fail-open while a checkout is unavailable.",
+	"hooks": {
+		"SessionStart": [
+			{
+				"matcher": "startup|resume",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/install.sh",
+						"timeout": 120
+					},
+					{
+						"type": "command",
+						"command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/guard.sh spawn-guard freshness"
+					},
+					{
+						"type": "command",
+						"command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/guard.sh worktree-sweep --execute"
+					}
+				]
+			}
+		],
+		"PreToolUse": [
+			{
+				"matcher": "Read|Edit|Write",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/guard.sh worktree-guard pre-file"
+					}
+				]
+			},
+			{
+				"matcher": "Bash",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/guard.sh worktree-guard pre-bash"
+					}
+				]
+			},
+			{
+				"matcher": "EnterWorktree",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/guard.sh worktree-guard pre-enter"
+					}
+				]
+			},
+			{
+				"matcher": "Task|Workflow",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/guard.sh spawn-guard guard"
+					}
+				]
+			}
+		],
+		"SubagentStop": [
+			{
+				"matcher": "*",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/guard.sh worktree-guard reap"
+					}
+				]
+			}
+		],
+		"WorktreeCreate": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/create-worktree.sh",
+						"timeout": 600
+					}
+				]
+			}
+		]
+	}
+}

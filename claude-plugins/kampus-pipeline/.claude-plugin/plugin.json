@@ -1,0 +1,8 @@
+{
+	"$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+	"name": "kampus-pipeline",
+	"description": "Private, project-local generic pipeline tooling. It resolves all runtime code from the adopting repository's .pipeline/toolkit submodule.",
+	"license": "MIT",
+	"hooks": "./hooks.json",
+	"keywords": ["git", "github", "agent-workflow", "repo-agnostic"]
+}
