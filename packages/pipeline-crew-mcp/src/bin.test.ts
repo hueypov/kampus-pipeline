@@ -41,4 +41,10 @@ describe("bin.ts — the session subcommand declares --instance (the launcher/se
 		assert.match(stdout, /--role/, "the --role flag is still declared");
 		assert.match(stdout, /--project-root/, "the --project-root flag is still declared");
 	}, 30_000);
+
+	it("check-config --help exposes the no-side-effect operator-config validation command", async () => {
+		const {code, stdout} = await run("check-config", "--help");
+		assert.strictEqual(code, 0, "check-config --help exits 0");
+		assert.match(stdout, /without starting the tracker, tmux, or crew sessions/);
+	}, 30_000);
 });

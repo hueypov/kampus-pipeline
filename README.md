@@ -13,7 +13,8 @@ git submodule update --init --recursive
 every runtime command from the pinned submodule. It creates
 `.claude/crew.config.template.jsonc`; copy it to
 `.claude/crew.config.jsonc`, fill every placeholder, then run
-`pipeline init --check`.
+`pipeline crew check-config` for the full no-side-effect launch-config validation
+and `pipeline init --check` for the bootstrap prerequisite check.
 
 To add the optional generic GitHub Actions baseline (toolkit verification and
 documentation-path safety), opt in explicitly:

@@ -109,6 +109,7 @@ Run the following after filling the crew configuration:
 ```bash
 cp .claude/crew.config.template.jsonc .claude/crew.config.jsonc
 # fill every <placeholder> in .claude/crew.config.jsonc
+./.pipeline/toolkit/bin/pipeline crew check-config
 ./.pipeline/toolkit/bin/pipeline init --check
 ```
 
@@ -274,6 +275,9 @@ Copy `.claude/crew.config.template.jsonc` to the ignored, operator-owned
 
 The crew commands are:
 
+- `check-config` — read and fully validate the crew launch configuration without
+  starting a tracker, tmux window, or crew session. It honors `$CREW_CONFIG` when
+  set, otherwise it reads `.claude/crew.config.jsonc`.
 - `stand-up` — validate configuration, ensure the per-project tracker, derive
   the configured roster, register project-scoped channel configuration, and
   launch the complete roster in tmux. It aborts before launching any session

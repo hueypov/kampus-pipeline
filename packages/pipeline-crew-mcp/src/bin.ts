@@ -54,6 +54,7 @@ import {Argument, Command, Flag} from "effect/unstable/cli";
 import {CREW_ROLES, RoleUniquenessError, runCrewSession} from "./crew/index.ts";
 import {
 	CREW_WINDOW,
+	readLaunchConfig,
 	renderStandUpError,
 	renderTaggedError,
 	retireRole,
@@ -159,6 +160,30 @@ const standUp = Command.make(
 ).pipe(
 	Command.withDescription(
 		"Stand the whole crew up from the operator config (tracker + bridges + N engines), fail-loud",
+	),
+);
+
+const checkConfig = Command.make(
+	"check-config",
+	{},
+	Effect.fn(function* () {
+		yield* Console.error(`pipeline-crew-mcp ${VERSION} — validating the crew operator config`);
+		return yield* readLaunchConfig().pipe(
+			Effect.flatMap((config) =>
+				Console.error(
+					`crew config valid: ${config.engineCount} engineering-manager session${config.engineCount === 1 ? "" : "s"}; ${config.channels.mode} channel mode`,
+				),
+			),
+			Effect.catch((error) =>
+				Console.error(`crew config invalid: ${renderTaggedError(error)}`).pipe(
+					Effect.andThen(Effect.sync(() => process.exit(1))),
+				),
+			),
+		);
+	}),
+).pipe(
+	Command.withDescription(
+		"Validate the operator crew config without starting the tracker, tmux, or crew sessions",
 	),
 );
 
@@ -273,7 +298,15 @@ const cli = Command.make(
 	}),
 ).pipe(
 	Command.withDescription("The crew's channels-backed messaging substrate (the MCP-channel rule: crew roles communicate through MCP channels instead of a terminal relay)"),
-	Command.withSubcommands([session, tracker, standUp, standDown, spawnRoleCmd, retireRoleCmd]),
+	Command.withSubcommands([
+		session,
+		tracker,
+		standUp,
+		checkConfig,
+		standDown,
+		spawnRoleCmd,
+		retireRoleCmd,
+	]),
 );
 
 cli.pipe(Command.run({version: VERSION}), Effect.provide(NodeServices.layer), NodeRuntime.runMain);
