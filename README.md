@@ -10,8 +10,10 @@ git submodule update --init --recursive
 ```
 
 `pipeline init` writes only project-local Claude configuration and resolves
-every runtime command from the pinned submodule. Run `pipeline init --check`
-after filling `.claude/crew.config.jsonc`.
+every runtime command from the pinned submodule. It creates
+`.claude/crew.config.template.jsonc`; copy it to
+`.claude/crew.config.jsonc`, fill every placeholder, then run
+`pipeline init --check`.
 
 To add the optional generic GitHub Actions baseline (toolkit verification and
 documentation-path safety), opt in explicitly:

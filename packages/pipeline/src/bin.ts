@@ -8,6 +8,8 @@ const TOOLKIT_RELATIVE_PATH = ".pipeline/toolkit";
 const CONFIG_RELATIVE_PATH = ".pipeline/pipeline.json";
 const SETTINGS_RELATIVE_PATH = ".claude/settings.json";
 const CREW_CONFIG_RELATIVE_PATH = ".claude/crew.config.jsonc";
+const CREW_CONFIG_TEMPLATE_RELATIVE_PATH = ".claude/crew.config.template.jsonc";
+const CREW_CONFIG_SOURCE_TEMPLATE_RELATIVE_PATH = "claude-plugins/pipeline-crew/crew.config.template.jsonc";
 const MANAGED_IGNORE_RELATIVE_PATH = ".claude/.gitignore";
 const LANGUAGE_TEMPLATE_RELATIVE_PATH = "templates/glossary/LANGUAGE.md";
 const LANGUAGE_RELATIVE_PATH = ".glossary/LANGUAGE.md";
@@ -48,6 +50,7 @@ const assertToolkit = (projectRoot: string): string => {
 	if (!existsSync(join(toolkit, "package.json"))) fail(`missing initialized toolkit at ${TOOLKIT_RELATIVE_PATH}`);
 	if (!existsSync(join(toolkit, "packages/pipeline-cli/src/bin.ts"))) fail("toolkit is missing packages/pipeline-cli");
 	if (!existsSync(join(toolkit, "packages/pipeline-crew-mcp/src/bin.ts"))) fail("toolkit is missing packages/pipeline-crew-mcp");
+	if (!existsSync(join(toolkit, CREW_CONFIG_SOURCE_TEMPLATE_RELATIVE_PATH))) fail(`toolkit is missing ${CREW_CONFIG_SOURCE_TEMPLATE_RELATIVE_PATH}`);
 	if (!existsSync(join(toolkit, LANGUAGE_TEMPLATE_RELATIVE_PATH))) fail(`toolkit is missing ${LANGUAGE_TEMPLATE_RELATIVE_PATH}`);
 	for (const template of GITHUB_WORKFLOW_TEMPLATES) {
 		if (!existsSync(join(toolkit, template.source))) fail(`toolkit is missing ${template.source}`);
@@ -187,7 +190,7 @@ const check = (projectRoot: string): string[] => {
 	const config = readConfig(projectRoot);
 	if (!config) errors.push(`missing ${CONFIG_RELATIVE_PATH}`);
 	if (!existsSync(join(projectRoot, SETTINGS_RELATIVE_PATH))) errors.push(`missing ${SETTINGS_RELATIVE_PATH}`);
-	if (!existsSync(join(projectRoot, CREW_CONFIG_RELATIVE_PATH))) errors.push(`missing ${CREW_CONFIG_RELATIVE_PATH}`);
+	if (!existsSync(join(projectRoot, CREW_CONFIG_RELATIVE_PATH))) errors.push(`missing ${CREW_CONFIG_RELATIVE_PATH}; copy ${CREW_CONFIG_TEMPLATE_RELATIVE_PATH} and fill every placeholder`);
 	else if (readFileSync(join(projectRoot, CREW_CONFIG_RELATIVE_PATH), "utf8").includes("<placeholder")) errors.push("crew configuration still contains placeholders");
 	if (!existsSync(join(projectRoot, LANGUAGE_RELATIVE_PATH))) errors.push(`missing ${LANGUAGE_RELATIVE_PATH}`);
 	if (toolkitRoot && config?.toolkitRoot !== TOOLKIT_RELATIVE_PATH) errors.push("pipeline config has an unsupported toolkit path");
@@ -211,6 +214,7 @@ const init = (args: string[]): void => {
 	installToolkit(toolkitRoot);
 	const prior = new Map((readConfig(projectRoot)?.managedPaths ?? []).map((entry) => [entry.path, entry.target]));
 	const languageVocabulary = materializeTemplate(projectRoot, toolkitRoot, LANGUAGE_TEMPLATE_RELATIVE_PATH, LANGUAGE_RELATIVE_PATH, prior);
+	const crewConfigTemplate = materializeTemplate(projectRoot, toolkitRoot, CREW_CONFIG_SOURCE_TEMPLATE_RELATIVE_PATH, CREW_CONFIG_TEMPLATE_RELATIVE_PATH, prior);
 	const githubWorkflows = GITHUB_WORKFLOW_TEMPLATES
 		.filter((template) => withGitHubActions || prior.get(template.destination) === `template:${template.source}`)
 		.flatMap((template) => {
@@ -220,17 +224,13 @@ const init = (args: string[]): void => {
 	mergeSettings(projectRoot, toolkitRoot);
 	const managedPaths = [
 		...(languageVocabulary ? [languageVocabulary] : []),
+		...(crewConfigTemplate ? [crewConfigTemplate] : []),
 		...githubWorkflows,
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/skills", ".claude/skills", (name) => existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name, "SKILL.md")), force, prior),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/agents", ".claude/agents", (name) => name.endsWith(".md"), force, prior),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/pipeline-crew/agents", ".claude/agents", (name) => name.endsWith(".md"), force, prior),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/pipeline-crew/commands", ".claude/commands", (name) => name.endsWith(".md"), force, prior),
 	];
-	const crewDestination = join(projectRoot, CREW_CONFIG_RELATIVE_PATH);
-	if (!existsSync(crewDestination)) {
-		mkdirSync(dirname(crewDestination), {recursive: true});
-		writeFileSync(crewDestination, readFileSync(join(toolkitRoot, "claude-plugins/pipeline-crew/crew.config.template.jsonc")));
-	}
 	mergeIgnore(projectRoot);
 	writeJson(join(projectRoot, CONFIG_RELATIVE_PATH), {schemaVersion: 1, toolkitRoot: TOOLKIT_RELATIVE_PATH, managedPaths} satisfies PipelineConfig);
 	const errors = check(projectRoot);

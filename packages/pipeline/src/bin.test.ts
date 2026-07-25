@@ -85,6 +85,8 @@ describe("pipeline init", () => {
 		expect(existsSync(join(consumer, ".claude/agents/reviewer.md"))).toBe(true);
 		expect(existsSync(join(consumer, ".claude/agents/crew-chief-of-staff.md"))).toBe(true);
 		expect(existsSync(join(consumer, ".claude/commands/stand-up.md"))).toBe(true);
+		expect(readFileSync(join(consumer, ".claude/crew.config.template.jsonc"), "utf8")).toBe('{"value":"<placeholder>"}\n');
+		expect(existsSync(join(consumer, ".claude/crew.config.jsonc"))).toBe(false);
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
 		write(join(consumer, ".glossary/LANGUAGE.md"), "# Consumer language\n");
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
@@ -94,7 +96,9 @@ describe("pipeline init", () => {
 		write(join(consumer, ".github/workflows/pipeline-toolkit.yml"), "name: Consumer workflow\n");
 		expect(command(consumer, ["sync"], mockBin).status).toBe(0);
 		expect(readFileSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"), "utf8")).toBe("name: Consumer workflow\n");
-		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(1);
+		const check = command(consumer, ["init", "--check"], mockBin);
+		expect(check.status).toBe(1);
+		expect(check.stderr).toContain("copy .claude/crew.config.template.jsonc and fill every placeholder");
 		write(join(consumer, ".claude/crew.config.jsonc"), '{"value":"configured"}\n');
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
 	});

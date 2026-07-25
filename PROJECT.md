@@ -22,7 +22,8 @@ adopting Git repository
     ├── skills/                    links to toolkit skills
     ├── agents/                    links to toolkit and crew agents
     ├── commands/                  links to crew commands
-    └── crew.config.jsonc          operator-owned, local configuration
+    ├── crew.config.template.jsonc generated placeholder template
+    └── crew.config.jsonc          operator-owned filled copy (ignored)
 ```
 
 The command that owns this setup is:
@@ -93,8 +94,9 @@ authenticated GitHub CLI access, and tmux.
    consumer does not already own that file; it never replaces an existing copy.
 5. Creates managed links for every extracted `kampus-pipeline` skill and agent,
    then every `pipeline-crew` agent and command.
-6. Creates `.claude/crew.config.jsonc` from the placeholder-only template when
-   it does not already exist.
+6. Creates `.claude/crew.config.template.jsonc` from the placeholder-only
+   toolkit template when it does not already exist. It never creates the
+   runtime config automatically.
 7. Adds `crew.config.jsonc` and `crew-run/` to `.claude/.gitignore`.
 8. Records all managed links in `.pipeline/pipeline.json`.
 
@@ -105,6 +107,8 @@ authenticated GitHub CLI access, and tmux.
 Run the following after filling the crew configuration:
 
 ```bash
+cp .claude/crew.config.template.jsonc .claude/crew.config.jsonc
+# fill every <placeholder> in .claude/crew.config.jsonc
 ./.pipeline/toolkit/bin/pipeline init --check
 ```
 
@@ -259,7 +263,8 @@ optimization rather than a correctness dependency.
 
 ### Operator configuration
 
-The generated `.claude/crew.config.jsonc` must supply:
+Copy `.claude/crew.config.template.jsonc` to the ignored, operator-owned
+`.claude/crew.config.jsonc`. The filled runtime configuration must supply:
 
 - operator and control-plane approver identities;
 - model tier and engine count/WIP caps for roles;
