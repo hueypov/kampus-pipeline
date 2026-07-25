@@ -98,7 +98,10 @@ authenticated GitHub CLI access, and tmux.
    toolkit template when it does not already exist. It never creates the
    runtime config automatically.
 7. Adds `crew.config.jsonc` and `crew-run/` to `.claude/.gitignore`.
-8. Records all managed links in `.pipeline/pipeline.json`.
+8. Adds a project-local `pipeline` script to `package.json`, preserving all
+   existing scripts and refusing to replace a conflicting `pipeline` script.
+   If the repository has no `package.json`, it creates a minimal private one.
+9. Records all managed links in `.pipeline/pipeline.json`.
 
 `--with-github-actions` additionally writes the optional generic workflows into
 `.github/workflows/` when those paths do not already exist. Once installed,
@@ -111,6 +114,14 @@ cp .claude/crew.config.template.jsonc .claude/crew.config.jsonc
 # fill every <placeholder> in .claude/crew.config.jsonc
 ./.pipeline/toolkit/bin/pipeline crew check-config
 ./.pipeline/toolkit/bin/pipeline init --check
+```
+
+After this first initialization, the `package.json` script provides the shorter
+project-local form. It is still not a global executable:
+
+```bash
+pnpm pipeline crew check-config
+pnpm pipeline crew stand-up
 ```
 
 `pipeline sync` currently performs the same reconciliation as `init`; use it

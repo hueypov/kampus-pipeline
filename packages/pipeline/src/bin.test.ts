@@ -75,6 +75,10 @@ describe("pipeline init", () => {
 		const {consumer, mockBin} = fixture();
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
 		expect(JSON.parse(readFileSync(join(consumer, ".claude/settings.json"), "utf8"))).toMatchObject({custom: true, hooks: expect.any(Object)});
+		expect(JSON.parse(readFileSync(join(consumer, "package.json"), "utf8"))).toMatchObject({
+			private: true,
+			scripts: {pipeline: "./.pipeline/toolkit/bin/pipeline"},
+		});
 		expect(existsSync(join(consumer, ".pipeline/pipeline.json"))).toBe(true);
 		expect(readFileSync(join(consumer, ".glossary/LANGUAGE.md"), "utf8")).toBe("# Fixture language\n");
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"))).toBe(false);

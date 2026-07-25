@@ -16,6 +16,16 @@ every runtime command from the pinned submodule. It creates
 `pipeline crew check-config` for the full no-side-effect launch-config validation
 and `pipeline init --check` for the bootstrap prerequisite check.
 
+Initialization also adds a safe project-local `pipeline` script to `package.json`.
+After the first full-path initialization, use `pnpm pipeline` instead of typing
+the submodule path:
+
+```bash
+pnpm pipeline crew check-config
+pnpm pipeline init --check
+pnpm pipeline crew stand-up
+```
+
 To add the optional generic GitHub Actions baseline (toolkit verification and
 documentation-path safety), opt in explicitly:
 

@@ -6,6 +6,8 @@ import {fileURLToPath} from "node:url";
 
 const TOOLKIT_RELATIVE_PATH = ".pipeline/toolkit";
 const CONFIG_RELATIVE_PATH = ".pipeline/pipeline.json";
+const PACKAGE_JSON_RELATIVE_PATH = "package.json";
+const PIPELINE_PACKAGE_SCRIPT = "./.pipeline/toolkit/bin/pipeline";
 const SETTINGS_RELATIVE_PATH = ".claude/settings.json";
 const CREW_CONFIG_RELATIVE_PATH = ".claude/crew.config.jsonc";
 const CREW_CONFIG_TEMPLATE_RELATIVE_PATH = ".claude/crew.config.template.jsonc";
@@ -129,6 +131,33 @@ const mergeSettings = (projectRoot: string, toolkitRoot: string): void => {
 	writeJson(settingsPath, settings);
 };
 
+const mergePackageScript = (projectRoot: string): void => {
+	const packagePath = join(projectRoot, PACKAGE_JSON_RELATIVE_PATH);
+	let packageJson: Record<string, unknown> = {private: true};
+	if (existsSync(packagePath)) {
+		try {
+			const parsed = JSON.parse(readFileSync(packagePath, "utf8")) as unknown;
+			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+				fail(`${PACKAGE_JSON_RELATIVE_PATH} must contain a JSON object; refusing to overwrite it`);
+			}
+			packageJson = parsed as Record<string, unknown>;
+		} catch {
+			fail(`${PACKAGE_JSON_RELATIVE_PATH} is not valid JSON; refusing to overwrite it`);
+		}
+	}
+	const scripts = packageJson.scripts;
+	if (scripts !== undefined && (!scripts || typeof scripts !== "object" || Array.isArray(scripts))) {
+		fail(`${PACKAGE_JSON_RELATIVE_PATH} has a non-object scripts field; refusing to overwrite it`);
+	}
+	const nextScripts = {...(scripts as Record<string, unknown> | undefined)};
+	if (nextScripts.pipeline !== undefined && nextScripts.pipeline !== PIPELINE_PACKAGE_SCRIPT) {
+		fail(`${PACKAGE_JSON_RELATIVE_PATH} already has a pipeline script; refusing to replace it`);
+	}
+	nextScripts.pipeline = PIPELINE_PACKAGE_SCRIPT;
+	packageJson.scripts = nextScripts;
+	writeJson(packagePath, packageJson);
+};
+
 const linkEntries = (projectRoot: string, toolkitRoot: string, sourceRelative: string, destinationRelative: string, accept: (name: string) => boolean, force: boolean, prior: Map<string, string>): ManagedPath[] => {
 	const source = join(toolkitRoot, sourceRelative);
 	const destination = join(projectRoot, destinationRelative);
@@ -222,6 +251,7 @@ const init = (args: string[]): void => {
 			return managed ? [managed] : [];
 		});
 	mergeSettings(projectRoot, toolkitRoot);
+	mergePackageScript(projectRoot);
 	const managedPaths = [
 		...(languageVocabulary ? [languageVocabulary] : []),
 		...(crewConfigTemplate ? [crewConfigTemplate] : []),
