@@ -4,7 +4,7 @@
  * behavior across a main checkout, a nested subdirectory, and a linked worktree, so a fake would
  * assert the belief instead of the platform.
  *
- * The convergence cases are the point. A repository root versus a nested package is the split-bug scenario
+ * The convergence cases are the point. `repo` vs `repo/apps/web` is the literal split-bug scenario
  * (`--git-common-dir` prints `../../.git` from the nested dir), and the linked worktree is the one
  * that broke every prior candidate key — `--show-toplevel` and `--absolute-git-dir` both differ
  * there, which is why the canonical-rendezvous rule: derive the tracker location from the repository shared Git directory so every worktree joins one tracker; fail rather than fall back when Git cannot identify it: derive the tracker location from the repository shared Git directory so every worktree joins one tracker; fail rather than fall back when Git cannot identify it bans them.
@@ -40,7 +40,7 @@ describe("canonicalizeGitCommonDir — the relative-to-cwd trap (the canonical-r
 		assert.strictEqual(canonicalizeGitCommonDir(".git", "/repo"), "/repo/.git");
 	});
 	it("resolves a nested subdir's `../../.git` reading back to the SAME key", () => {
-		assert.strictEqual(canonicalizeGitCommonDir("../../.git", "/repo/packages/client"), "/repo/.git");
+		assert.strictEqual(canonicalizeGitCommonDir("../../.git", "/repo/apps/web"), "/repo/.git");
 	});
 	it("passes a worktree's already-absolute reading through unchanged", () => {
 		assert.strictEqual(canonicalizeGitCommonDir("/repo/.git", "/repo/.wt/lane-a"), "/repo/.git");

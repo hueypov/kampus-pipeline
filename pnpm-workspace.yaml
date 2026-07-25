@@ -9,9 +9,11 @@ catalog:
   '@types/proper-lockfile': 4.1.4
   '@typescript/native-preview': ^7.0.0-dev.20260509.2
   effect: 4.0.0-beta.92
+  fast-xml-parser: 5.8.0
   proper-lockfile: 4.1.2
   typescript: ^6.0.3
   vitest: ^4.1.5
+  yaml: 2.9.0
 
 patchedDependencies:
   effect@4.0.0-beta.92: patches/effect@4.0.0-beta.92.patch

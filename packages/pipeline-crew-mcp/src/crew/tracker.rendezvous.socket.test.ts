@@ -1,6 +1,6 @@
 /**
  * The end-to-end proof of the canonical-rendezvous rule: derive the tracker location from the repository shared Git directory so every worktree joins one tracker; fail rather than fall back when Git cannot identify it: derive the tracker location from the repository shared Git directory so every worktree joins one tracker; fail rather than fall back when Git cannot identify it over the REAL socket: two peers of one repo seeded from DIFFERENT
- * cwds — the repo root and a nested package — meet at one live registry, so the peer announced by
+ * cwds — the repo root and a nested `apps/web` — meet at one live registry, so the peer announced by
  * the first is discoverable by the second.
  *
  * This is the regression test for the failure the rewrite exists to kill. Under the old cwd-derived

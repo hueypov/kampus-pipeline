@@ -7,10 +7,10 @@
  * one machine stay isolated. See the canonical-rendezvous rule: derive the tracker location from the repository shared Git directory so every worktree joins one tracker; fail rather than fall back when Git cannot identify it: derive the tracker location from the repository shared Git directory so every worktree joins one tracker; fail rather than fall back when Git cannot identify it.
  *
  * The one non-obvious thing, and the trap the whole module is shaped around: `--git-common-dir` is
- * printed RELATIVE TO THE CWD IT RAN IN. From the repo root it prints `.git`; from a nested package it
+ * printed RELATIVE TO THE CWD IT RAN IN. From the repo root it prints `.git`; from `repo/apps/web` it
  * prints `../../.git`; from a linked worktree it prints an absolute path. So the raw string is not a
  * key — it must be resolved against that same cwd and symlink-canonicalized before it is hashed, or
- * the exact root-vs-subdirectory split this module exists to prevent comes straight back.
+ * the exact `repo` vs `repo/apps/web` split this module exists to kill comes straight back.
  *
  * the canonical-rendezvous rule: derive the tracker location from the repository shared Git directory so every worktree joins one tracker; fail rather than fall back when Git cannot identify it: derive the tracker location from the repository shared Git directory so every worktree joins one tracker; fail rather than fall back when Git cannot identify it left open how much of the surrounding ceremony a canonical rendezvous retires. The finding
  * is: only the cwd-derived hashing. First-peer host-or-dial and stale-socket reclaim (`./server.ts`)
@@ -96,7 +96,7 @@ const resolvedRendezvous = new Map<string, Rendezvous>();
 
 /**
  * Resolve the canonical rendezvous for the repo containing `startDir`. `startDir` seeds git's repo
- * discovery only — it is never itself the key, so two callers passing `repo` and a nested package (or a
+ * discovery only — it is never itself the key, so two callers passing `repo` and `repo/apps/web` (or a
  * linked worktree of either) get the same `repoKey` and the same socket.
  */
 export const resolveRendezvous = (
