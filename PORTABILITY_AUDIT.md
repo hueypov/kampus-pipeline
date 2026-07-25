@@ -1,6 +1,6 @@
 # Portability audit — remaining Phoenix coupling
 
-**Audit date:** 2026-07-25  
+**Baseline audit date:** 2026-07-25  
 **Scope:** every tracked text file in this repository, excluding `pnpm-lock.yaml`
 and `node_modules`. The scan covered 516 tracked files.
 
@@ -19,6 +19,25 @@ This document is an inventory, not a deletion plan. Some names such as
 “control plane” are not inherently Phoenix-specific, but their current rules,
 path classifiers, labels, and approval policy are. A file can appear in more
 than one category.
+
+## Progress after the baseline
+
+The following capabilities have been restored and generalized without being
+deleted:
+
+- `release` now requires explicit human authority and follows the target
+  repository’s documented release contract instead of Cloudflare/Flagship and
+  release-queue labels.
+- `what-shipped` now reports Git/GitHub evidence and repository-defined
+  deployment/release evidence; absent evidence is reported as `unknown`.
+- `rite-audit` is now a non-production, repository-defined acceptance audit
+  with generic functional, accessibility, and isolation dimensions.
+- `pipeline-cli/README.md` now documents project-local private use rather than
+  npm publication or global installation.
+
+The counts below remain the **baseline inventory** until the full scan is
+re-run after each extraction slice. Entries for these four repaired areas are
+retained as history and should be removed from the next refreshed inventory.
 
 ## Scan markers and counts
 
