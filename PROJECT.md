@@ -86,12 +86,14 @@ authenticated GitHub CLI access, and tmux.
 2. Builds `@kampus/pipeline-cli` and typechecks `@kampus/pipeline-crew-mcp`.
 3. Merges pipeline hook entries into `.claude/settings.json` without removing
    unrelated existing settings.
-4. Creates managed links for every extracted `kampus-pipeline` skill and agent,
+4. Creates `.glossary/LANGUAGE.md` from the toolkit's source template when the
+   consumer does not already own that file; it never replaces an existing copy.
+5. Creates managed links for every extracted `kampus-pipeline` skill and agent,
    then every `pipeline-crew` agent and command.
-5. Creates `.claude/crew.config.jsonc` from the placeholder-only template when
+6. Creates `.claude/crew.config.jsonc` from the placeholder-only template when
    it does not already exist.
-6. Adds `crew.config.jsonc` and `crew-run/` to `.claude/.gitignore`.
-7. Records all managed links in `.pipeline/pipeline.json`.
+7. Adds `crew.config.jsonc` and `crew-run/` to `.claude/.gitignore`.
+8. Records all managed links in `.pipeline/pipeline.json`.
 
 Run the following after filling the crew configuration:
 
@@ -349,8 +351,8 @@ The portable v1 is complete when all of the following are true:
 4. Generated hooks, commands, skills, agents, and crew launch paths resolve the
    pinned local toolkit only.
 5. Every retained workflow and CLI tool has been reviewed for generic behavior;
-   source-repository-specific policy has either been removed, isolated behind an
-   explicit profile, or intentionally retained and documented.
+source-repository-specific policy has either been removed, isolated behind an
+explicit profile, or intentionally retained and documented.
 6. The lockfile is current, the complete workspace installs from it, and package
    typechecks/tests pass in a clean fixture consumer.
 

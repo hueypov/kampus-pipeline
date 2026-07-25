@@ -9,6 +9,8 @@ const CONFIG_RELATIVE_PATH = ".pipeline/pipeline.json";
 const SETTINGS_RELATIVE_PATH = ".claude/settings.json";
 const CREW_CONFIG_RELATIVE_PATH = ".claude/crew.config.jsonc";
 const MANAGED_IGNORE_RELATIVE_PATH = ".claude/.gitignore";
+const LANGUAGE_TEMPLATE_RELATIVE_PATH = "templates/glossary/LANGUAGE.md";
+const LANGUAGE_RELATIVE_PATH = ".glossary/LANGUAGE.md";
 type ManagedPath = {path: string; target: string};
 type PipelineConfig = {
 	schemaVersion: 1;
@@ -42,6 +44,7 @@ const assertToolkit = (projectRoot: string): string => {
 	if (!existsSync(join(toolkit, "package.json"))) fail(`missing initialized toolkit at ${TOOLKIT_RELATIVE_PATH}`);
 	if (!existsSync(join(toolkit, "packages/pipeline-cli/src/bin.ts"))) fail("toolkit is missing packages/pipeline-cli");
 	if (!existsSync(join(toolkit, "packages/pipeline-crew-mcp/src/bin.ts"))) fail("toolkit is missing packages/pipeline-crew-mcp");
+	if (!existsSync(join(toolkit, LANGUAGE_TEMPLATE_RELATIVE_PATH))) fail(`toolkit is missing ${LANGUAGE_TEMPLATE_RELATIVE_PATH}`);
 	const submodule = spawnSync("git", ["submodule", "status", "--", TOOLKIT_RELATIVE_PATH], {
 		cwd: projectRoot,
 		encoding: "utf8",
@@ -148,6 +151,19 @@ const mergeIgnore = (projectRoot: string): void => {
 	writeFileSync(path, `${[...lines].join("\n")}\n`);
 };
 
+const createLanguageVocabulary = (projectRoot: string, toolkitRoot: string, prior: Map<string, string>): ManagedPath | undefined => {
+	const destination = join(projectRoot, LANGUAGE_RELATIVE_PATH);
+	const target = `template:${LANGUAGE_TEMPLATE_RELATIVE_PATH}`;
+	if (existsSync(destination)) {
+		return prior.get(LANGUAGE_RELATIVE_PATH) === target
+			? {path: LANGUAGE_RELATIVE_PATH, target}
+			: undefined;
+	}
+	mkdirSync(dirname(destination), {recursive: true});
+	writeFileSync(destination, readFileSync(join(toolkitRoot, LANGUAGE_TEMPLATE_RELATIVE_PATH)));
+	return {path: LANGUAGE_RELATIVE_PATH, target};
+};
+
 const installToolkit = (toolkitRoot: string): void => {
 	run("pnpm", ["install", "--frozen-lockfile"], toolkitRoot);
 	run("pnpm", ["--filter", "@kampus/pipeline-cli", "build"], toolkitRoot);
@@ -166,6 +182,7 @@ const check = (projectRoot: string): string[] => {
 	if (!existsSync(join(projectRoot, SETTINGS_RELATIVE_PATH))) errors.push(`missing ${SETTINGS_RELATIVE_PATH}`);
 	if (!existsSync(join(projectRoot, CREW_CONFIG_RELATIVE_PATH))) errors.push(`missing ${CREW_CONFIG_RELATIVE_PATH}`);
 	else if (readFileSync(join(projectRoot, CREW_CONFIG_RELATIVE_PATH), "utf8").includes("<placeholder")) errors.push("crew configuration still contains placeholders");
+	if (!existsSync(join(projectRoot, LANGUAGE_RELATIVE_PATH))) errors.push(`missing ${LANGUAGE_RELATIVE_PATH}`);
 	if (toolkitRoot && config?.toolkitRoot !== TOOLKIT_RELATIVE_PATH) errors.push("pipeline config has an unsupported toolkit path");
 	return errors;
 };
@@ -185,8 +202,10 @@ const init = (args: string[]): void => {
 	const toolkitRoot = assertToolkit(projectRoot);
 	installToolkit(toolkitRoot);
 	const prior = new Map((readConfig(projectRoot)?.managedPaths ?? []).map((entry) => [entry.path, entry.target]));
+	const languageVocabulary = createLanguageVocabulary(projectRoot, toolkitRoot, prior);
 	mergeSettings(projectRoot, toolkitRoot);
 	const managedPaths = [
+		...(languageVocabulary ? [languageVocabulary] : []),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/skills", ".claude/skills", (name) => existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name, "SKILL.md")), force, prior),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/agents", ".claude/agents", (name) => name.endsWith(".md"), force, prior),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/pipeline-crew/agents", ".claude/agents", (name) => name.endsWith(".md"), force, prior),

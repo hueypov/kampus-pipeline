@@ -30,6 +30,7 @@ const fixture = (): {consumer: string; mockBin: string} => {
 	write(join(toolkit, "bin/pipeline"), "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"$(dirname \"$0\")/pipeline.calls\"\nexit 0\n", true);
 	write(join(toolkit, "packages/pipeline-cli/src/bin.ts"), "export {};\n");
 	write(join(toolkit, "packages/pipeline-crew-mcp/src/bin.ts"), "export {};\n");
+	write(join(toolkit, "templates/glossary/LANGUAGE.md"), "# Fixture language\n");
 	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/example/SKILL.md"), "# Example\n");
 	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/report/SKILL.md"), "# Report\n");
 	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/triage/SKILL.md"), "# Triage\n");
@@ -73,6 +74,7 @@ describe("pipeline init", () => {
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
 		expect(JSON.parse(readFileSync(join(consumer, ".claude/settings.json"), "utf8"))).toMatchObject({custom: true, hooks: expect.any(Object)});
 		expect(existsSync(join(consumer, ".pipeline/pipeline.json"))).toBe(true);
+		expect(readFileSync(join(consumer, ".glossary/LANGUAGE.md"), "utf8")).toBe("# Fixture language\n");
 		expect(existsSync(join(consumer, ".claude/skills/example"))).toBe(true);
 		expect(existsSync(join(consumer, ".claude/skills/report"))).toBe(true);
 		expect(existsSync(join(consumer, ".claude/skills/triage"))).toBe(true);
@@ -81,6 +83,9 @@ describe("pipeline init", () => {
 		expect(existsSync(join(consumer, ".claude/agents/crew-chief-of-staff.md"))).toBe(true);
 		expect(existsSync(join(consumer, ".claude/commands/stand-up.md"))).toBe(true);
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		write(join(consumer, ".glossary/LANGUAGE.md"), "# Consumer language\n");
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		expect(readFileSync(join(consumer, ".glossary/LANGUAGE.md"), "utf8")).toBe("# Consumer language\n");
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(1);
 		write(join(consumer, ".claude/crew.config.jsonc"), '{"value":"configured"}\n');
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
