@@ -11,6 +11,10 @@ const CREW_CONFIG_RELATIVE_PATH = ".claude/crew.config.jsonc";
 const MANAGED_IGNORE_RELATIVE_PATH = ".claude/.gitignore";
 const LANGUAGE_TEMPLATE_RELATIVE_PATH = "templates/glossary/LANGUAGE.md";
 const LANGUAGE_RELATIVE_PATH = ".glossary/LANGUAGE.md";
+const GITHUB_WORKFLOW_TEMPLATES = [
+	{source: "templates/github/workflows/pipeline-toolkit.yml", destination: ".github/workflows/pipeline-toolkit.yml"},
+	{source: "templates/github/workflows/pipeline-doc-safety.yml", destination: ".github/workflows/pipeline-doc-safety.yml"},
+] as const;
 type ManagedPath = {path: string; target: string};
 type PipelineConfig = {
 	schemaVersion: 1;
@@ -45,6 +49,9 @@ const assertToolkit = (projectRoot: string): string => {
 	if (!existsSync(join(toolkit, "packages/pipeline-cli/src/bin.ts"))) fail("toolkit is missing packages/pipeline-cli");
 	if (!existsSync(join(toolkit, "packages/pipeline-crew-mcp/src/bin.ts"))) fail("toolkit is missing packages/pipeline-crew-mcp");
 	if (!existsSync(join(toolkit, LANGUAGE_TEMPLATE_RELATIVE_PATH))) fail(`toolkit is missing ${LANGUAGE_TEMPLATE_RELATIVE_PATH}`);
+	for (const template of GITHUB_WORKFLOW_TEMPLATES) {
+		if (!existsSync(join(toolkit, template.source))) fail(`toolkit is missing ${template.source}`);
+	}
 	const submodule = spawnSync("git", ["submodule", "status", "--", TOOLKIT_RELATIVE_PATH], {
 		cwd: projectRoot,
 		encoding: "utf8",
@@ -151,17 +158,17 @@ const mergeIgnore = (projectRoot: string): void => {
 	writeFileSync(path, `${[...lines].join("\n")}\n`);
 };
 
-const createLanguageVocabulary = (projectRoot: string, toolkitRoot: string, prior: Map<string, string>): ManagedPath | undefined => {
-	const destination = join(projectRoot, LANGUAGE_RELATIVE_PATH);
-	const target = `template:${LANGUAGE_TEMPLATE_RELATIVE_PATH}`;
+const materializeTemplate = (projectRoot: string, toolkitRoot: string, sourceRelative: string, destinationRelative: string, prior: Map<string, string>): ManagedPath | undefined => {
+	const destination = join(projectRoot, destinationRelative);
+	const target = `template:${sourceRelative}`;
 	if (existsSync(destination)) {
-		return prior.get(LANGUAGE_RELATIVE_PATH) === target
-			? {path: LANGUAGE_RELATIVE_PATH, target}
+		return prior.get(destinationRelative) === target
+			? {path: destinationRelative, target}
 			: undefined;
 	}
 	mkdirSync(dirname(destination), {recursive: true});
-	writeFileSync(destination, readFileSync(join(toolkitRoot, LANGUAGE_TEMPLATE_RELATIVE_PATH)));
-	return {path: LANGUAGE_RELATIVE_PATH, target};
+	writeFileSync(destination, readFileSync(join(toolkitRoot, sourceRelative)));
+	return {path: destinationRelative, target};
 };
 
 const installToolkit = (toolkitRoot: string): void => {
@@ -190,6 +197,7 @@ const check = (projectRoot: string): string[] => {
 const init = (args: string[]): void => {
 	const force = args.includes("--force");
 	const checkOnly = args.includes("--check");
+	const withGitHubActions = args.includes("--with-github-actions");
 	const requested = args.includes("--project-root") ? args[args.indexOf("--project-root") + 1] : undefined;
 	if (args.includes("--project-root") && !requested) fail("--project-root requires a path");
 	const projectRoot = findProjectRoot(requested);
@@ -202,10 +210,17 @@ const init = (args: string[]): void => {
 	const toolkitRoot = assertToolkit(projectRoot);
 	installToolkit(toolkitRoot);
 	const prior = new Map((readConfig(projectRoot)?.managedPaths ?? []).map((entry) => [entry.path, entry.target]));
-	const languageVocabulary = createLanguageVocabulary(projectRoot, toolkitRoot, prior);
+	const languageVocabulary = materializeTemplate(projectRoot, toolkitRoot, LANGUAGE_TEMPLATE_RELATIVE_PATH, LANGUAGE_RELATIVE_PATH, prior);
+	const githubWorkflows = GITHUB_WORKFLOW_TEMPLATES
+		.filter((template) => withGitHubActions || prior.get(template.destination) === `template:${template.source}`)
+		.flatMap((template) => {
+			const managed = materializeTemplate(projectRoot, toolkitRoot, template.source, template.destination, prior);
+			return managed ? [managed] : [];
+		});
 	mergeSettings(projectRoot, toolkitRoot);
 	const managedPaths = [
 		...(languageVocabulary ? [languageVocabulary] : []),
+		...githubWorkflows,
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/skills", ".claude/skills", (name) => existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name, "SKILL.md")), force, prior),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/agents", ".claude/agents", (name) => name.endsWith(".md"), force, prior),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/pipeline-crew/agents", ".claude/agents", (name) => name.endsWith(".md"), force, prior),

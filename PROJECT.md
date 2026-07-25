@@ -62,6 +62,7 @@ The command that owns this setup is:
 | `packages/pipeline-crew-mcp` | Private TypeScript crew substrate: tracker, peer/channel protocol, MCP edge, validated configuration, tmux launcher, and role lifecycle. |
 | `claude-plugins/kampus-pipeline` | The issue-pipeline plugin: skills, agents, hooks, helper scripts, and its source documentation. |
 | `claude-plugins/pipeline-crew` | The crew plugin: role definitions, user commands, configuration template, and operator documentation. |
+| `templates/github/workflows` | Optional, project-agnostic GitHub Actions workflow pack installed only on request. |
 | `pnpm-workspace.yaml`, `pnpm-lock.yaml` | The only workspace dependency definition and reproducibility lock for the private toolkit. |
 
 ## Consumer workflow
@@ -74,6 +75,8 @@ In the adopting repository:
 git submodule add git@github.com:hueypov/kampus-pipeline.git .pipeline/toolkit
 git submodule update --init --recursive
 ./.pipeline/toolkit/bin/pipeline init
+# Optional: also install the generic GitHub Actions workflow pack.
+./.pipeline/toolkit/bin/pipeline init --with-github-actions
 ```
 
 `pipeline init` requires a Git repository and an initialized
@@ -95,6 +98,10 @@ authenticated GitHub CLI access, and tmux.
 7. Adds `crew.config.jsonc` and `crew-run/` to `.claude/.gitignore`.
 8. Records all managed links in `.pipeline/pipeline.json`.
 
+`--with-github-actions` additionally writes the optional generic workflows into
+`.github/workflows/` when those paths do not already exist. Once installed,
+`pipeline sync` preserves them and never replaces consumer edits.
+
 Run the following after filling the crew configuration:
 
 ```bash
@@ -103,6 +110,19 @@ Run the following after filling the crew configuration:
 
 `pipeline sync` currently performs the same reconciliation as `init`; use it
 after advancing the submodule pointer.
+
+### 2a. Optional generic GitHub Actions pack
+
+The optional pack deliberately excludes Phoenix deployment, application-path,
+Cloudflare, release, and approval-topology workflows. It contains only:
+
+- `pipeline-toolkit.yml` — checks out the consumer with its submodule, installs
+  the pinned toolkit workspace, and runs the toolkit package test suites.
+- `pipeline-doc-safety.yml` — scans changed Markdown, ADR, pattern, and
+  glossary files for machine-local-path leaks using the pinned local CLI.
+
+The pack is a starting CI baseline. Repositories may add their own application
+tests and deployment workflows without changing toolkit-managed files.
 
 ### 3. Run the toolkit
 

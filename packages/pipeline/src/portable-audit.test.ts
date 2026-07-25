@@ -6,6 +6,7 @@ const root = join(process.cwd(), "../..");
 const portablePaths = [
 	"bin/pipeline",
 	"packages/pipeline/src/bin.ts",
+	"templates/github/workflows",
 	"claude-plugins/kampus-pipeline/hooks",
 	"claude-plugins/pipeline-crew/agents",
 	"claude-plugins/pipeline-crew/commands",
