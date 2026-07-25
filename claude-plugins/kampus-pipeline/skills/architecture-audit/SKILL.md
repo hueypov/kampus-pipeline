@@ -32,8 +32,8 @@ preference — GraphQL calls error out on this org.
 call targets `$REPO`, not a hardcoded repo. Resolve it at the top of your run per the shared
 contract's **Target repo resolution**
 ([`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md)): `$CLAUDE_PIPELINE_REPO`
-if set, else the current repository. In the adopting repository this defaults to `<owner>/<repository>`, so the
-behavior is unchanged with no config (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository §1).
+if set, else the current repository. In any adopting repository this defaults to
+the current GitHub repository, so no configuration is needed for the common case.
 
 ```bash
 REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
@@ -81,7 +81,7 @@ This skill **carries its own method docs**, which is method, not vocabulary:
 
 - **No argument** — codebase-level audit. Sample breadth-first across the repo's subsystems.
 - **`<path-or-area>`** — scope the walk to a directory, package, or app
-  (e.g. `apps/web/worker`, `packages/...`). Stay inside that scope; walk outward only when a
+  (e.g. `src/server`, `packages/...`). Stay inside that scope; walk outward only when a
   finding genuinely depends on something across the seam.
 
 ## Process
@@ -219,7 +219,7 @@ call). Map the finding into the report template:
   file/symbol references and the smell-catalog smell it matches. The load-bearing section.
 - **Why it matters** — the cost, framed in **locality** and **leverage**: what scattered, what
   the interface fails to hide, how tests are blocked. Honest about uncertainty.
-- **Pointers** — repo-relative file paths (e.g. `apps/web/worker/...`), the domain term from
+- **Pointers** — repo-relative file paths (e.g. `src/server/...`), the domain term from
   `.glossary/TERMS.md`, the lens attribution (e.g. `Vocabulary only (1 of 3 — divergent,
   preserved)`), the smell number, and any settled ADR the finding touches.
 - **Suggested next step (non-binding)** — the deepening direction, classified by the
@@ -230,7 +230,8 @@ call). Map the finding into the report template:
 # one finding, one issue — only status:needs-triage, exactly like report. The
 # `tracker create-issue` verb owns this intake-create envelope (the applicable safety invariant;
 # `packages/pipeline-cli/src/tools/tracker/`) and enters the needs-triage queue by default;
-# don't hand-roll the `gh api repos/$REPO/issues` create — the adoption lint (<related work item>) flags it.
+# Use the toolkit’s issue-reporting helper when the repository enables it; do
+# not duplicate a repository-specific issue creation convention in this skill.
 BODY_FILE="$(mktemp /tmp/arch-audit-body.XXXXXX)"   # per-run temp file (concurrent runs share /tmp)
 # … write the five sections + footer into "$BODY_FILE" …
 BODY="$(cat "$BODY_FILE")"
@@ -283,4 +284,5 @@ This skill is one of a suite that turns GitHub issues into an agent-operable pip
 shared formats, label semantics, and target-repo resolution live in
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md), and the raw-intake filing
 mechanics it reuses live in [`../report/SKILL.md`](../report/SKILL.md). The emits-issues +
-4th-surface decision is the applicable safety invariant; the repo-as-config portability guarantee is the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository.
+The audit stays repository-local: it uses an explicit repository override when
+one is supplied and otherwise derives the current GitHub repository.

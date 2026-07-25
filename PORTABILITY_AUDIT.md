@@ -34,6 +34,8 @@ deleted:
   with generic functional, accessibility, and isolation dimensions.
 - `pipeline-cli/README.md` now documents project-local private use rather than
   npm publication or global installation.
+- `architecture-audit` now uses repository-neutral paths and direct current-repo
+  resolution; it no longer carries copied Phoenix examples or policy references.
 
 The counts below remain the **baseline inventory** until the full scan is
 re-run after each extraction slice. Entries for these four repaired areas are
