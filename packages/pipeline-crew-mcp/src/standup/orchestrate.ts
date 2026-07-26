@@ -31,7 +31,12 @@ import {
 	type CrewSessionBinUnresolvableError,
 	type SessionBind,
 } from "./bind.ts";
-import {type LaunchConfig, type LaunchConfigError, readLaunchConfig} from "./config.ts";
+import {
+	type LaunchConfig,
+	type LaunchConfigError,
+	readLaunchConfig,
+	resolveProjectConfigPath,
+} from "./config.ts";
 import {
 	ensureTrackerRunning,
 	type TrackerHandle,
@@ -140,6 +145,8 @@ export interface LaunchPlan {
 	 * its own persisted-scope entry at boot, never a sibling's (which would storm the role lease, the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure).
 	 */
 	readonly cwd: string;
+	/** Absolute operator config path inherited by this role despite its isolated pane cwd. */
+	readonly crewConfigPath: string;
 }
 
 /** A launched crew session: the role + lease it came up holding, the crew window + pane it lives in, and its pid. */
@@ -282,6 +289,8 @@ export interface SessionPlanContext {
 	/** The id of the cwd-dir tree this session's launch cwd lands under (`<root>/.claude/crew-run/<runId>/`). */
 	readonly runId: string;
 	readonly localScope: ProjectScopeRegistrar;
+	/** The resolved config file read at launch, propagated to the pane as `CREW_CONFIG`. */
+	readonly crewConfigPath: string;
 }
 
 /**
@@ -319,7 +328,7 @@ export const buildLaunchPlan = (
 		// The pane's distinct launch cwd — where its leaf `.mcp.json` lands (the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure). Resolved here so an
 		// unwritable cwd fails closed before the register/launch.
 		const cwd = yield* ctx.localScope.paneCwd(ctx.projectRoot, ctx.runId, placement.paneLabel);
-		return {session, bind, placement, cwd};
+		return {session, bind, placement, cwd, crewConfigPath: ctx.crewConfigPath};
 	});
 
 /**
@@ -415,9 +424,15 @@ const shellQuote = (token: string): string => `'${token.replace(/'/g, "'\\''")}'
  * can accept. The operator's `$SHELL` runs it (falling back to `zsh`, the macOS default the workaround
  * was proven on); every token is single-quoted so the shell re-parses the argv verbatim.
  */
-export const paneClaudeCommand = (argv: readonly string[]): readonly string[] => {
+export const paneClaudeCommand = (
+	argv: readonly string[],
+	crewConfigPath?: string,
+): readonly string[] => {
 	const shell = process.env.SHELL || "zsh";
-	const command = ["claude", ...argv].map(shellQuote).join(" ");
+	const envPrefix = crewConfigPath === undefined ? [] : [`CREW_CONFIG=${shellQuote(crewConfigPath)}`];
+	const command = [...envPrefix, "claude", ...argv].map((token) =>
+		token.startsWith("CREW_CONFIG=") ? token : shellQuote(token),
+	).join(" ");
 	return [shell, "-lic", command];
 };
 
@@ -473,7 +488,7 @@ export const launchSessionInTmux = (
 				"-P",
 				"-F",
 				"#{window_id}",
-				...paneClaudeCommand(bind.argv),
+				...paneClaudeCommand(bind.argv, plan.crewConfigPath),
 			]);
 			if (opened.spawnError !== undefined || opened.code !== 0) {
 				return yield* Effect.fail(launchFailure(session, pane, opened, "new-window"));
@@ -489,7 +504,7 @@ export const launchSessionInTmux = (
 			intoWindow,
 			"-c",
 			cwd,
-			...paneClaudeCommand(bind.argv),
+			...paneClaudeCommand(bind.argv, plan.crewConfigPath),
 		]);
 		if (split.spawnError !== undefined || split.code !== 0) {
 			return yield* Effect.fail(launchFailure(session, pane, split, "split-window"));
@@ -521,7 +536,8 @@ export const runStandUp = (
 		const resolveTargetSession = input.resolveTargetSession ?? resolveTargetSessionDefault;
 		const launch = input.launch ?? launchSessionInTmux;
 
-		const config = yield* input.config ?? readLaunchConfig();
+		const crewConfigPath = resolveProjectConfigPath(projectRoot);
+		const config = yield* input.config ?? readLaunchConfig({CREW_CONFIG: crewConfigPath});
 		// Fail fast on a version drift before starting the tracker or any session — channels vary
 		// across CLI versions, so a mismatch is a stand-up to refuse (version-assert.ts / the pre-launch CLI-version check).
 		yield* assertPinnedCliVersion(config, input.readVersionOutput ?? readInstalledCliVersionOutput);
@@ -554,6 +570,7 @@ export const runStandUp = (
 					config,
 					runId,
 					localScope,
+					crewConfigPath,
 				});
 			},
 			{concurrency: 1},
