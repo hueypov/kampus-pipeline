@@ -15,6 +15,7 @@ import {
 	LaunchConfigError,
 	parseJsonc,
 	resolveConfigPath,
+	resolveProjectConfigPath,
 	stripJsonc,
 } from "./config.ts";
 
@@ -71,6 +72,13 @@ describe("standup/config — resolveConfigPath", () => {
 	it("falls back to the default when $CREW_CONFIG is unset or blank", () => {
 		assert.strictEqual(resolveConfigPath({}), DEFAULT_CONFIG_PATH);
 		assert.strictEqual(resolveConfigPath({CREW_CONFIG: "   "}), DEFAULT_CONFIG_PATH);
+	});
+	it("anchors the default and relative override to the project root for isolated panes", () => {
+		assert.strictEqual(resolveProjectConfigPath("/repo", {}), "/repo/.claude/crew.config.jsonc");
+		assert.strictEqual(
+			resolveProjectConfigPath("/repo", {CREW_CONFIG: "config/crew.jsonc"}),
+			"/repo/config/crew.jsonc",
+		);
 	});
 });
 

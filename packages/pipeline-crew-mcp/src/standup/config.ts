@@ -22,6 +22,7 @@
  * (operator/notification/wipCap/…) are ignored. There is no config-read tmux dimension —
  * tmux window placement now derives from role identity at launch (tmux-placement.ts), not config.
  */
+import {resolve as resolvePath} from "node:path";
 import {Effect, FileSystem, Schema} from "effect";
 import {CREW_ROLES} from "../crew/index.ts";
 
@@ -213,6 +214,17 @@ export const resolveConfigPath = (
 	const override = env.CREW_CONFIG?.trim();
 	return override && override.length > 0 ? override : DEFAULT_CONFIG_PATH;
 };
+
+/**
+ * Resolve the operator config against the project root before a crew pane changes into its
+ * isolated launcher cwd. This is the exact config file stand-up reads and the path each
+ * launched role inherits through `CREW_CONFIG`, so role definitions never fall back to a
+ * pane-relative `.claude/crew.config.jsonc`.
+ */
+export const resolveProjectConfigPath = (
+	projectRoot: string,
+	env: {readonly CREW_CONFIG?: string | undefined} = process.env,
+): string => resolvePath(projectRoot, resolveConfigPath(env));
 
 /**
  * Strip JSONC to strict JSON: line/block comments and trailing commas. String-literal aware,

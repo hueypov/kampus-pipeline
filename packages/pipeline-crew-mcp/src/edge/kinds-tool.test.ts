@@ -93,6 +93,9 @@ describe("edge/kinds-tool — the channel_kinds discovery tool (the message-sche
 				tools.tools.map((t) => t.name),
 				"channel_kinds",
 			);
+			const describe = tools.tools.find((tool) => tool.name === "channel_kinds");
+			assert.strictEqual(describe?.inputSchema.type, "object");
+			assert.property(describe?.inputSchema.properties ?? {}, "request");
 		}),
 	);
 

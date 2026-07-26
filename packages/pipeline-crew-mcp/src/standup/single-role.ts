@@ -34,7 +34,12 @@ import type {
 	CrewServerNotRegisteredError,
 	CrewSessionBinUnresolvableError,
 } from "./bind.ts";
-import {type LaunchConfig, type LaunchConfigError, readLaunchConfig} from "./config.ts";
+import {
+	type LaunchConfig,
+	type LaunchConfigError,
+	readLaunchConfig,
+	resolveProjectConfigPath,
+} from "./config.ts";
 import {
 	ensureTrackerRunning,
 	type TrackerHandle,
@@ -214,7 +219,8 @@ export const spawnRole = (
 			input.resolveTargetSession ?? (() => resolveTargetSessionDefault(runTmuxCommand));
 		const launch = input.launch ?? launchSessionInTmux;
 
-		const config = yield* input.config ?? readLaunchConfig();
+		const crewConfigPath = resolveProjectConfigPath(projectRoot);
+		const config = yield* input.config ?? readLaunchConfig({CREW_CONFIG: crewConfigPath});
 		// Same fail-fast the whole-crew boot does: channels vary across CLI versions, so a drifted pin is
 		// a spawn to refuse before touching the tracker or launching (version-assert.ts / the pre-launch CLI-version check).
 		yield* assertPinnedCliVersion(config, input.readVersionOutput ?? readInstalledCliVersionOutput);
@@ -234,6 +240,7 @@ export const spawnRole = (
 			config,
 			runId,
 			localScope,
+			crewConfigPath,
 		});
 
 		// Register just THIS pane's project scope (+ idempotent folder-trust / server-approval boot gates):
