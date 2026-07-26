@@ -126,59 +126,42 @@ These hold on every run regardless of what the spawn prompt remembered to say:
   verdicts on the PR are the whole output — a verdict returned only to the orchestrator and
   never posted is a dropped gate.
 <a id="fan-across-every-present-class-in-lockstep-with-ship-its-live-class-probes-class_reresolve"></a>
-- **Fan across EVERY present class in lockstep with ship-it's live class probes
-  (`class_reresolve`).** Decide the class set the *same* way `ship-it` Step 2 decides which
-  gates it requires: from the canonical `HAS_CODE_RE`/`HAS_SKILLS_RE`/`HAS_DOCS_*_RE` lines in
-  `gh-issue-intake-formats.md` §CLASS, **re-resolved from `$PIPELINE_BASE_REF`** — never the inline
-  literals in this snapshot (which can predate a probe amendment and mis-classify). This is the
-  `ui_reresolve` idiom (below) generalized from `review-design` to all three verdict classes:
-  because both sides read the one live source, `required-gate == dispatched-gate` holds by
-  construction, so a multi-class PR reaches `ship-it` with a current-head PASS already standing
-  in **every** present namespace — no late-stall bounce-back (documented repository precedent). **Fail-closed**: an
-  unreadable source ⇒ dispatch the gate (`.` for the match probes, a never-match sentinel for the
-  docs carve-out so every path reaches the doc test), consistent with `ui_reresolve` — never
-  fail-open to skip a class.
+- **Fan across EVERY present class in lockstep with ship-it's policy-backed class probe.** The
+  authoritative rules are the repository's `github.review.classification` object in
+  `.pipeline/agent-policy.json`, read from `$PIPELINE_BASE_REF` by `class-probe` — never inline
+  literals in this snapshot and never a PR-head policy that could relax its own gates. The object
+  owns code, docs, skills/agents, and optional design include/exclude patterns. The classifier owns
+  the inclusive fan-out, stable order, no-class fallback, and fail-closed behavior. That division
+  keeps a repository's taxonomy configurable while making `required-gate == dispatched-gate` a
+  tested executable invariant rather than a reviewer judgment.
 
-  **Compute the class set with `pipeline-cli class-probe`, not by eyeballing (documented repository precedent).** The
-  §CLASS regexes below already put `.glossary/**` in **has-code**, yet PR documented repository precedent (a mixed
-  `.glossary/TERMS.md` + skill diff) still fanned only `review-skill` — the reviewer read the
-  glossary path as a doc surface and skipped `review-code`, so `ship-it` refused the bank on the
-  empty `review-code` namespace. The classification is not a taste call; run the deterministic,
-  unit-tested probe (it parses the **same** §CLASS `HAS_*_RE` lines `ship-it` Step 0 reads — no
-  third copy) and dispatch a gate for **exactly** each namespace it prints:
+  **Compute the class set with `pipeline-cli class-probe`, not by eyeballing.** A path that looks
+  like prose, configuration, or a non-visual UI implementation can still be owned by a stronger
+  review gate. The command uses the same base-ref policy that shipping and delivery CI use; a mixed
+  diff therefore receives every required namespace, rather than only the first class a reviewer
+  notices. Fetch the changed-file set, resolve the base ref, and dispatch **exactly** every line the
+  probe prints:
   ```bash
+  BASE_SHA="$(gh api "repos/$REPO/pulls/$PR" --jq '.base.sha')"
+  git fetch --no-tags origin "$BASE_SHA"
   gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename' \
-    | pipeline-cli class-probe classify --namespaces   # → review-code / review-doc / review-skill (+ review-design when has-ui), one per present gate
+    | pipeline-cli class-probe classify --policy-ref "$BASE_SHA" --namespaces
+  # → review-code / review-doc / review-skill / review-design, one per required gate
   ```
-  The probe **also folds in the additive `review-design`** (`ui_reresolve`, below): it reads the
-  live `UI_RE` from its single source (`ship-it/SKILL.md`) and appends `review-design` to
-  `--namespaces` when the diff is UI-affecting, so the one command names **every** gate ship-it
-  will require — class **and** design. **Dispatch exactly each namespace it prints**, review-design
-  included; do not re-decide has-ui by eye. This is the documented repository precedent/documented repository precedent fix: a non-visual
-  a configured UI-source `*.ts` file matches the policy-derived `UI_RE`, so the probe names `review-design`
-  and the fan dispatches it — where the old eyeball-the-files step skipped it and deadlocked ship-it
-  on a phantom-empty `review-design` namespace.
-  The equivalent shell, kept as the **fail-closed reference** for what the tool computes (the tool
-  is authoritative — its core mirrors these exact lines, `packages/pipeline-cli/src/tools/class-probe/`):
-  ```bash
-  HAS_CODE_RE='^(apps|packages|\.glossary|infra)/'; HAS_SKILLS_RE='^claude-plugins/[^/]+/(skills|agents)/|^\.claude-plugin/'   # fail-closed reference; §CLASS is authoritative
-  HAS_DOCS_EXCLUDE_RE='^(claude-plugins|apps|packages|\.glossary|infra)/'; HAS_DOCS_RE='^(\.decisions|\.patterns)/|\.md$'
-  CLASS_RAW="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
-  reresolve_re() { live="$(printf '%s\n' "$CLASS_RAW" | grep "^$1=" | head -n1 || true)"; if [ -n "$live" ]; then printf '%s' "$live" | sed "s/^$1='//; s/'\$//"; else printf '%s' "$2"; fi; }
-  HAS_CODE_RE="$(reresolve_re HAS_CODE_RE '.')"; HAS_SKILLS_RE="$(reresolve_re HAS_SKILLS_RE '.')"
-  HAS_DOCS_EXCLUDE_RE="$(reresolve_re HAS_DOCS_EXCLUDE_RE '\$^')"; HAS_DOCS_RE="$(reresolve_re HAS_DOCS_RE '.')"   # unreadable ⇒ exclude nothing / every path a doc ⇒ dispatch review-doc
-  CHANGED="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename')"
-  echo "$CHANGED" | grep -Eq "$HAS_CODE_RE"   && echo "has-code → dispatch review-code"
-  echo "$CHANGED" | grep -Eq "$HAS_SKILLS_RE" && echo "has-skills → dispatch review-skill"
-  echo "$CHANGED" | grep -Ev "$HAS_DOCS_EXCLUDE_RE" | grep -Eq "$HAS_DOCS_RE" && echo "has-docs → dispatch review-doc"
-  # No-class fail-closed (documented repository precedent): a file matching NONE of the three classes above — root tooling
-  # outside the code roots (biome-plugins/**, biome.jsonc, turbo.json) — rides has-code → dispatch
-  # review-code (§CLASS no-class fail-closed rule). `class-probe classify` folds this in, so the fan
-  # never leaves a non-empty diff with zero dispatched gates. Not a widened HAS_CODE_RE (that is documented repository precedent).
-  ```
-  Dispatch each gate the probe names — class gates **and** the additive `review-design` when it
-  appears — and post its SHA-bound marker in this same pass. A single-class PR simply fires one
-  probe — the fan degenerates to today's behavior, never a regression.
+
+  `review-design` is **additive**, never a replacement for the code/doc/skill namespace. Its
+  configured design patterns may deliberately include non-visual implementation files when the
+  repository treats them as part of a rendered surface; do not re-decide that boundary by eye.
+  Conversely, an explicit design exclusion can keep test-only or non-rendered paths from minting a
+  phantom design gate. Dispatch each namespace the probe prints and post its SHA-bound marker in
+  the same pass. A single-class PR simply fires one gate; a multi-class PR fires all of them.
+
+  **Fail closed, but distinguish an empty diff.** An empty changed-file list prints no gate. A
+  non-empty diff with no matching configured pattern rides `review-code`, so executable tooling or
+  an unfamiliar repository surface never becomes an unreviewed change. If the base-ref policy is
+  missing, unreadable, malformed, or contains an invalid pattern, `class-probe` prints every review
+  namespace for a non-empty diff and explains the conservative result on stderr. Do not replace
+  that output with a best-effort grep or a smaller hand-selected fan.
 <a id="dispatch-review-design-in-lockstep-with-ship-its-live-ui_re"></a>
 - **Dispatch `review-design` in lockstep with ship-it's LIVE `UI_RE` — the `class-probe` output
   is the deterministic dispatch signal; the shell below is its fail-closed reference

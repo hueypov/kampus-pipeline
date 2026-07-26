@@ -36,9 +36,13 @@ const GENERATED_WORKFLOWS = [
 	["pipeline-toolkit", ".github/workflows/pipeline-toolkit.yml"],
 	["pipeline-doc-safety", ".github/workflows/pipeline-doc-safety.yml"],
 	["pipeline-delivery-gate", ".github/workflows/pipeline-delivery-gate.yml"],
+	["pipeline-gitleaks", ".github/workflows/pipeline-gitleaks.yml"],
+	["pipeline-doc-links", ".github/workflows/pipeline-doc-links.yml"],
+	["pipeline-settings-env-guard", ".github/workflows/pipeline-settings-env-guard.yml"],
+	["pipeline-unresolved-threads", ".github/workflows/pipeline-unresolved-threads.yml"],
 ] as const;
 
-const LIFECYCLE_COMMANDS = ["main-sync", "trivial-diff classify", "worktree-sweep"] as const;
+const LIFECYCLE_COMMANDS = ["main-sync", "trivial-diff classify", "class-probe classify", "guard-content-probe", "cp-cardinality decide", "cp-cardinality evidence-github-team", "reachability-guard check", "worktree-sweep", "gh-compat lint-skills", "ship-digest derive", "ref-guard", "primary-index-guard pre-commit"] as const;
 
 type CatalogEntry = {
 	readonly name: string;

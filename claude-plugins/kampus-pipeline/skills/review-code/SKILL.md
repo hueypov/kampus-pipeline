@@ -558,39 +558,53 @@ snapshot once mis-classified a now-control-plane PR (documented repository prece
 ```bash
 # §CP travels in the INJECTED skill snapshot, which can lag $PIPELINE_BASE_REF even when the on-disk file
 # is current — a pre-amendment snapshot once mis-classified a now-control-plane PR (documented repository precedent).
-# §CP boundary is single-sourced in pipeline-cli (control-plane-paths/control-plane-re.ts, documented repository precedent);
-# run `pipeline-cli control-plane-paths` to print it. It is re-resolved from $PIPELINE_BASE_REF right below
+# §CP boundary is single-sourced in repository policy through `pipeline-cli protected-change-policy`;
+# it is re-resolved from $PIPELINE_BASE_REF right below
 # (the documented repository precedent anti-self-authorization read), so this is only a fail-closed sentinel, never the live source.
 CONTROL_PLANE_RE='.'   # fail-closed default: every path is control-plane until $PIPELINE_BASE_REF resolves
 # Re-resolve §CP from $PIPELINE_BASE_REF at run time so a stale snapshot can't mis-flag a now-control-plane
 # PR as auto-mergeable (documented repository precedent). the skill-review rule that gives skills their own behavioral gate §6 names gh-issue-intake-formats.md the single source; read it
 # freshly via REST raw (never GraphQL). $PIPELINE_BASE_REF's line wins over the snapshot; fail closed on read failure.
-CP_LIVE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep '^CONTROL_PLANE_RE=' | head -n1 || true)"
+CP_LIVE="$(pnpm pipeline cli protected-change-policy regex --policy-ref "$PIPELINE_BASE_REF" 2>/dev/null || true)"
 if [ -n "$CP_LIVE" ]; then
-  CONTROL_PLANE_RE="$(printf '%s' "$CP_LIVE" | sed "s/^CONTROL_PLANE_RE='//; s/'$//")"   # the flag tracks $PIPELINE_BASE_REF, not the snapshot's age (AC1/AC2)
+  CONTROL_PLANE_RE="$CP_LIVE"   # policy-derived boundary tracks $PIPELINE_BASE_REF, not the injected snapshot
 else
   CONTROL_PLANE_RE='.'   # FAIL CLOSED: can't read $PIPELINE_BASE_REF's boundary ⇒ flag EVERY path control-plane (not-auto-mergeable), never trust the possibly-stale snapshot
 fi
-# --paginate streams filenames (the API caps per_page at 100); grep aggregates the §CP matches
-# ACROSS the concatenated pages — a jq `[ … ]` aggregate would instead emit one array PER PAGE.
-# `|| true`: no §CP match is grep exit 1, an empty (non-control-plane) result, not a failure (documented repository precedent).
-CONTROL_PLANE_TOUCHED="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
-  --jq '.[].filename' | grep -E "$CONTROL_PLANE_RE" || true)"
+# Retrieve the complete filename set once. `--paginate` + streaming `--jq` avoids the API's
+# 100-file page cap; both the path boundary and the configured content-candidate selector consume
+# this same list, so the two protected-change signals cannot observe different diffs.
+FILES="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename')"
+# `|| true`: no §CP match is grep exit 1, an empty (non-control-plane) result, not a failure.
+CONTROL_PLANE_TOUCHED="$(printf '%s\n' "$FILES" | grep -E "$CONTROL_PLANE_RE" || true)"
 # non-empty → control-plane: emit the advisory line in the verdict (Step 4a) per the control-plane rule that requires human approval for changes to automation, CI, or merge safeguards/the related safeguards
-# §CP by CONTENT (the applicable safety invariant): a touched .decisions/** ADR is not path-§CP, but a guard-RELAXING one is
-# control-plane by nature. Probe each ADR's content at head with the SHARED `guard-content-probe` verb
-# — the SAME probe ship-it Step 0, review-doc, and the driver (via trivial-diff) call, so a guard-touching
-# ADR reads §CP consistently everywhere (issue documented repository precedent, founder ruling documented repository precedent). A mixed code+guard-ADR PR
-# fans BOTH gates; either flagging the ADR carries the §CP merge-authority hold. Fail-closed inside the verb.
+# Protected content by CONFIGURATION (the applicable safety invariant): a changed decision record
+# selected by the repository-owned policy may be protected by its content even when its path is not
+# a control-plane path. Probe candidates at the current head with the SHARED
+# `guard-content-probe` command — the SAME probe ship-it Step 0, review-doc, and the driver (via
+# trivial-diff) call — so a guard-touching configured record takes the protected-change route
+# consistently everywhere. A mixed code + protected decision fans BOTH gates; either flag carries
+# the merge-authority hold. The command fails closed for untrusted policy and unreadable bodies.
+BASE_POLICY_REF="${PIPELINE_BASE_REF:?PIPELINE_BASE_REF must name the trusted base policy ref}"
 HEAD_SHA="$(gh api "repos/$REPO/pulls/$PR" --jq '.head.sha')"
 GUARD_TOUCHING=""
-while IFS= read -r adr; do
-  [ -z "$adr" ] && continue
-  gh api "repos/$REPO/contents/$adr?ref=$HEAD_SHA" -H 'Accept: application/vnd.github.raw' 2>/dev/null \
-    | pnpm pipeline cli guard-content-probe classify --path "$adr" >/dev/null \
-    && GUARD_TOUCHING="$GUARD_TOUCHING $adr"
-done < <(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename' | grep -E '^\.decisions/.*\.md$' || true)
-# non-empty $GUARD_TOUCHING → §CP-advisory, same as CONTROL_PLANE_TOUCHED above (Step 4a; the applicable safety invariant)
+GUARD_CANDIDATES="$(printf '%s\n' "$FILES" \
+  | pnpm pipeline cli guard-content-probe candidates --policy-ref "$BASE_POLICY_REF")" || GUARD_CANDIDATES="$FILES"
+while IFS= read -r candidate; do
+  [ -z "$candidate" ] && continue
+  body="$(gh api "repos/$REPO/contents/$candidate?ref=$HEAD_SHA" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
+  classify_status=0
+  classification="$(printf '%s' "$body" \
+    | pnpm pipeline cli guard-content-probe classify --policy-ref "$BASE_POLICY_REF" --path "$candidate")" || classify_status=$?
+  if [ "$classification" != "not-guard-touching" ] || [ "$classify_status" -ne 1 ]; then
+    GUARD_TOUCHING="$GUARD_TOUCHING $candidate"
+  fi
+done <<EOF
+$GUARD_CANDIDATES
+EOF
+# non-empty $GUARD_TOUCHING → protected-change advisory, same as CONTROL_PLANE_TOUCHED above
+# (Step 4a; the applicable safety invariant). Only an exact `not-guard-touching` token with exit 1
+# proves the candidate ordinary; every other command outcome stays protected.
 ```
 
 ---
@@ -1255,9 +1269,10 @@ re-gates.
 ## Step 4a — Pass path: signal merge-ready (do NOT merge)
 
 Every criterion passed. **Branch on the control-plane class first** (the `CONTROL_PLANE_TOUCHED`
-flag from Step 2 — **or** a non-empty `GUARD_TOUCHING`, a guard-touching `.decisions/**` ADR that is
-§CP by content, the applicable safety invariant / documented repository precedent): a **blocking-set** PR (it touches `.claude/**`, `.github/**`, a
-gate-critical skill, or a guard-touching ADR — §CP) does **not** get a binding `PASS @ <sha> —
+flag from Step 2 — **or** a non-empty `GUARD_TOUCHING`, a configured decision-record candidate
+that the shared policy-ref probe classifies as guard-touching, the applicable safety invariant /
+documented repository precedent): a **blocking-set** PR (it touches `.claude/**`, `.github/**`, a
+gate-critical skill, or a guard-touching configured record) does **not** get a binding `PASS @ <sha> —
 merge-ready` marker. It
 gets the **canonical advisory line** instead — `review-code: advisory — blocking-set PR (manual
 merge)`, no `@ <sha>` — the one advisory shape all three gates converge on (the skill-review rule that gives skills their own behavioral gate §5;
@@ -1447,7 +1462,9 @@ same forbidden forms — differing only in polarity (`FAIL @ <sha> — not merge
 ### Pass path — blocking-set PR (advisory only, the canonical advisory form)
 
 Every criterion passed but `CONTROL_PLANE_TOUCHED` **or** `GUARD_TOUCHING` (Step 2) is non-empty —
-the PR touches the control plane, or a guard-touching `.decisions/**` ADR that is §CP by content (the applicable safety invariant / documented repository precedent; the shared `guard-content-probe` verb returned `guard-touching`). Post the **same
+the PR touches the control plane, or a configured decision-record candidate whose shared
+`guard-content-probe --policy-ref` classification is `guard-touching` (the applicable safety
+invariant / documented repository precedent). Post the **same
 evidence**, but the first line is the **canonical advisory
 line** (§6.6), **not** a binding merge-ready marker. Its **first line** carries **no `@ <sha>`** by
 design (it authorizes nothing on its first line, so it never enters `ship-it`'s auto-merge PASS
@@ -1474,9 +1491,10 @@ code review namespace via its `commit_id`, defeating the advisory's purpose).
 ```markdown
 review-code: advisory — blocking-set PR (manual merge)
 
-PR #<PR> is §CP — it touches the control plane (`.claude/**`, `.github/**`, or a gate-critical
-skill — the control-plane rule that requires human approval for changes to automation, CI, or merge safeguards), OR a guard-touching `.decisions/**` ADR (§CP by content, the applicable safety invariant — the
-shared `guard-content-probe` verb flagged: `<the .decisions/** path(s)>`). My verdict is **advisory
+PR #<PR> is in the protected-change route — it touches the control plane (`.claude/**`, `.github/**`,
+or a gate-critical skill — the control-plane rule that requires human approval for changes to
+automation, CI, or merge safeguards), OR it has a configured decision-record candidate the shared
+`guard-content-probe --policy-ref` command flagged: `<the configured candidate path(s)>`. My verdict is **advisory
 only**: it does **not** authorize a merge. Under the §CP hard gate (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues), a
 `configured approval authority` member approves this at its current head and `ship-it` then enqueues it (the rule that only the shipping stage has merge authority single merge authority) — there is no human hand-merge in the §CP path.
 

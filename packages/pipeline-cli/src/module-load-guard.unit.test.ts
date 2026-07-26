@@ -68,7 +68,7 @@ describe("remediationMessage", () => {
 		const msg = remediationMessage(unlinkedPkgErr("yaml"));
 		expect(msg).toContain("`yaml`");
 		expect(msg).toContain("pnpm install");
-		expect(msg).toContain("pnpm --filter @kampus/pipeline-cli install");
+		expect(msg).toContain("pnpm --filter pipeline-cli install");
 		// no raw stack framing
 		expect(msg).not.toContain("ERR_MODULE_NOT_FOUND");
 	});

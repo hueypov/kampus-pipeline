@@ -1,5 +1,5 @@
 {
-	"name": "@kampus/pipeline-cli",
+	"name": "pipeline-cli",
 	"version": "0.2.0",
 	"private": true,
 	"description": "pipeline-cli — the single subcommand-router home all pipeline tooling folds into; `pipeline-cli <tool> …` dispatches to a registered tool (the originating initiative)",

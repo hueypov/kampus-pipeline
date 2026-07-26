@@ -63,18 +63,19 @@ A PR is in one of two classes by the files it touches (the control-plane rule th
   (blocking) is the *separate* axis 0065 owns, and 0065 stands verbatim until a later decision
   retires it against `review-skill`'s evidence (the skill-review rule that gives skills their own behavioral gate §4).
 - **NON-BLOCKING — autonomous.** Everything else — `$PIPELINE_CODE_PATHS` (every app worker), `$PIPELINE_CODE_PATHS`,
-  `.decisions/**` (**except a guard-touching ADR** — see next paragraph), `.patterns/**`, and
+  repository decision records (**except a configured candidate classified guard-touching — see next paragraph), `.patterns/**`, and
   other prose docs. These are product or knowledge
   artifacts; they are gated for quality, but a human at the merge adds no security value, so
   you ship them once the matching gate PASSes.
 
-Note `.decisions/**` and `.patterns/**` are **non-blocking** under 0053 — they auto-merge
-through `review-doc` (the boundary moved off "harness vs not" to "control plane vs not"). **The
-one exception (the applicable safety invariant,
-documented repository precedent): a guard-touching `.decisions/**` ADR is §CP.** An ADR that relaxes/amends a documented
-guard is control-plane by nature, so Step 0 classifies a `.decisions/**` file §CP by its
-**content** (a conservative, fail-closed guard-vocabulary probe — not an author-declared tag) and
-holds it for a founder/control-plane approval rather than auto-shipping it on a `review-doc` PASS.
+Decision records and patterns are **non-blocking** unless the repository's explicit
+`github.shipping.guardContent` policy selects a changed record and the shared probe classifies its
+content as guard-touching. **The one exception (the applicable safety invariant, documented
+repository precedent): a guard-touching configured decision record is protected.** A record that
+relaxes/amends a documented safeguard is control-plane by nature, so Step 0 uses the shared,
+conservative, fail-closed content probe — not an author-declared tag — with the trusted base
+`--policy-ref`, then holds it for the configured approval route rather than auto-shipping it on
+the ordinary artifact-gate PASS.
 
 ## All GitHub ops via `gh api` REST — never GraphQL
 
@@ -255,247 +256,249 @@ and **fails closed** (treats every path as control-plane → refuses) if that re
 FILES=$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename')   # --paginate + streaming --jq: full set past file documented repository precedent (the API caps per_page at 100; the grep probes below aggregate the concatenated lines) (documented repository precedent)
 # §CP travels in the INJECTED skill snapshot, which can lag $PIPELINE_BASE_REF even when the on-disk file
 # is current — a pre-amendment snapshot once auto-merged a now-control-plane PR (documented repository precedent).
-# §CP boundary is single-sourced in pipeline-cli (control-plane-paths/control-plane-re.ts, documented repository precedent);
-# run `pipeline-cli control-plane-paths` to print it. It is re-resolved from $PIPELINE_BASE_REF right below
+# §CP boundary is single-sourced in repository policy through `pipeline-cli protected-change-policy`;
+# it is re-resolved from $PIPELINE_BASE_REF right below
 # (the documented repository precedent anti-self-authorization read), so this is only a fail-closed sentinel, never the live source.
 CONTROL_PLANE_RE='.'   # fail-closed default: every path is control-plane until $PIPELINE_BASE_REF resolves
 # Re-resolve §CP from $PIPELINE_BASE_REF at run time so a stale snapshot can't mis-classify a now-control-plane
 # PR as auto-mergeable (documented repository precedent). the skill-review rule that gives skills their own behavioral gate §6 names gh-issue-intake-formats.md the single source; read it
 # freshly via REST raw (never GraphQL, top-of-skill rule). $PIPELINE_BASE_REF's line wins over the snapshot.
-CP_LIVE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep '^CONTROL_PLANE_RE=' | head -n1 || true)"
+CP_LIVE="$(pnpm pipeline cli protected-change-policy regex --policy-ref "$PIPELINE_BASE_REF" 2>/dev/null || true)"
 if [ -n "$CP_LIVE" ]; then
-  CONTROL_PLANE_RE="$(printf '%s' "$CP_LIVE" | sed "s/^CONTROL_PLANE_RE='//; s/'$//")"   # classification tracks $PIPELINE_BASE_REF, not the snapshot's age (AC1/AC2)
+  CONTROL_PLANE_RE="$CP_LIVE"   # policy-derived boundary tracks $PIPELINE_BASE_REF, not the injected snapshot
 else
   CONTROL_PLANE_RE='.'   # FAIL CLOSED: can't read $PIPELINE_BASE_REF's boundary ⇒ treat EVERY path as control-plane (refuse), never trust the possibly-stale snapshot
 fi
 echo "$FILES" | grep -Eq "$CONTROL_PLANE_RE" && echo "BLOCKING"   # control plane: .claude/.github + the gate-critical skills (the rule that makes gate-critical skill changes control-plane changes) + the enforcement-guard packages (the applicable safety invariant); other skills/** auto-merge on a review-skill PASS (the skill-review rule that gives skills their own behavioral gate)
-# §CP CONTENT clause (the applicable safety invariant/documented repository precedent): a .decisions/** ADR is §CP by PATH only if it also matches
-# CONTROL_PLANE_RE (it doesn't) — but a guard-RELAXING ADR is control-plane by NATURE and path can't
-# tell it from an ordinary one. So classify a touched .decisions/** ADR §CP when its CONTENT cites or
-# amends a documented guard. This probe is the SHARED verb `pipeline-cli guard-content-probe` (issue
-# documented repository precedent, founder ruling documented repository precedent) — the ONE content probe the review gate and the driver (via
-# trivial-diff) ALSO call, so a guard-touching ADR classifies §CP consistently at every stage, not
-# only here. The GUARD_ADR_RE vocabulary stays single-sourced in gh-issue-intake-formats.md §CP; the
-# verb reads it from the local checkout (immune to the documented repository precedent injected-snapshot staleness — it reads
-# disk, not this skill's prompt copy). FAIL CLOSED: an unreadable ADR body (delete/404) ⇒ §CP —
-# never auto-ship an ADR that couldn't be read and proven guard-free (the verb resolves this itself).
+# Protected-content clause (the applicable safety invariant/documented repository precedent): a
+# configured decision record can be protected by its CONTENT even where its path does not match
+# CONTROL_PLANE_RE. The path selector and vocabulary are repository-owned `guardContent` policy,
+# so neither a decision-record directory nor safeguard words live in this skill. This is the SHARED
+# `pipeline-cli guard-content-probe` command the review gates and driver (via trivial-diff) ALSO
+# call, so a guard-touching configured record takes the protected-change route consistently at
+# every stage, not only here. The command reads the trusted base `--policy-ref`, not a mutable PR
+# policy; it fails closed for invalid/missing policy and unreadable candidate bodies, so delivery
+# never auto-ships a record that cannot be proven ordinary.
+BASE_POLICY_REF="${PIPELINE_BASE_REF:?PIPELINE_BASE_REF must name the trusted base policy ref}"
 HEAD_SHA="$(gh api "repos/$REPO/pulls/$PR" --jq '.head.sha')"
-echo "$FILES" | grep -E '^\.decisions/.*\.md$' | while IFS= read -r adr; do
-  [ -z "$adr" ] && continue
-  gh api "repos/$REPO/contents/$adr?ref=$HEAD_SHA" -H 'Accept: application/vnd.github.raw' 2>/dev/null \
-    | pnpm pipeline cli guard-content-probe classify --path "$adr" >/dev/null \
-    && echo "BLOCKING ($adr — guard-touching ADR ⇒ §CP, the applicable safety invariant)"
-done
-# The has-code/has-docs/has-skills probes are single-sourced as canonical HAS_*_RE= lines in
-# gh-issue-intake-formats.md §CLASS and re-resolved from $PIPELINE_BASE_REF here (like CONTROL_PLANE_RE/
-# UI_RE, documented repository precedent) so this snapshot can't mis-classify — and so the reviewer (which consumes the SAME
-# lines) fans across every present class in lockstep with what ship-it requires (documented repository precedent). The reviewer
-# and this step both run `pipeline-cli class-probe classify` (which parses these SAME §CLASS lines —
-# no third copy) as the deterministic class set, so `required == dispatched` can't diverge by an
-# eyeball miss the way `.glossary/**` did on PR documented repository precedent (documented repository precedent). FAIL CLOSED: an unreadable source ⇒
-# dispatch/require the gate. The literals below are the fail-closed reference, NOT the live decision
-# source — §CLASS is the source:
-#   gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename' | pipeline-cli class-probe classify
-HAS_CODE_RE='^(apps|packages|\.glossary|infra)/'
-HAS_SKILLS_RE='^claude-plugins/[^/]+/(skills|agents)/|^\.claude-plugin/'
-HAS_DOCS_EXCLUDE_RE='^(claude-plugins|apps|packages|\.glossary|infra)/'
-HAS_DOCS_RE='^(\.decisions|\.patterns)/|\.md$'
-CLASS_RAW="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
-reresolve_re() { live="$(printf '%s\n' "$CLASS_RAW" | grep "^$1=" | head -n1 || true)"; if [ -n "$live" ]; then printf '%s' "$live" | sed "s/^$1='//; s/'\$//"; else printf '%s' "$2"; fi; }
-HAS_CODE_RE="$(reresolve_re HAS_CODE_RE '.')"
-HAS_SKILLS_RE="$(reresolve_re HAS_SKILLS_RE '.')"
-HAS_DOCS_EXCLUDE_RE="$(reresolve_re HAS_DOCS_EXCLUDE_RE '\$^')"   # fail-closed: exclude NOTHING ⇒ every path reaches the doc test
-HAS_DOCS_RE="$(reresolve_re HAS_DOCS_RE '.')"                     # fail-closed: every path is a doc
-echo "$FILES" | grep -Eq "$HAS_SKILLS_RE" && echo "has-skills"   # → review-skill (the skill-review rule that gives skills their own behavioral gate); §CP-blocking for merge via CONTROL_PLANE_RE above
-echo "$FILES" | grep -Eq "$HAS_CODE_RE" && echo "has-code"       # → review-code; the has-code roots agree with the docs-exclusion below in lockstep (§CLASS/§DOC, documented repository precedent/documented repository precedent/documented repository precedent)
-echo "$FILES" | grep -Ev "$HAS_DOCS_EXCLUDE_RE" | grep -Eq "$HAS_DOCS_RE" && echo "has-docs"   # → review-doc; carve out code roots/skills/.glossary first, then test for a doc path (§DOC contract)
-# No-class fail-closed (documented repository precedent): a NON-EMPTY diff whose files match NONE of the three classes above
-# — root tooling outside the code roots (biome-plugins/**, biome.jsonc, turbo.json) — must NOT ship
-# un-gated. `pipeline-cli class-probe classify` (the live decision source above) folds this in: any
-# unclassified changed file rides has-code → review-code, so a non-empty diff never requires zero
-# gates. This is the §CLASS "no-class fail-closed" rule, NOT a widened HAS_CODE_RE (that is documented repository precedent).
-# UI probe → review-design (ADDITIVE, not a class): a changed path under $PIPELINE_APPLICATION_PATH/src — the
-# rendered frontend surface (React components, styles, tokens, routes). `pipeline-cli class-probe
-# classify` above ALSO emits `has-ui` (it parses this same UI_RE from its single source,
-# ship-it/SKILL.md) — so the reviewer fan dispatches review-design off the SAME deterministic probe
-# it fans the class gates from, rather than eyeballing the files and skipping it (the documented repository precedent deadlock;
-# documented repository precedent). Like CONTROL_PLANE_RE/GUARD_ADR_RE above, the literal below is the fail-closed REFERENCE +
-# the validate-gate-path-drift lockstep target, NOT the live decision source: it is re-resolved from
-# $PIPELINE_BASE_REF right after, so an injected skill snapshot that predates the review-design gate can't
-# silently DROP the UI probe and slip a UI PR past the gate (documented repository precedent — the documented repository precedent idiom, previously only
-# on §CP/GUARD, now extended to UI_RE). ship-it/SKILL.md@configured base branch's `UI_RE=` line is the ONE live source;
-# reviewer.md, class-probe, AND review-design's Step 0 off-ramp all re-resolve the SAME line from the
-# same ref, so required-gate == dispatched-gate == satisfiable-gate holds by construction — all sides
-# read live configured base branch, not independently-aging snapshots. When a second app worker is added, generalize
-# this one live UI_RE to $PIPELINE_CODE_PATHS/src and every side tracks it.
-# SCOPE (documented repository precedent): UI_RE is `^$PIPELINE_APPLICATION_PATH/src/` ONLY — a `.tsx`/`.css` OUTSIDE $PIPELINE_APPLICATION_PATH/src (a Hono
-# server-JSX file, a `.tsx` test fixture, a non-web `.css`) has no rendered surface, so it is NOT
-# design-gate work and must NOT mint a required review-design. The earlier `|\.tsx$|\.css$` branches
-# made the *require* predicate a superset of review-design's own dispatch/off-ramp predicate
-# (`^$PIPELINE_APPLICATION_PATH/src/`): a non-web `.tsx` was required-but-unroutable — the dispatched review-design run
-# off-ramped with no marker and ship-it deadlocked on a review-design PASS no run could produce.
-# IN-SRC TEST CARVE-OUT (documented repository precedent): a change whose $PIPELINE_APPLICATION_PATH/src paths are ALL test/spec files renders no
-# surface, so it must NOT mint a required review-design either — the src-colocated `*.test.tsx` next to
-# a component (the established sibling-colocation convention) stalled documented repository precedent/documented repository precedent at ship on a gate no
-# run could satisfy. ERE (grep -E) has no negative lookahead, so a single UI_RE can't express "under
-# src, but not a test" — mirror §CLASS's has-docs carve-then-test: strip test/spec files FIRST, THEN
-# test for a UI path. A real component ($PIPELINE_APPLICATION_PATH/src/**/*.tsx non-test) or a mixed component+test diff
-# survives the carve and STILL gates; only an all-test/spec src diff is exempted.
-UI_RE='^$PIPELINE_APPLICATION_PATH/src/'
-UI_EXCLUDE_RE='\.(test|spec)\.tsx?$'
-UI_RAW="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/ship-it/SKILL.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
-UI_LIVE="$(printf '%s\n' "$UI_RAW" | grep '^UI_RE=' | head -n1 || true)"
-UX_LIVE="$(printf '%s\n' "$UI_RAW" | grep '^UI_EXCLUDE_RE=' | head -n1 || true)"
-if [ -n "$UI_LIVE" ]; then UI_RE="$(printf '%s' "$UI_LIVE" | sed "s/^UI_RE='//; s/'$//")"; else UI_RE='.'; fi   # FAIL CLOSED: can't read $PIPELINE_BASE_REF's UI_RE ⇒ '.' ⇒ every path UI-affecting ⇒ REQUIRE review-design, never silently skip (documented repository precedent)
-if [ -n "$UX_LIVE" ]; then UI_EXCLUDE_RE="$(printf '%s' "$UX_LIVE" | sed "s/^UI_EXCLUDE_RE='//; s/'$//")"; else UI_EXCLUDE_RE='$^'; fi   # FAIL CLOSED: unreadable ⇒ '$^' never-match ⇒ carve out NOTHING ⇒ every $PIPELINE_APPLICATION_PATH/src path (incl. tests) gates review-design
-echo "$FILES" | grep -Ev "$UI_EXCLUDE_RE" | grep -Eq "$UI_RE" && echo "has-ui"   # carve test/spec first, THEN require review-design ALONGSIDE the class gate(s)
+GUARD_CANDIDATES="$(printf '%s\n' "$FILES" \
+  | pnpm pipeline cli guard-content-probe candidates --policy-ref "$BASE_POLICY_REF")" || GUARD_CANDIDATES="$FILES"
+while IFS= read -r candidate; do
+  [ -z "$candidate" ] && continue
+  body="$(gh api "repos/$REPO/contents/$candidate?ref=$HEAD_SHA" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
+  classify_status=0
+  classification="$(printf '%s' "$body" \
+    | pnpm pipeline cli guard-content-probe classify --policy-ref "$BASE_POLICY_REF" --path "$candidate")" || classify_status=$?
+  if [ "$classification" != "not-guard-touching" ] || [ "$classify_status" -ne 1 ]; then
+    echo "BLOCKING ($candidate — guard-touching or unprovable at head ⇒ protected change, fail-closed)"
+  fi
+done <<EOF
+$GUARD_CANDIDATES
+EOF
+# `class-probe` is the one shared authority for reviewer dispatch, this shipping decision, and
+# delivery CI. It reads `github.review.classification` from `$PIPELINE_BASE_REF` rather than this
+# prompt snapshot or a PR-head policy, so the PR cannot relax its own required gate set. The policy
+# supplies repository-owned code/docs/skills/design include and exclusion patterns; the command
+# supplies stable ordering, inclusive fan-out, the unknown-path → review-code fallback, and a
+# conservative all-gates result when policy cannot be trusted. Do not reproduce these predicates in
+# shell: a second classifier makes `required == dispatched` a convention instead of a guarantee.
+BASE_POLICY_SHA="$(gh api "repos/$REPO/pulls/$PR" --jq '.base.sha')"
+git fetch --no-tags origin "$BASE_POLICY_SHA"
+REQUIRED_NAMESPACES="$(printf '%s\n' "$FILES" | pipeline-cli class-probe classify --policy-ref "$BASE_POLICY_SHA" --namespaces)"
+printf '%s\n' "$REQUIRED_NAMESPACES"  # review-code / review-doc / review-skill / review-design
+# A non-empty diff matching no configured class still prints review-code. An absent, malformed,
+# unreadable, or invalid base policy prints every namespace and a fail-closed diagnostic on stderr.
+# An empty diff prints no namespace. review-design is additive; its include/exclude rules keep the
+# required gate, reviewer dispatch, and review-design's own off-ramp satisfiable by one policy.
+#
+# Classification contract — preserve these distinctions when the repository changes policy:
+#   * code and skills are direct include matches. A path may match both and therefore requires
+#     both review namespaces; do not choose a "more specific" gate by inspection.
+#   * docs and design are carve-then-test rules. Their exclusions are part of the policy contract,
+#     not an invitation to use filename suffixes as an alternative classifier. A document under a
+#     code-owned tree may intentionally be code-gated; an excluded design test may intentionally
+#     be code-gated without also requiring review-design.
+#   * a design match adds review-design alongside the other classes. It never turns code/docs/skill
+#     work into design-only work, and a design exclusion never removes another matching class gate.
+#   * a repository can intentionally leave design include patterns empty when it has no rendered or
+#     design-reviewable surface. This is an explicit policy decision, not an implicit exemption for
+#     a particular framework, extension, directory, or product.
+#   * a file matching no class still rides review-code. That default closes the dangerous state in
+#     which a real diff changes tooling, configuration, or an unfamiliar surface but requires zero
+#     verdicts. Only an actually empty changed-file list has no required namespace.
+#
+# Base-ref authority is equally important. A policy change in the PR under review is itself a
+# change that needs the base policy's gate set; it cannot lower the gates that verify it. Therefore
+# pass the fetched base SHA with --policy-ref for shipping, reviewer dispatch, review-design
+# routing, and CI. Local worktree policy is useful for authors previewing a future taxonomy, but it
+# is never the merge authority. If `git show <base>:.pipeline/agent-policy.json` fails, the JSON is
+# malformed, a required rule section is absent, or any configured regular expression cannot be
+# compiled, class-probe emits all four namespaces for a non-empty diff. Treat that result as a
+# deliberate safety signal: obtain a valid base policy or produce the required review evidence;
+# never replace it with a smaller manual gate set.
+#
+# The stdout lines are machine input. Preserve their exact order and names when looping through
+# required verdicts: review-code, review-doc, review-skill, review-design. Human diagnostics stay
+# on stderr so shell callers can capture the line set without parsing prose. `pipeline-cli verdict
+# read --gate` accepts both these review-* names and its short internal gate keys, so no sed-based
+# namespace conversion is needed. This is why the class probe, verdict reader, reviewer fan, and
+# delivery workflow can share one result without a second table of aliases.
 ```
 
 **Routing:**
 
-- If **any** file is control plane (the §CP set — `.claude/**`, `.github/**`, or a
-  gate-critical skill) **OR any touched `.decisions/**` ADR matched the guard-touching content
-  probe above** (a guard-relaxing/amending ADR is control-plane by nature — the applicable safety invariant,
-  documented repository precedent; its `review-doc` verdict routing is unchanged, only merge-authority moves) → the PR is
-  **§CP: APPROVAL-GATED** (not a blanket refuse — the control-plane rule that requires non-author approval of the current head before the pipeline enqueues,
-  amending 0053's merge model). Run the **deterministic §CP cardinality check** (the
-  [§CP approval gate](#step-0-cp-approval-gate) below, the control-plane approval check that counts non-author approvals at the current head):
+- If **any** file is in the repository-configured protected-change boundary (for example, automation,
+  CI, merge safeguards, or other configured protected paths) **or** any
+  gate-critical skill) **OR any configured decision-record candidate matched the guard-touching
+  content probe above** (a safeguard-relaxing/amending record is protected by nature — the
+  applicable safety invariant, documented repository precedent; its artifact-gate routing is
+  unchanged, only merge-authority moves) → the PR is
+  **PROTECTED-CHANGE: APPROVAL-GATED** (not a blanket refuse — the configured approval-authority
+  rule requires current-revision evidence before the pipeline enqueues). Run the **deterministic
+  protected-change cardinality check** (the
+  [protected-change approval gate](#step-0-cp-approval-gate) below):
   - **discharge** → the human-judgment gate is satisfied; **carry on** into Step 2's normal machine
     gates (matching-gate SHA-bound PASS, CI green, run-evidence). Once those pass, ENQUEUE exactly
-    like a non-§CP PR (`gh pr merge --auto`, no method flag — the queue owns the SQUASH method;
-    QUEUED → auto-merges on green; §CP PRs now
-    enter the applicable safety invariant queue too). §CP carries **one extra** gate — the team approval — layered on
+    like a non-protected PR (`gh pr merge --auto`, no method flag — the queue owns the SQUASH method;
+    QUEUED → auto-merges on green; protected PRs now
+    enter the applicable safety invariant queue too). A protected change carries **one extra** gate — the configured approval-authority approval — layered on
     the same machine gates every PR clears.
-  - **stop** (the cardinality branch's required current-head signal is absent, or the team is
-    empty) → **STOP.** Report `awaiting control-plane approval` and stop; do **not** enqueue. This
+  - **stop** (the cardinality branch's required current-head signal is absent, or the approval authority is
+    empty) → **STOP.** Report `awaiting protected-change approval` and stop; do **not** enqueue. This
     **replaces** the old blanket refuse.
 
   This holds even if the rest of the diff is clean code/docs/skills — a mixed PR that touches the
-  control plane needs the team approval for the whole PR, and should be split so the non-§CP half
-  can flow without it. The §CP gate short-circuits **before** the namespace check below, so it never
+  protected-change boundary needs the configured approval-authority approval for the whole PR, and should be split so the non-protected half
+  can flow without it. The protected-change gate short-circuits **before** the namespace check below, so it never
   conflicts with the fact that a gate-critical `claude-plugins/kampus-pipeline/skills/**` PR is still
   `review-skill`-routed (the skill-review rule that gives skills their own behavioral gate): the routing decides *which gate's verdict the human reads*, the
-  §CP approval gate decides *whether the enqueue is unblocked*. A `claude-plugins/kampus-pipeline/skills/**`
-  PR that touches **no** gate-critical skill is **not** §CP — it flows through `review-skill` and
-  auto-merges on a PASS with no team approval.
+  protected-change approval gate decides *whether the enqueue is unblocked*. A `claude-plugins/kampus-pipeline/skills/**`
+  PR that touches **no** gate-critical skill is **not** protected — it flows through `review-skill` and
+  auto-merges on a PASS with no approval-authority approval.
 
   <a id="step-0-cp-approval-gate"></a>
-  **The §CP approval gate — a deterministic team-cardinality check, resolved over `gh api` REST
-  (the control-plane approval check that counts non-author approvals at the current head).**
-  The discharge is a **function of `configured approval authority` team shape**, never agent judgment — the
-  same §CP conditions produce the same verdict across agents (killing the documented repository precedent non-determinism where
-  identical single-owner PRs merged in one run and were refused in another). The branch keys on `N`,
-  the count of present, active, human control-plane members, exactly as the control-plane approval check that counts non-author approvals at the current head's `case "$N"`
-  reference specifies:
-  - **`N == 0`** (empty team) → **STOP, fail closed** — no accountable human to discharge the boundary.
-  - **`N == 1`, sole owner *is* the PR author** → a current-head **self-approval marker** by the sole
-    owner discharges (the single-owner degenerate case; GitHub blocks native self-approval, so the
-    signal is a marker comment — the control-plane rule that requires non-author approval of the current head before the pipeline enqueues).
-  - **`N == 1`, sole member *is not* the author** → that member's current-head **approval** discharges.
-  - **`N >= 2`** (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues's two-person control, unchanged) → a current-head **APPROVED review by a
-    control-plane member who is NOT the author** discharges; a self-approval never does.
+  **The protected-change approval gate — a deterministic approval-authority-cardinality check, resolved by the
+  repository-owned evidence adapter (the protected-change approval rule).** The discharge is a
+  **function of the configured approval-authority shape and proven current-revision evidence**, never
+  agent judgment — the same protected PR conditions produce the same verdict across shippers. Read
+  `github.shipping.protectedChangeApproval` from the immutable base policy reference, not from the
+  PR head or an injected prompt snapshot. That policy names the installed authority/evidence adapter,
+  the configured non-author threshold, and the optional sole-author-exception contract; it contains
+  no portable fallback organization, team, identity normalization, review state, or marker text.
 
-  Every discharge signal is **bound to the PR's current head** — a review's `commit_id` (the commit
-  it was submitted against, per the [GitHub REST reviews resource](https://docs.github.com/rest/pulls/reviews))
-  or the self-approval marker's `@ <sha>` equals the PR head SHA. A stale signal on a superseded head
-  **does not count** — this retains the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA's
-  SHA-staleness rule (and the `dismiss_stale_reviews_on_push` the Phase-3 ruleset sets). The branch
-  itself lives in the pure, unit-tested `cp-cardinality` core (`packages/pipeline-cli`) — the single
-  source ship-it runs, so the verdict cannot drift across shippers (the class-probe/control-plane-paths
-  precedent). Resolve the roster + the two signals over REST, never GraphQL, then decide:
+  The pure core preserves all four authority-cardinality branches without asking this workflow to
+  reproduce them: no eligible authority stops; a sole authority member who is the author can only
+  use the configured, current-revision sole-author exception; a sole non-author and every larger
+  authority require the configured count of distinct eligible non-author approvals at the current
+  revision. A sole-author exception is deliberately ignored in every other shape. This keeps the
+  strict two-person behavior whenever the repository configures an authority with multiple members,
+  while allowing a repository to configure a different positive threshold without editing a skill.
+
+  More precisely, the command normalizes the adapter roster by trimming, dropping blanks, and
+  de-duplicating exact identities, then requires a non-blank author identity. `N == 0` has no
+  accountable authority and therefore stops. With `N == 1` and the sole member equal to the author,
+  only the enabled configured exception proven at the current head can discharge; an ordinary review
+  count cannot weaken that branch. With `N == 1` and a different authority member, the configured
+  number of distinct eligible non-author approvals at the current head is required. With `N >= 2`,
+  that same configured number is required; the author's approval and every sole-author exception
+  remain excluded. If a configured threshold exceeds the available eligible non-author capacity,
+  `cp-cardinality` stops rather than reducing the threshold. Blank identities, malformed counts,
+  unreadable roster input, partial policy, and contradictory evidence are all stop outcomes, never
+  a permissive interpretation. The core writes only `discharge` or `stop` to stdout, its exact
+  branch and reason to stderr, and has no provider, network, policy-reading, or marker-parsing role.
+
+  Every evidence fact is **bound to the PR's current head**. The adapter validates the provider
+  payloads before it reads them; resolves the active, de-duplicated authority roster; obtains the PR
+  author and head; takes the latest effective review per reviewer; counts only configured approval
+  states from eligible non-authors at that head; and, when enabled, proves the repository-owned
+  sole-author exception's actor, configured pattern, and current-head binding. A stale, dismissed,
+  duplicate, author, outsider, inactive, malformed, missing, unreadable, or permission-denied
+  evidence item does not count. An adapter read failure is **UNKNOWN**, not an empty roster and not
+  approval: report the named policy/evidence gap and stop before enqueue. The core itself remains
+  provider-neutral — provider URLs, organization/team coordinates, review vocabulary, and exception
+  marker grammar belong only to the selected repository adapter.
+
+  The adapter returns trusted facts only after all of those checks. Do not substitute an inline team
+  endpoint, a hand-written marker parser, a boolean approximation, or a second `case` branch here:
+  doing so creates a competing merge authority. Pass the facts to the one pure, unit-tested
+  `cp-cardinality` core (`packages/pipeline-cli`) as follows:
 
   ```bash
-  # the control-plane approval check that counts non-author approvals at the current head: DETERMINISTIC §CP discharge keyed on control-plane team cardinality, not judgment.
-  ORG="${REPO%%/*}"                                            # owner half of owner/repo
-  # N = present, active, human control-plane members (REST, never GraphQL — the control-plane rule that requires non-author approval of the current head before the pipeline enqueues)
-  MEMBERS="$(gh api --paginate "orgs/$ORG/teams/control-plane/members?per_page=100" --jq '.[].login')"
-  AUTHOR="$(gh api "repos/$REPO/pulls/$PR" --jq '.user.login')"
-  HEAD="$(gh api "repos/$REPO/pulls/$PR" --jq '.head.sha')"    # every signal binds THIS head (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA)
-  sha_binds_head() { [ -n "$1" ] || return 1; case "$HEAD" in "$1"*) return 0;; esac; case "$1" in "$HEAD"*) return 0;; esac; return 1; }
+  # Resolve policy and evidence from the immutable base ref. The configured GitHub-team adapter
+  # stops/returns UNKNOWN when policy is disabled, malformed, unavailable, or cannot prove a fact.
+  BASE_POLICY_REF="${PIPELINE_BASE_REF:?PIPELINE_BASE_REF must name the trusted base policy ref}"
+  REPO_ROOT="${PIPELINE_REPO_ROOT:-$(git rev-parse --show-toplevel)}" || {
+    echo "protected-change approval: STOP (cannot resolve repository root for approval policy)"
+    exit 1
+  }
+  # `evidence-github-team` is the repository-policy adapter boundary. It reads only the base policy
+  # plus live provider evidence and writes one machine-readable fact object; it does not use PR-head
+  # policy. An adopting repository may choose another configured adapter, but must retain this fact
+  # contract rather than copy its provider/team/marker logic into a shipper.
+  EVIDENCE="$(pipeline-cli cp-cardinality evidence-github-team \
+    --root "$REPO_ROOT" --policy-ref "$BASE_POLICY_REF" --repo "$REPO" --pr "$PR")" || {
+    echo "protected-change approval: STOP (approval evidence UNKNOWN or policy unavailable)"
+    exit 1
+  }
+  # Reject a malformed adapter response before extracting it. Required facts are MEMBERS (one exact
+  # eligible identity per line), AUTHOR, REQUIRED_NON_AUTHOR_APPROVALS (positive integer),
+  # NON_AUTHOR_APPROVALS_AT_HEAD (distinct count), and SOLE_AUTHOR_EXCEPTION_AT_HEAD (true only
+  # when the enabled repository-owned exception is proven at the current head).
+  printf '%s' "$EVIDENCE" | jq -e '
+    (.members | type == "array" and all(.[]; type == "string")) and
+    (.author | type == "string" and length > 0) and
+    (.requiredNonAuthorApprovals | type == "number" and floor == . and . > 0) and
+    (.nonAuthorApprovalsAtHead | type == "number" and floor == . and . >= 0) and
+    (.soleAuthorExceptionAtHead | type == "boolean")
+  ' >/dev/null || {
+    echo "protected-change approval: STOP (adapter returned malformed evidence)"
+    exit 1
+  }
+  MEMBERS="$(printf '%s' "$EVIDENCE" | jq -r '.members[]')"
+  AUTHOR="$(printf '%s' "$EVIDENCE" | jq -r '.author')"
+  REQUIRED_NON_AUTHOR_APPROVALS="$(printf '%s' "$EVIDENCE" | jq -r '.requiredNonAuthorApprovals')"
+  NON_AUTHOR_APPROVALS_AT_HEAD="$(printf '%s' "$EVIDENCE" | jq -r '.nonAuthorApprovalsAtHead')"
+  SOLE_AUTHOR_EXCEPTION_AT_HEAD="$(printf '%s' "$EVIDENCE" | jq -r '.soleAuthorExceptionAtHead')"
 
-  # Signal 1 — a current-head APPROVED review by a control-plane member who is NOT the author
-  # (the N>=2 and N==1-sole!=author discharge). Latest review per author, APPROVED, commit_id == HEAD.
-  NON_AUTHOR_APPROVAL_AT_HEAD=false
-  CURRENT_APPROVERS="$(gh api --paginate "repos/$REPO/pulls/$PR/reviews?per_page=100" \
-    --jq "group_by(.user.login) | map(max_by(.submitted_at))
-          | map(select(.state == \"APPROVED\" and .commit_id == \"$HEAD\") | .user.login) | .[]")"
-  while IFS= read -r u; do
-    [ -z "$u" ] && continue
-    [ "$u" = "$AUTHOR" ] && continue                          # self-approval never counts here (the control-plane approval check that counts non-author approvals at the current head)
-    st="$(gh api "orgs/$ORG/teams/control-plane/memberships/$u" --jq '.state' 2>/dev/null)"
-    [ "$st" = "active" ] && { NON_AUTHOR_APPROVAL_AT_HEAD=true; break; }
-  done <<<"$CURRENT_APPROVERS"
-
-  # Signal 2 — a deliberate current-head self-approval MARKER by the sole owner (the ONLY N==1
-  # sole-owner discharge). GitHub records no native self-approval, so the signal is a marker comment:
-  # first line `control-plane-self-approval @ <sha>` — a DISTINCT token from the review-* markers, so
-  # it can never leak a §CP PR into the auto-merge namespace (the rule that keeps advisory control-plane evidence separate from merge-authorizing verdicts) — authored by the sole owner
-  # and SHA-bound to the current head. The sole owner posts it to consciously self-approve their own
-  # §CP PR; it is inert unless N==1 and they are the author (cp-cardinality ignores it otherwise).
-  SELF_APPROVAL_AT_HEAD=false
-  SELF_SHA="$(gh api --paginate "repos/$REPO/issues/$PR/comments?per_page=100" \
-    --jq "[.[] | select(.user.login == \"$AUTHOR\")
-               | select(.body | test(\"(?i)^\\\\s*\\\\**\\\\s*control-plane-self-approval\\\\b\"))]
-          | last | .body // \"\"" \
-    | grep -ioE 'control-plane-self-approval[[:space:]]*@?[[:space:]]*[0-9a-f]{7,40}' \
-    | grep -ioE '[0-9a-f]{7,40}' | head -n1)"
-  sha_binds_head "$SELF_SHA" && SELF_APPROVAL_AT_HEAD=true
-
-  # The DETERMINISTIC decision — the whole the control-plane approval check that counts non-author approvals at the current head `case "$N"` branch lives in the tested pure core.
-  # discharge → carry on to the machine gates; stop → STOP (fail closed). Pass a signal flag only when
-  # that signal is present at head; cp-cardinality selects which signal the branch actually requires.
+  # The deterministic decision is network-free. Its stdin is the adapter's exact eligible roster;
+  # stdout is only `discharge` or `stop`, with the branch/reason on stderr.
   if printf '%s\n' "$MEMBERS" | pipeline-cli cp-cardinality decide \
        --author "$AUTHOR" \
-       $([ "$NON_AUTHOR_APPROVAL_AT_HEAD" = true ] && printf -- '--non-author-approval-at-head') \
-       $([ "$SELF_APPROVAL_AT_HEAD" = true ] && printf -- '--self-approval-at-head'); then
-    echo "§CP approval: discharged deterministically (the control-plane approval check that counts non-author approvals at the current head) → carry on to machine gates"
+       --required-non-author-approvals "$REQUIRED_NON_AUTHOR_APPROVALS" \
+       --non-author-approvals-at-head "$NON_AUTHOR_APPROVALS_AT_HEAD" \
+       $([ "$SOLE_AUTHOR_EXCEPTION_AT_HEAD" = true ] && printf -- '--sole-author-exception-at-head'); then
+    echo "protected-change approval: discharged deterministically from configured authority evidence → carry on to machine gates"
   else
-    echo "§CP approval: STOP (awaiting control-plane approval) — cardinality branch not satisfied (the control-plane approval check that counts non-author approvals at the current head)"
+    echo "protected-change approval: STOP (configured cardinality policy not discharged)"
+    exit 1
   fi
   ```
 
-  This is **only** the §CP unblock — it does not weaken any other guard. The SHA-bound gate verdict
+  This is **only** the protected-change unblock — it does not weaken any other guard. The SHA-bound gate verdict
   (Step 2/2b), CI-green (Step 3), the run-evidence bundle (Step 3.5), and single-merge-authority
-  (the rule that only the shipping stage has merge authority) all still apply to a §CP PR exactly as to a non-§CP one; the cardinality discharge is an
-  **additional** requirement, never a substitute. The two-person control is preserved exactly where it
-  exists (`N >= 2`): GitHub blocks a member approving their **own** §CP PR, so a §CP change needs the
-  OTHER team member (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues). Adding a second control-plane member automatically re-tightens the
-  gate to that two-person control with no further edit — the branch keys on live cardinality (the control-plane approval check that counts non-author approvals at the current head).
-- Otherwise, note which **artifact classes are present** (skills, code, docs, or a mix) **and
-  whether the diff is UI-affecting** (`has-ui`). Step 2 requires the matching gate's latest
-  verdict = PASS for **each class present**: skills → `review-skill` PASS; code → `review-code`
-  PASS; docs → `review-doc` PASS; a mixed PR needs a current-head PASS in **each** namespace
-  present. **If the diff is UI-affecting (`has-ui`), a current-head `review-design` PASS is
-  required *in addition*** — additive, alongside the class gate(s), never instead of one. Carry
-  the class set **and the `has-ui` flag** into Step 2.
+  (the rule that only the shipping stage has merge authority) all still apply to a protected PR exactly as to a non-protected one; the cardinality discharge is an
+  **additional** requirement, never a substitute. The configured multi-member protection is
+  preserved exactly where it exists (`N >= 2`): the adapter supplies only distinct **non-author**
+  current-head approvals, and the pure core rejects every sole-author exception outside its exact
+  one-member/author branch. Adding authority members or increasing the repository-owned threshold
+  automatically applies the stricter live-cardinality outcome with no skill edit — the branch keys
+  on trusted evidence and configured policy, not on a shipper's inference.
+- Otherwise, carry `REQUIRED_NAMESPACES` from `class-probe` into Step 2. It is the complete,
+  ordered set of verdict namespaces for this diff: code → `review-code`, docs → `review-doc`,
+  skills/agents → `review-skill`, and a configured design surface → additive `review-design`.
+  Step 2 requires the latest current-head PASS for **every printed namespace**, never merely the
+  first class noticed. A mixed diff therefore requires every relevant class gate, while a design
+  diff requires `review-design` alongside—not instead of—its class gates.
 
 <a id="the-ui-affecting-detection-must-agree-with-the-reviewer"></a>
-**The UI-affecting detection must AGREE with the reviewer, or the gate is unroutable.** ship-it
-requires a `review-design` PASS *because the reviewer dispatched `review-design` on the same
-diff*, AND *because the dispatched `review-design` run can actually reach a rendered surface to
-verdict* — so the `UI_RE` probe above (`^$PIPELINE_APPLICATION_PATH/src/` — a changed path under the rendered
-frontend) **must be the same rule** the reviewer agent uses to decide whether to run
-`review-design` **and** the rule `review-design`'s own Step 0 off-ramp uses to decide it has a
-surface to gate. This is the same **required-gate == dispatched-gate == satisfiable-gate**
-invariant that binds the has-code probe to review-code's scope: if ship-it required `review-design`
-on a diff the reviewer never routed to it — or on one the dispatched `review-design` run then
-off-ramps as non-UI without emitting a marker — that PR would demand a `review-design: PASS` **no
-gate ever produces** → every such PR **deadlocks** (`unverified — no review-design PASS`). That
-second gap is exactly documented repository precedent: the earlier `UI_RE='^$PIPELINE_APPLICATION_PATH/src/|\.tsx$|\.css$'` was a **superset**
-of review-design's `^$PIPELINE_APPLICATION_PATH/src/` off-ramp, so a `.tsx`/`.css` outside `$PIPELINE_APPLICATION_PATH/src` was
-required-but-unroutable — now the one live `UI_RE` is `^$PIPELINE_APPLICATION_PATH/src/` and all three sides
-(require, dispatch, off-ramp) resolve it. Lockstep here is **not two hand-synced copies that drift as
-each side's checkout ages** — that staleness was the enforcement hole (documented repository precedent: a shipper/reviewer on
-a snapshot predating the review-design merge silently omitted the gate; PR documented repository precedent merged
-un-design-reviewed). Both sides instead resolve `UI_RE` from **one live source — `UI_RE=` in
-`ship-it/SKILL.md` on `$PIPELINE_BASE_REF`**, read via `?ref=$PIPELINE_BASE_REF` at run time (the `documented repository precedent` idiom the §CP
-`CONTROL_PLANE_RE`/`GUARD_ADR_RE` already use): ship-it re-resolves it in the probe above,
-`reviewer.md` re-resolves the **same line from the same ref** before deciding to dispatch
-`review-design`, and `review-design`'s Step 0 off-ramp re-resolves the **same line** before
-deciding it has a rendered surface to gate (documented repository precedent). All three fail closed to
-*require*/`dispatch`/*proceed* on the gate if that line is unreadable — never to skip it. So they
-agree by construction, not by manual sync: change the one live `UI_RE` (e.g. a new app worker →
-`$PIPELINE_CODE_PATHS/src`) and every side tracks it on its next run.
+**The design-surface decision must AGREE with the reviewer, or the gate is unroutable.** Shipping
+requires `review-design` only when the base-ref `github.review.classification.design` policy makes
+`class-probe` print it. The reviewer dispatches that same output, and `review-design` uses that
+same command/policy for its off-ramp. This is the **required-gate == dispatched-gate ==
+satisfiable-gate** invariant: no hand-maintained UI regex, filename extension heuristic, or stale
+skill snapshot may mint a required design verdict that no reviewer can produce. If the base policy
+is absent, malformed, unreadable, or contains an invalid pattern, `class-probe` fail-closes by
+requiring every namespace; the cost is an extra review, never an unreviewed or deadlocked change.
 
 **The docs class must equal `review-doc`'s verification scope, or the gate it demands is
 unreachable.** ship-it requires a class's gate PASS *because that gate runs on that class* —
@@ -833,8 +836,9 @@ advisory folded in):
   `created_at`; its bound SHA is the marker's `@ <sha>`. `review-design: PASS … merge-ready` is
   PASS; `review-design: FAIL … changes-requested` is FAIL. (review-design is comment-only, the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA — same single-record-type resolution as review-doc/review-skill; a newer FAIL in this
   namespace vetoes an older PASS, latest-wins, exactly like the other gates.) This namespace is
-  resolved **and required only when the diff is UI-affecting** (Step 0's `has-ui`) — it is the
-  additive UI-quality gate, so a non-UI PR neither resolves nor needs it. On the rare §CP UI PR,
+  resolved **and required only when `REQUIRED_NAMESPACES` contains `review-design`** — it is the
+  additive design-quality gate, so a diff outside configured design surfaces neither resolves nor
+  needs it. On the rare §CP design-surface PR,
   a `review-design` **advisory** resolves via the same
   **[§CP advisory resolution](#step-2cp--cp-advisory-namespace-resolution-the control-plane rule that requires non-author approval of the current head before the pipeline enqueues0151)** below
   as review-skill/review-doc (comment-only, body-bound `Reviewed-head`), never a bindable
@@ -940,16 +944,16 @@ Then gate the merge on the classes present (Step 0):
    - code present but the review-code namespace is empty → `unverified (no review-code PASS)`.
    - docs present but the review-doc namespace is empty → `unverified (no review-doc PASS)`.
    - skills present but the review-skill namespace is empty → `unverified (no review-skill PASS)`.
-   - **UI-affecting (`has-ui`) but the review-design namespace is empty → `awaiting review-design
+   - **`REQUIRED_NAMESPACES` contains `review-design` but that namespace is empty → `awaiting review-design
      (no review-design PASS)` → do not ship.** This is **additive**: it holds *on top of* the
-     PR's artifact-class gate(s), so a UI PR under `$PIPELINE_APPLICATION_PATH/src` (has-code) needs **both** a
+     PR's artifact-class gate(s), so a configured design change that also has code needs **both** a
      current-head `review-code` PASS **and** a current-head `review-design` PASS.
    - a verdict present but not bound to the current head → `unverified (verdict not bound to
      current head)` → refuse. (For a §CP advisory namespace, "bound to current head" is the body's
      `Reviewed-head` SHA per Step 2.§CP, not the absent first-line `@ <sha>`.)
-   - a mixed PR needs **each** present namespace resolved to a current-head PASS (e.g. a
-     skill+code PR needs both `review-skill` and `review-code`); a UI-affecting PR additionally
-     needs a current-head `review-design` PASS alongside those (e.g. a UI code PR needs
+   - a mixed PR needs **each** printed namespace resolved to a current-head PASS (e.g. a
+     skill+code PR needs both `review-skill` and `review-code`); a configured design change
+     additionally needs a current-head `review-design` PASS alongside those (e.g. a design+code PR needs
      `review-code` **and** `review-design`).
 2. If **any** required namespace's current-head verdict is **FAIL** → **do not merge.** The PR
    has unaddressed failures as its *current* state, even if an older PASS exists. Report
@@ -962,13 +966,12 @@ The polarity of the **newest current-head** event in each namespace is the only 
 decides — an old PASS behind a newer FAIL never ships, an old FAIL behind a newer PASS does not
 block, and a PASS bound to a *stale* head never ships at all.
 
-**This per-present-class requirement iterates over EVERY class Step 0 found — never just one —
-and, when the diff is UI-affecting, folds in the additive `review-design` gate.** The merge is
-gated on the **conjunction** across all present namespaces plus `review-design` when `has-ui`: a
+**This requirement iterates over EVERY namespace `class-probe` printed — never just one.** The merge is
+gated on the **conjunction** across that complete namespace set: a
 mixed code+docs PR clears guard 1 **only** when the review-code namespace AND the review-doc
-namespace each resolve to a current-head PASS; a UI code PR clears it **only** when the
+namespace each resolve to a current-head PASS; a design+code PR clears it **only** when the
 review-code namespace AND the review-design namespace each do; a single namespace's PASS while
-another *required* namespace (including `review-design` on a UI PR) is empty/stale/FAIL
+another *required* namespace (including `review-design` when the classifier printed it) is empty/stale/FAIL
 **refuses** (`unverified (no review-doc PASS)`, `awaiting review-design (no review-design PASS)`,
 etc.). This is the **fail-closed
 late catch** — the safety net, deliberately preserved unchanged. It is **not** meant to be the

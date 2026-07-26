@@ -45,9 +45,9 @@ pnpm pipeline cli commands compact
 From the toolkit checkout:
 
 ```bash
-pnpm --filter @kampus/pipeline-cli typecheck
-pnpm --filter @kampus/pipeline-cli test
-pnpm --filter @kampus/pipeline-cli build
+pnpm --filter pipeline-cli typecheck
+pnpm --filter pipeline-cli test
+pnpm --filter pipeline-cli build
 ```
 
 Do not publish this package. Consumers update by moving their pinned

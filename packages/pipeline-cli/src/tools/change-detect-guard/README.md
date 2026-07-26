@@ -47,5 +47,5 @@ Wired as the always-on `.github/workflows/change-detect-guard.yml` gate (the
 `change-detect-guard.unit.test.ts`, the filesystem gate in `gate.unit.test.ts`.
 
 ```bash
-pnpm --filter @kampus/pipeline-cli test    # vitest over the core + gate
+pnpm --filter pipeline-cli test    # vitest over the core + gate
 ```

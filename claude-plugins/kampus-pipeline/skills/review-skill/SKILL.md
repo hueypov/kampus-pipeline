@@ -208,16 +208,16 @@ PR=<pr number>
 # the canonical §CP probe — one definition all four gates cite. §CP travels in the INJECTED skill
 # snapshot, which can lag $PIPELINE_BASE_REF even when the on-disk file is current — a pre-amendment snapshot
 # once mis-flagged a now-control-plane PR as auto-mergeable (documented repository precedent).
-# §CP boundary is single-sourced in pipeline-cli (control-plane-paths/control-plane-re.ts, documented repository precedent);
-# run `pipeline-cli control-plane-paths` to print it. It is re-resolved from $PIPELINE_BASE_REF right below
+# §CP boundary is single-sourced in repository policy through `pipeline-cli protected-change-policy`;
+# it is re-resolved from $PIPELINE_BASE_REF right below
 # (the documented repository precedent anti-self-authorization read), so this is only a fail-closed sentinel, never the live source.
 CONTROL_PLANE_RE='.'   # fail-closed default: every path is control-plane until $PIPELINE_BASE_REF resolves
 # Re-resolve §CP from $PIPELINE_BASE_REF at run time so a stale snapshot can't mis-flag a now-control-plane
 # PR as auto-mergeable (documented repository precedent). the skill-review rule that gives skills their own behavioral gate §6 names gh-issue-intake-formats.md the single source; read it
 # freshly via REST raw (never GraphQL). $PIPELINE_BASE_REF's line wins over the snapshot; fail closed on read failure.
-CP_LIVE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep '^CONTROL_PLANE_RE=' | head -n1 || true)"
+CP_LIVE="$(pnpm pipeline cli protected-change-policy regex --policy-ref "$PIPELINE_BASE_REF" 2>/dev/null || true)"
 if [ -n "$CP_LIVE" ]; then
-  CONTROL_PLANE_RE="$(printf '%s' "$CP_LIVE" | sed "s/^CONTROL_PLANE_RE='//; s/'$//")"   # the advisory flag tracks $PIPELINE_BASE_REF, not the snapshot's age (AC1/AC2)
+  CONTROL_PLANE_RE="$CP_LIVE"   # policy-derived boundary tracks $PIPELINE_BASE_REF, not the injected snapshot
 else
   CONTROL_PLANE_RE='.'   # FAIL CLOSED: can't read $PIPELINE_BASE_REF's boundary ⇒ flag EVERY path control-plane (advisory not-auto-mergeable), never trust the possibly-stale snapshot
 fi

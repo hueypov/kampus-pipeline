@@ -198,7 +198,7 @@ from `CrewTracker`, taking the head of the live set (`peer.send` addresses a rol
 ## Stand-up CLI
 
 Source: [`src/bin.ts`](../src/bin.ts). Built on `effect/unstable/cli`, run from source with Node's
-TypeScript loader (`node src/bin.ts <subcommand>`, or `pnpm --filter @kampus/pipeline-crew-mcp cli
+TypeScript loader (`node src/bin.ts <subcommand>`, or `pnpm --filter pipeline-crew-mcp cli
 <subcommand>`). The root command with no subcommand prints a one-line hint to **stderr** (an MCP
 stdio server owns stdout for JSON-RPC, so all startup logging goes to stderr). A `--version` flag is
 wired by `Command.run`.

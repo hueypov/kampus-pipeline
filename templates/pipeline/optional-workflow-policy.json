@@ -1,4 +1,42 @@
 {
 	"schemaVersion": 1,
-	"workflows": {}
+	"workflows": {},
+	"adapters": {
+		"catalogGuard": {
+			"enabled": false,
+			"packageManager": null,
+			"workspaceManifest": null,
+			"packageGlobs": [],
+			"dependencyFields": [],
+			"catalogNames": [],
+			"allowedSpecifierPrefixes": [],
+			"allowlist": []
+		},
+		"adoptionLint": {
+			"enabled": false,
+			"corpusGlobs": [],
+			"decisions": [],
+			"exemptions": []
+		},
+		"designTokenGuard": {
+			"enabled": false,
+			"sourceGlobs": [],
+			"rawLayerPaths": [],
+			"externalProperties": [],
+			"grandfatheredMissingTokens": [],
+			"rawPxCeilings": {},
+			"referencePattern": null,
+			"declarationPattern": null,
+			"hexLiteralPattern": null,
+			"rawPxPattern": null,
+			"rawPxThreshold": null
+		},
+		"designInventory": {
+			"enabled": false,
+			"sourceGlobs": [],
+			"artifactPath": null,
+			"normativeArtifactPaths": [],
+			"tags": null
+		}
+	}
 }

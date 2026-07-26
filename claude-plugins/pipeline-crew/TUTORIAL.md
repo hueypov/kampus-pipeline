@@ -20,7 +20,7 @@ so you can follow it end to end from here.
 
 - The adopting repository checked out with its dependencies installed (run its documented
   dependency-install command at the repository root).
-  The channel substrate `@kampus/pipeline-crew-mcp` is a **runtime prerequisite** — it ships in
+  The channel substrate `pipeline-crew-mcp` is a **runtime prerequisite** — it ships in
   the repo and is available on `main` HEAD, so an installed repo already has it.
 - **tmux** — `/stand-up` places each launched session into a `crew` tmux window; the crew runs
   as a set of live panes you can attach to and watch.

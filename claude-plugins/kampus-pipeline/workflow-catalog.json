@@ -400,6 +400,38 @@
 			"authorityBoundary": "Repository-owned checks and paths remain explicit."
 		},
 		{
+			"name": "pipeline-gitleaks",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".github/workflows/pipeline-gitleaks.yml",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned checks and paths remain explicit."
+		},
+		{
+			"name": "pipeline-doc-links",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".github/workflows/pipeline-doc-links.yml",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned checks and paths remain explicit."
+		},
+		{
+			"name": "pipeline-settings-env-guard",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".github/workflows/pipeline-settings-env-guard.yml",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned checks and paths remain explicit."
+		},
+		{
+			"name": "pipeline-unresolved-threads",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".github/workflows/pipeline-unresolved-threads.yml",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned checks and paths remain explicit."
+		},
+		{
 			"name": "main-sync",
 			"artifactType": "cli-command",
 			"deliveryClass": "core-installed",
@@ -420,10 +452,90 @@
 			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
 		},
 		{
+			"name": "class-probe classify",
+			"artifactType": "cli-command",
+			"deliveryClass": "core-installed",
+			"entryPoint": "pipeline cli class-probe classify",
+			"prerequisites": [
+				".pipeline/agent-policy.json"
+			],
+			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
+		},
+		{
+			"name": "guard-content-probe",
+			"artifactType": "cli-command",
+			"deliveryClass": "core-installed",
+			"entryPoint": "pipeline cli guard-content-probe",
+			"prerequisites": [
+				".pipeline/agent-policy.json"
+			],
+			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
+		},
+		{
+			"name": "cp-cardinality decide",
+			"artifactType": "cli-command",
+			"deliveryClass": "core-installed",
+			"entryPoint": "pipeline cli cp-cardinality decide",
+			"prerequisites": [
+				".pipeline/agent-policy.json"
+			],
+			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
+		},
+		{
+			"name": "cp-cardinality evidence-github-team",
+			"artifactType": "cli-command",
+			"deliveryClass": "core-installed",
+			"entryPoint": "pipeline cli cp-cardinality evidence-github-team",
+			"prerequisites": [
+				".pipeline/agent-policy.json"
+			],
+			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
+		},
+		{
 			"name": "worktree-sweep",
 			"artifactType": "cli-command",
 			"deliveryClass": "core-installed",
 			"entryPoint": "pipeline cli worktree-sweep",
+			"prerequisites": [
+				".pipeline/agent-policy.json"
+			],
+			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
+		},
+		{
+			"name": "gh-compat lint-skills",
+			"artifactType": "cli-command",
+			"deliveryClass": "core-installed",
+			"entryPoint": "pipeline cli gh-compat lint-skills",
+			"prerequisites": [
+				".pipeline/agent-policy.json"
+			],
+			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
+		},
+		{
+			"name": "ship-digest derive",
+			"artifactType": "cli-command",
+			"deliveryClass": "core-installed",
+			"entryPoint": "pipeline cli ship-digest derive",
+			"prerequisites": [
+				".pipeline/agent-policy.json"
+			],
+			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
+		},
+		{
+			"name": "ref-guard",
+			"artifactType": "cli-command",
+			"deliveryClass": "core-installed",
+			"entryPoint": "pipeline cli ref-guard",
+			"prerequisites": [
+				".pipeline/agent-policy.json"
+			],
+			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
+		},
+		{
+			"name": "primary-index-guard pre-commit",
+			"artifactType": "cli-command",
+			"deliveryClass": "core-installed",
+			"entryPoint": "pipeline cli primary-index-guard pre-commit",
 			"prerequisites": [
 				".pipeline/agent-policy.json"
 			],

@@ -20,7 +20,7 @@ const adrPaths = [
 	"claude-plugins/kampus-pipeline/agents/adr.md",
 ];
 const forbidden = new RegExp(
-	["pnpm dlx @kampus/pipeline-cli", "npm install @kampus/pipeline-cli", "publish .*pipeline-cli", "pho" + "enix", "cloud" + "flare", "cf-utils", "apps/web"].join("|"),
+	["pnpm dlx pipeline-cli", "npm install pipeline-cli", "publish .*pipeline-cli", "pho" + "enix", "cloud" + "flare", "cf-utils", "apps/web"].join("|"),
 	"i",
 );
 const adrForbidden = new RegExp(
@@ -122,8 +122,15 @@ describe("portable toolkit boundary", () => {
 				implementation?: {enabled?: unknown};
 				planning?: {enabled?: unknown; epicEligibilityQuery?: unknown};
 				triage?: {enabled?: unknown; queueQuery?: unknown};
-				review?: {uiPaths?: unknown; requiredChecks?: unknown};
-				shipping?: {enabled?: unknown; controlPlanePaths?: unknown; requiredApprovals?: unknown};
+				review?: {uiPaths?: unknown; requiredChecks?: unknown; classification?: unknown};
+				shipping?: {
+					enabled?: unknown;
+					controlPlanePaths?: unknown;
+					requiredApprovals?: unknown;
+					shipDigest?: unknown;
+					guardContent?: {enabled?: unknown; decisionRecordPaths?: unknown; vocabularyPatterns?: unknown};
+					protectedChangeApproval?: unknown;
+				};
 			};
 		};
 		expect(policy.schemaVersion).toBe(1);
@@ -132,8 +139,30 @@ describe("portable toolkit boundary", () => {
 			implementation: {enabled: true},
 			planning: {enabled: true, epicEligibilityQuery: null},
 			triage: {enabled: true, queueQuery: null},
-			review: {uiPaths: [], requiredChecks: []},
-			shipping: {enabled: true, controlPlanePaths: [], requiredApprovals: 0},
+			review: {uiPaths: [], requiredChecks: [], classification: expect.any(Object)},
+			shipping: {
+				enabled: true,
+				controlPlanePaths: [],
+				requiredApprovals: 0,
+				shipDigest: expect.any(Object),
+				guardContent: {enabled: false, decisionRecordPaths: [], vocabularyPatterns: []},
+				protectedChangeApproval: expect.any(Object),
+			},
+		});
+		expect(policy.github?.shipping?.guardContent).toEqual({
+			enabled: false,
+			decisionRecordPaths: [],
+			vocabularyPatterns: [],
+		});
+		expect(policy.github?.shipping?.shipDigest).toMatchObject({
+			categories: {order: [], labels: {}, fallbackLabel: "Uncategorized"},
+			types: {order: [], labels: {}, fallbackLabel: "Uncategorized"},
+			releaseState: {adapter: null, mergedWithoutReleaseEvidence: "unknown"},
+		});
+		expect(policy.github?.shipping?.protectedChangeApproval).toEqual({
+			authority: {provider: "github-team", organization: null, teamSlug: null},
+			requiredNonAuthorApprovals: 1,
+			soleAuthorException: {enabled: false, commentPattern: null},
 		});
 	});
 
@@ -143,7 +172,21 @@ describe("portable toolkit boundary", () => {
 		expect(workflow).toContain("pipeline cli verdict read");
 		expect(workflow).toContain("requiredChecks");
 		expect(workflow).toContain("merge_commit_sha");
-    expect(workflow).toContain('new Set(["code"])');
+		expect(workflow).toContain("pipeline cli class-probe classify");
+	});
+
+	it("ships portable security, documentation, settings, and review-thread workflow templates", () => {
+		const workflows = [
+			["pipeline-gitleaks.yml", "./gitleaks git .", false],
+			["pipeline-doc-links.yml", "lychee --offline", false],
+			["pipeline-settings-env-guard.yml", "pipeline cli settings-env-guard check", true],
+			["pipeline-unresolved-threads.yml", "pipeline cli unresolved-threads-guard check --pr", true],
+		] as const;
+		for (const [name, expected, requiresToolkit] of workflows) {
+			const workflow = readFileSync(join(root, "templates/github/workflows", name), "utf8");
+			expect(workflow).toContain(expected);
+			if (requiresToolkit) expect(workflow).toContain(".pipeline/toolkit");
+		}
 	});
 
 	it("ships lifecycle safety commands and their repository-owned configuration boundary", () => {
@@ -151,14 +194,20 @@ describe("portable toolkit boundary", () => {
 		const matrix = readFileSync(join(root, "templates/pipeline/cli-capability-matrix.md"), "utf8");
 		const registry = readFileSync(join(root, "packages/pipeline-cli/src/registry.ts"), "utf8");
 		expect(policy).toContain('"primaryBranch": null');
+		expect(policy).toContain('"primaryRemote": null');
+		expect(policy).not.toContain('"refGuard"');
 		expect(policy).toContain('"trivialDiff"');
 		expect(policy).toContain('"managedRoots"');
 		expect(matrix).toContain("`main-sync`");
 		expect(matrix).toContain("`trivial-diff classify`");
 		expect(matrix).toContain("`worktree-sweep`");
+		expect(matrix).toContain("`ship-digest`");
+		expect(matrix).toContain("`ref-guard`");
 		expect(registry).toContain("mainSyncCommand");
 		expect(registry).toContain("trivialDiffCommand");
 		expect(registry).toContain("worktreeSweepCommand");
+		expect(registry).toContain("shipDigestCommand");
+		expect(registry).toContain("refGuardCommand");
 	});
 
 	it("declares a complete, non-overlapping portable core and archived workflow catalog", () => {

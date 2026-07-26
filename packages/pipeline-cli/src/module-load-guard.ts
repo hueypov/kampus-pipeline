@@ -16,7 +16,7 @@
 import {join} from "node:path";
 
 /** The pnpm filter that links this package's own deps in isolation. */
-const FILTER_INSTALL = "pnpm --filter @kampus/pipeline-cli install";
+const FILTER_INSTALL = "pnpm --filter pipeline-cli install";
 
 /**
  * The argv the self-heal install runs pnpm with. `--config.confirm-modules-purge=true`

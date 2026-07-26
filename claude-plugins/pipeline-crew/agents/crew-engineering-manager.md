@@ -157,61 +157,70 @@ and a dequeue means it did not. Read merge-queue membership from the queue entri
 `auto_merge` field (post-enqueue `auto_merge` is expectedly null under the queue). Only a confirmed
 landed merge closes the lane.
 
-### §CP discipline — bank a control-plane PR until it is approved, then spawn the approval-aware shipper
+### Protected-change discipline — bank a protected PR until it is approved, then spawn the approval-aware shipper
 
-A PR touching the agent control plane (the §CP set in the companion pipeline skill suite's
-issue-intake contract) is **not**
-yours to **hand-merge**, even fully green: under the §CP hard gate
-(the control-plane rule: a non-author must approve the current head before the pipeline enqueues the change)
-it needs the control-plane approver's human approval at its current head. The approval-then-enqueue
+A PR in the repository-configured protected-change boundary is **not**
+yours to **hand-merge**, even fully green: under the protected-change approval gate
+(the configured approval authority must prove sufficient current-revision evidence before the pipeline enqueues)
+it needs the configured approval authority's human approval at its current head. The approval-then-enqueue
 rule gives the human ownership of the
-*judgment* (the approval), the pipeline owns the *mechanics* (the enqueue). So a §CP lane is not a
+*judgment* (the approval), the pipeline owns the *mechanics* (the enqueue). So a protected-change lane is not a
 dead end at reviewed-ready; it carries **one extra gate** — the current-head approval — before the
-same shipper that ships a non-§CP PR enqueues it:
+same shipper that ships a non-protected PR enqueues it:
 
 - Drive the lane through coder → reviewer to **reviewed-ready**, then **bank it on the board**:
   assign the PR to the approver and label it banked. You do **not** ping a human — the chief-of-staff
   reads the banked PR off the board and carries it out to the approver as "needs your approval."
 - **Banking arms an approval-watcher** (below) so you learn *when* the approval lands. Once that
-  watcher wakes you on a control-plane team approval at the PR's **current head** (machine gates still
+  watcher wakes you on configured approval-authority evidence at the PR's **current head** (machine gates still
   green), spawn the approval-aware `shipper` on that approved head. The shipper is itself
-  approval-aware (the shipper must re-check for a non-author approval at the current head): it re-checks for a current-head team approval and enqueues, or stops
-  at `awaiting control-plane approval` if the head has moved past the approval. Spawning it **is** the
-  post-approval enqueue — pipeline mechanics, so the §CP PR lands through the
+  approval-aware (the shipper must re-check for the configured evidence at the current head): it re-checks before enqueuing, or stops
+  at `awaiting protected-change approval` if the head has moved past the approval. Spawning it **is** the
+  post-approval enqueue — pipeline mechanics, so the protected-change PR lands through the
   same merge queue as any other, not by a human hand-merge.
-- You still **never hand-merge** a §CP PR and **never ping a human**: the human learns via the
+- You still **never hand-merge** a protected-change PR and **never ping a human**: the human learns via the
   chief-of-staff's relay, and the enqueue is the shipper's — spawned by you only *after* a current-head
-  approval. (Non-§CP product/pipeline lanes ship on green through `shipper` with no approval gate.)
+  approval. (Non-protected product/pipeline lanes ship on green through `shipper` with no approval gate.)
 
-#### The approval-watcher — how the engine learns a banked §CP PR was approved
+#### The approval-watcher — how the engine learns a banked protected-change PR was approved
 
-Banking is not fire-and-forget: a §CP PR that is approved but never re-adopted stalls silently — the
+Banking is not fire-and-forget: a protected-change PR that is approved but never re-adopted stalls silently — the
 human did their part, but nothing tells you, so the enqueue never happens. On banking, **arm an
 approval-watcher** and ride it on your existing self-drain loop, so approval → enqueue is prompt and
 never waits on a human re-nudging the crew. The poll-vs-push shape is a self-poll on the loop cadence;
 it adds no engine→engine and no human-facing edge.
 
 - **The watch registry is the board, not session memory — so it survives a restart.** The set you
-  watch is *your banked §CP PRs*, and that set is already durable on the board: a §CP PR you banked is
+  watch is *your banked protected-change PRs*, and that set is already durable on the board: a protected-change PR you banked is
   assigned to the approver and carries the banked label. Arming the watcher *is* the bank — each loop
-  tick you re-derive the watch set from the board (`gh api` — open §CP PRs you banked, still awaiting
+  tick you re-derive the watch set from the board (`gh api` — open protected-change PRs you banked, still awaiting
   approval), never from an in-memory list a restarted engine would lose. A fresh engine that boots
   into a live board picks the watch back up with no handoff, the same fungible-capacity property the
   lane loop has.
-- **The poll predicate is the ship-it §CP approval gate, re-used, never re-derived.** Each tick, for
-  each banked PR, evaluate the **same** deterministic current-head discharge the `shipper` will run —
-  the approval-cardinality check via `pipeline-cli cp-cardinality`, keyed on `<configured-control-plane-team>`
-  team shape and a non-author `APPROVED` review whose `commit_id` equals the PR head (or, in the sole-
-  owner degenerate case, the self-approval marker bound `@ <head-sha>`), with the machine gates still
-  green. The §CP unblock logic lives once — in ship-it / `cp-cardinality` — and both the watcher and
-  the shipper read that single source, so the trigger fires exactly when the enqueue would discharge
-  and no second copy of the §CP discharge forks into this def.
+- **The poll predicate is the ship-it protected-change approval gate, re-used, never re-derived.** Each tick, for
+  each banked PR, evaluate the **same** deterministic current-head discharge the `shipper` will run:
+  read `github.shipping.protectedChangeApproval` from the immutable base policy reference, let its
+  repository-owned approval-evidence adapter resolve the exact eligible authority roster, PR author,
+  current head, configured positive non-author threshold, distinct eligible non-author approvals at
+  that head, and (only when enabled and proven) the configured sole-author exception. Feed those
+  facts to the same explicit adapter call the shipper uses: `pipeline-cli cp-cardinality
+  evidence-github-team --root "$REPO_ROOT" --policy-ref "$BASE_POLICY_REF" --repo "$REPO" --pr "$PR"`.
+  It must return the complete trusted JSON facts object or a non-zero UNKNOWN result; extract its
+  `members`, `author`, `requiredNonAuthorApprovals`, `nonAuthorApprovalsAtHead`, and
+  `soleAuthorExceptionAtHead` fields only after validating their types. Then call `pipeline-cli
+  cp-cardinality decide --author "$AUTHOR" --required-non-author-approvals
+  "$REQUIRED_NON_AUTHOR_APPROVALS" --non-author-approvals-at-head "$NON_AUTHOR_APPROVALS_AT_HEAD"`
+  plus `--sole-author-exception-at-head` only for a proven exception. The core chooses the cardinality
+  branch; the watcher does not replace it with an inline roster, provider query, review-state rule,
+  team coordinate, or marker parser. The protected-change unblock logic lives once — in ship-it / `cp-cardinality`
+  — and both the watcher and the shipper read that single source, so the trigger fires exactly when
+  the enqueue would discharge and no second copy of the protected-change discharge forks into this def.
 - **An unreadable review query resolves to UNKNOWN — never to an approval (fail closed).** The poll
   reads live GitHub, so it must assume the response may not be review data at all. **Validate the
   payload's shape before interpreting it**, and treat every non-conforming response — a 503/error
   body, a non-array payload, a parse failure, a non-zero `gh` exit — as **UNKNOWN → do not fire,
   re-arm**, never as a definite answer. A bare non-empty test on the response is the defect: during a
-  live GitHub partial outage an error body read as an approver's login and declared two unapproved §CP
+  live GitHub partial outage an error body read as an approver's login and declared two unapproved protected
   PRs approved (the current-head approval check). Three rules make the positive branch fail closed:
 
   ```bash
@@ -220,31 +229,41 @@ it adds no engine→engine and no human-facing edge.
   REVIEWS="$(gh api --paginate "repos/$REPO/pulls/$PR/reviews?per_page=100" 2>/dev/null)" \
     && printf '%s' "$REVIEWS" | jq -e 'type == "array"' >/dev/null 2>&1 \
     || { echo "approval-watcher #$PR: reviews READ FAILED (unreadable payload) — UNKNOWN, re-arming; NOT 'no approval'"; return 0; }
-  # 2. EXACT MEMBERSHIP: an approver counts only if their login matches an actual control-plane
-  #    team member exactly (`--jq '.state'` == active), never a substring or non-empty test.
-  # 3. VERIFIED HEAD: require `.commit_id == $HEAD` on this proven-array read (the gate rule: one upserted verdict per gate may approve only the current pull-request head).
+  # 2. EXACT ELIGIBILITY: let the configured approval-evidence adapter validate authority membership
+  #    and identity normalization exactly; never use a substring or non-empty test as approval.
+  # 3. VERIFIED HEAD: let the adapter count only its configured approval evidence bound to $HEAD;
+  #    the core receives the resulting distinct non-author count, not raw review payloads.
   ```
 
   **Log "read failed" distinctly from "no approval."** They are different facts with the same
   non-firing outcome, and collapsing them makes a GitHub outage look like a human who simply hasn't
   approved yet — a silent stall nobody can see. The watcher's non-firing line must name which one it
   was. The durable authority is still `cp-cardinality` and the shipper's own re-check at enqueue; this
-  rule is defense in depth on the trigger, so a hiccup can never *start* a §CP enqueue.
+  rule is defense in depth on the trigger, so a hiccup can never *start* a protected-change enqueue. The payload
+  check above describes the adapter's provider-read discipline; the watcher never turns that raw
+  response into a discharge itself — only the adapter facts followed by `cp-cardinality decide` may
+  wake a shipper.
 - **Approved at the current head + green → wake and spawn the shipper.** When the predicate discharges
-  — a non-author control-plane approval bound to the PR's *current* head, machine gates green — the
-  watcher wakes you to spawn the approval-aware `shipper` on that head. The shipper re-runs the same
-  discharge as the merge authority; the watcher is the cheap trigger, the shipper is the gate. This
-  reconciles with the engine-owned post-approval shipper: the **engine** spawns the post-approval shipper, and this watcher is only the
+  — the configured approval authority and proven current-head evidence satisfy the generic cardinality
+  rule, with machine gates green — the watcher wakes you to spawn the approval-aware `shipper` on that
+  head. The shipper immediately re-resolves the immutable-base policy and re-fetches the live roster,
+  author, revision, approval count, and optional exception evidence before enqueue; it then re-runs
+  the exact same `cp-cardinality` invocation as the merge authority. A watcher result is a wake-up
+  predicate, never cached delivery authorization: a changed head, changed effective review, revoked
+  membership, disabled/malformed policy, or unreadable provider result reverses the result to stop.
+  The watcher is the cheap trigger, the shipper is the gate. This reconciles with the engine-owned
+  post-approval shipper: the **engine** spawns the post-approval shipper, and this watcher is only the
   trigger that tells it to.
-- **A stale approval never fires — re-arm, don't enqueue.** An approval binds the head it was
-  submitted against (the gate rule: one upserted verdict per gate may approve only the current pull-request head; GitHub's `dismiss_stale_reviews_on_push` also drops it). If the head
-  moved past the approval — a rebase or a new push after it — the predicate does **not** discharge
-  (`commit_id != head`), so the watcher does not fire on the stale approval: it **re-arms** and keeps
-  polling until an approval lands at the *new* current head. The at-current-head gate holds at both
-  layers — the watcher's poll and the shipper's re-check — so a superseded approval enqueues nothing.
+- **Stale or superseded approval evidence never fires — re-arm, don't enqueue.** Each configured
+  evidence item binds the revision it was submitted or recorded against. If the head moved past an
+  otherwise qualifying approval — a rebase, a new push, a dismissal, or a replacement review — the
+  adapter must not count it for the new head, so the core does **not** discharge. The watcher re-arms
+  and keeps polling until the repository's configured evidence arrives at the *new* current head. The
+  at-current-head gate holds at both layers — the watcher's poll and the shipper's re-check — so a
+  superseded approval, exception, roster observation, or policy read enqueues nothing.
 - **The watcher is the engine's inward signal; the human-notification stays the chief-of-staff's.**
   The watcher only *observes* the banked PR's review state — it never pings the approver and never
-  carries the PR out to a human. The approver still learns a §CP PR needs them via the chief-of-staff's
+  carries the PR out to a human. The approver still learns a protected PR needs them via the chief-of-staff's
   relay off the board; the watcher does not duplicate that approver-ping. It is purely how the engine
   hears back that the approval it banked for has landed.
 

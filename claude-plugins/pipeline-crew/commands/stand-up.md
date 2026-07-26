@@ -9,7 +9,7 @@ allowed-tools: ["Bash"]
 This is the **one stand-up command**: it boots the entire crew from your filled operator
 config in one shot. It is a thin front for the substrate launcher — the mechanical logic
 (version assert, tracker ensure, roster derivation, per-session bind, screen placement,
-launch) lives in the `@kampus/pipeline-crew-mcp` substrate's `stand-up` subcommand
+launch) lives in the `pipeline-crew-mcp` substrate's `stand-up` subcommand
 (the launcher rule: commands stay thin and delegate launcher mechanics to the tested crew service), never in this plugin.
 
 ## Preconditions

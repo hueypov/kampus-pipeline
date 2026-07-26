@@ -61,16 +61,14 @@ reaches a per-run ref; your session tree is never switched, reset, or checked ou
 
 ---
 
-> **Status: built dormant — not yet wired (the rule that permits the lightweight review path only for strictly trivial, non-control-plane changes §2, issue documented repository precedent).** This gate exists and
-> is correct, but **nothing invokes it yet**. The executor tier branch that routes a
-> trivially-classified PR *to* this gate (instead of the full `review-code` / `review-doc`
-> fan-out) is sibling issue documented repository precedent's job — it wires the branch + the fail-closed fallback into
-> `.claude/workflows/drive-issue.js`. The trivial-diff *classifier* (the predicate that
-> decides "is this diff trivial?") is sibling documented repository precedent. Adopting the lighter path at all is gated
-> behind the applicable safety invariant two-axis measurement of sibling documented repository precedent (a measured token win **and** held
-> gate-accuracy, with a quality regression vetoing the lever). Until those land, this skill is
-> reachable only by an explicit operator invocation — the build is intentionally ahead of its
-> wiring.
+> **Status: available only through the shared fail-closed route.** The portable toolkit now
+> supplies `pipeline-cli trivial-diff route`, which selects this gate only after immutable policy,
+> changed-path classification, protected-change policy, guard-content policy, and SHA-bound
+> reduced-gate support all prove it safe. A generic repository may still need to connect that
+> output to its own reviewer orchestrator; until it does, retain the full `review-code` /
+> `review-doc` fan-out. An explicit operator request is not routing proof and must re-run the
+> shared command or decline to this gate. Adopting the lighter path remains contingent on a
+> measured token benefit **and** held gate accuracy; a quality regression vetoes the lever.
 
 ---
 
@@ -95,9 +93,7 @@ NFILES=$(printf '%s\n' "$FILES" | grep -c . || true)
 ADD=$(gh api repos/$REPO/pulls/$PR --jq '.additions'); DEL=$(gh api repos/$REPO/pulls/$PR --jq '.deletions')
 
 # the live control-plane boundary, read from $PIPELINE_BASE_REF (raw, ?ref=$PIPELINE_BASE_REF) — never the head, never a local snapshot
-CONTROL_PLANE_RE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" \
-  -H 'Accept: application/vnd.github.raw' \
-  | sed -n "s/^CONTROL_PLANE_RE='\(.*\)'$/\1/p" | head -n1)"
+CONTROL_PLANE_RE="$(pnpm pipeline cli protected-change-policy regex --policy-ref "$PIPELINE_BASE_REF" 2>/dev/null || true)"
 [ -n "$CONTROL_PLANE_RE" ] || { echo "review-trivial: cannot read live CONTROL_PLANE_RE — fail-closed, route to full path"; }   # unreadable boundary ⇒ not trivial
 ```
 

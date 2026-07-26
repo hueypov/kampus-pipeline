@@ -11,7 +11,7 @@ whole self-driving roster and deliberately *excludes* the human-in-the-loop cart
 (the topology rule: each unique-seam bridge is a singleton, while seam-free engines may scale and bridges never execute engine lanes, the on-demand cartographer rule); this command is how you bring up **one** role when you want it — the
 cartographer to run a `wayfinder chart`, or a scaled-up extra engine. It is a thin front for
 the substrate: the launcher logic (version assert, tracker ensure, single-session derivation,
-the per-session channel bind, screen placement) lives in the `@kampus/pipeline-crew-mcp`
+the per-session channel bind, screen placement) lives in the `pipeline-crew-mcp`
 substrate's `spawn-role` subcommand (the launcher rule: commands stay thin and delegate launcher mechanics to the tested crew service), never in this plugin.
 
 **Never hand-launch a role instead.** A hand-rolled `claude …` misses the per-pane leaf

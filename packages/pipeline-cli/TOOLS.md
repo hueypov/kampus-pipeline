@@ -1,6 +1,6 @@
 # pipeline-cli tools — the per-tool reference
 
-The internal per-tool reference for `@kampus/pipeline-cli`. The package
+The internal per-tool reference for `pipeline-cli`. The package
 [README](./README.md) is the consumer front page; this doc is for people working in the
 example-repo monorepo who need to know what a given tool does, how it is shaped, and how to add
 a new one. It carries repo-internal context — issue and ADR references, the pipeline
@@ -72,6 +72,186 @@ node packages/pipeline-cli/src/bin.ts --help
 # dispatch to a registered tool
 node packages/pipeline-cli/src/bin.ts <tool> …
 ```
+
+### `gh-compat` — repository-configured GitHub CLI compatibility and corpus lint
+
+The generic successor to the source-specific `gh-phoenix` package. It preserves the original
+two independent capabilities without imposing a GitHub-provider limitation on every adopter:
+
+- **`gh-compat lint-skills <file>...`** validates strict YAML frontmatter in scoped skill and
+  agent definitions, reports the exact scanned scope, and fails closed when it scanned no required
+  files. When `.pipeline/agent-policy.json` explicitly enables a REST-only compatibility rule, it
+  also reports configured `gh` invocations that would violate that rule.
+- **The toolkit-local `gh-compat` shim executable** is an explicit wrapper for a repository that
+  has enabled `github.cliCompatibility.pathShim`. It safely passes ordinary calls through,
+  blocks the explicit `gh api graphql` transport in REST-only mode, rewrites only configured
+  supported edit operations to REST, strips only configured unsupported JSON fields, and blocks
+  an unprovable or unsupported rewrite with a remediation. It never
+  changes PATH itself.
+
+The PATH wrapper is intentionally opt-in. Configure the repository policy first, then place a
+wrapper at `.pipeline/toolkit/templates/pipeline/gh-compat-wrapper.sh` ahead of the real `gh` only
+in the agent environment that needs the compatibility rule. Do not add it to a global shell profile.
+
+### `class-probe` — shared, fail-closed review routing
+
+`class-probe classify` turns newline-delimited changed repository paths into the complete set of
+artifact classes or review namespaces that must be dispatched and verified. It is the one shared
+authority for the reviewer fan, `ship-it`, and the delivery workflow; no consumer should reproduce
+the routing rules with a shell `grep` or a second Node classifier.
+
+- `pipeline-cli class-probe classify` prints `has-code`, `has-docs`, `has-skills`, and additive
+  `has-design` classes in stable order.
+- `pipeline-cli class-probe classify --namespaces` prints the corresponding `review-code`,
+  `review-doc`, `review-skill`, and `review-design` namespaces. These values can be passed directly
+  to `pipeline-cli verdict read --gate`, which also accepts the namespaced form.
+- The repository owns its pattern taxonomy in `github.review.classification` in
+  `.pipeline/agent-policy.json`: code and skills are include matches; docs and design are
+  carve-then-test include/exclude matches. Empty design includes deliberately mean no design
+  surface. No product, framework, or UI path is a hidden command default.
+- For delivery decisions, pass `--policy-ref <base-sha-or-ref>`. The tool reads policy through
+  `git show`, preventing a PR from relaxing the rules used to decide its own required review set.
+- A non-empty diff outside every configured class receives `review-code`. Missing, malformed,
+  unreadable, or invalid policy over-dispatches every namespace; an empty diff emits no namespace.
+
+```bash
+gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename' \
+  | pipeline-cli class-probe classify --policy-ref "$BASE_POLICY_SHA" --namespaces
+```
+
+### `guard-content-probe` — shared protected-decision classifier
+
+Some repositories keep decision records on ordinary documentation paths, yet a record can still
+change a safeguard by relaxing, widening, bypassing, or otherwise changing the rule that protects
+delivery. A path alone cannot distinguish that protected decision from an ordinary record. This
+tool gives review, delivery, and lightweight-review eligibility one conservative content decision
+instead of three drifting shell predicates.
+
+The command is portable core tooling; its convention is not. The repository owns the optional
+`github.shipping.guardContent` section in `.pipeline/agent-policy.json`:
+
+```json
+{
+  "enabled": false,
+  "decisionRecordPaths": [],
+  "vocabularyPatterns": []
+}
+```
+
+The disabled, empty default means no decision-record convention has been configured. When an
+adopter enables it, both arrays must be non-empty JavaScript regular-expression source strings:
+`decisionRecordPaths` matches repository-relative changed paths, and `vocabularyPatterns` matches
+a candidate record's body case-insensitively. The core ships no product, team, directory, or
+safeguard vocabulary default.
+
+- **`guard-content-probe candidates [--files-from FILE] [--root DIR] [--policy-ref REF]`** reads
+  newline-delimited repository-relative changed paths from stdin (or `--files-from`) and writes
+  only candidate paths to stdout. With a trusted enabled policy, it preserves input order and
+  removes duplicates. An explicit disabled policy writes no candidates. A missing, unreadable,
+  malformed, or invalid policy writes every non-empty input path and a diagnostic to stderr: the
+  caller must then treat each path as unproven rather than silently declaring it ordinary.
+- **`guard-content-probe classify [--body-file FILE] [--path PATH] [--root DIR] [--policy-ref REF]`**
+  reads one candidate body from stdin or `--body-file`. It writes exactly `guard-touching` or
+  `not-guard-touching` to stdout and puts the path plus a stable reason on stderr. Its exit code is
+  intentionally inverted for shell gates: `0` means `guard-touching`; `1` means a readable body
+  under a fully valid enabled policy proved `not-guard-touching`.
+
+`classify` fails closed (`guard-touching`, exit `0`) when the body is empty, unavailable, or
+unreadable, or when the applicable policy is missing, unreadable, malformed, disabled in an
+unexpected form, incomplete, or contains an invalid pattern. An ordinary result is possible only
+after a complete enabled policy and a readable, non-matching body. Argument and usage errors stay
+ordinary CLI errors; diagnostics never contaminate the machine-readable stdout token.
+
+### `design-token-guard` — optional, configured token-consistency guard
+
+`pipeline-cli design-token-guard check` is disabled unless
+`.pipeline/optional-workflow-policy.json` explicitly enables `adapters.designTokenGuard`.
+The policy supplies the source globs, parser expressions, raw-layer paths, token exceptions,
+and raw-pixel ratchet; it carries no framework, stylesheet root, or token naming default.
+An enabled invalid policy or empty source scope fails closed. The command is read-only.
+
+### `design-inventory` — optional, configured descriptive inventory
+
+`pipeline-cli design-inventory generate|check` is disabled unless
+`adapters.designInventory` explicitly supplies source globs, tag vocabulary, an artifact path,
+and normative-artifact exclusions. `check` is read-only and fails on drift. `generate` writes
+only the declared descriptive artifact; policy rejects an artifact that is named normative.
+
+For review and delivery authority, pass `--policy-ref "$BASE_POLICY_REF"`. The command reads
+`.pipeline/agent-policy.json` through `git show <ref>:.pipeline/agent-policy.json`; it must not
+fall back to a pull request worktree that could weaken its own protection. A local invocation
+without `--policy-ref` may use the worktree policy for authoring or configuration exploration, but
+is not delivery authority.
+
+```bash
+# First select only the repository-owned decision-record candidates.
+git diff --name-only "$BASE_REF"...HEAD \
+  | node packages/pipeline-cli/src/bin.ts guard-content-probe candidates \
+      --root /repo --policy-ref "$BASE_POLICY_REF"
+
+# The caller retrieves each selected body at the current review head, then classifies it.
+fetch_decision_body "$candidate" \
+  | node packages/pipeline-cli/src/bin.ts guard-content-probe classify \
+      --root /repo --policy-ref "$BASE_POLICY_REF" --path "$candidate" \
+  && echo "protected decision: retain the advisory/approval route"
+```
+
+`review-code`, `review-doc`, and `ship-it` use this one decision to keep their existing authority
+separation: reviewers preserve advisory evidence and the configured approval route owns delivery.
+`trivial-diff` reuses the same policy/parser so a matching, deleted, unreadable, or unprovable
+candidate is never eligible for lightweight review. An ordinary configured decision record can
+still be considered under the normal size and path rules.
+
+### `cp-cardinality` — deterministic protected-change approval discharge
+
+`cp-cardinality decide` is the pure, local decision authority for a protected change after a
+repository-owned approval-evidence adapter has resolved the facts. It does not read a forge,
+team endpoint, pull request, comment, token, or policy file. The adapter supplies newline-delimited
+eligible authority-member identities on stdin, the PR author, the configured threshold, the count
+of distinct eligible non-author approvals bound to the current revision, and—only when proven—the
+narrow sole-author exception fact.
+
+The repository convention is explicit in `github.shipping.protectedChangeApproval` in
+`.pipeline/agent-policy.json`. Its shipped default is disabled, with no organization, team slug,
+or marker. When enabled, the repository chooses the approval-evidence adapter provider and team,
+sets a positive `requiredNonAuthorApprovals`, and may enable a sole-author exception only with a
+non-empty repository-owned `commentPattern`. Shipping resolves that policy from its immutable base
+reference; a PR cannot relax its own approval authority or marker.
+
+`cp-cardinality evidence-github-team` is the first explicit adapter. It takes
+`--root <repository-root> --policy-ref <immutable-base-ref> --repo <owner/name> --pr <number>` and
+emits exactly one JSON facts object on stdout:
+`{members, author, requiredNonAuthorApprovals, nonAuthorApprovalsAtHead, soleAuthorExceptionAtHead}`.
+It resolves the policy through that immutable reference and requires its enabled authority provider
+to be `github-team`. Any unreadable policy, mismatched provider, missing team configuration, or
+untrusted provider evidence is a diagnostic plus a non-zero exit, never an empty roster or an
+approval fact. The adapter is deliberately separate from `decide`; another provider can produce
+the same facts without changing the cardinality core.
+
+The pure decision has four fail-closed authority shapes: an empty authority always stops; a
+one-member authority whose member is the author can discharge only with the current-revision
+sole-author exception; a one-member non-author authority and any multi-member authority require
+the configured number of current-revision eligible non-author approvals. Blank or duplicate member
+identities, a blank author, malformed counts, stale evidence, or an untrusted adapter result stop.
+The command prints only `discharge` or `stop` on stdout, with its branch and reason on stderr;
+exit status `0` means discharge and `1` means stop.
+
+```bash
+# Resolve evidence from the base policy, then pass only those facts to the pure decision.
+facts="$(node packages/pipeline-cli/src/bin.ts cp-cardinality evidence-github-team \
+  --root /repo --policy-ref "$BASE_POLICY_REF" --repo "$REPO" --pr "$PR")" || exit 1
+printf '%s\n' "$(jq -r '.members[]' <<<"$facts")" \
+  | node packages/pipeline-cli/src/bin.ts cp-cardinality decide \
+      --author "$(jq -r '.author' <<<"$facts")" \
+      --required-non-author-approvals "$(jq -r '.requiredNonAuthorApprovals' <<<"$facts")" \
+      --non-author-approvals-at-head "$(jq -r '.nonAuthorApprovalsAtHead' <<<"$facts")" \
+      $(jq -e '.soleAuthorExceptionAtHead' <<<"$facts" >/dev/null && printf '%s' '--sole-author-exception-at-head')
+```
+
+The retained boolean `--non-author-approval-at-head` is a compatibility shorthand for a count of
+one. It must not be combined with the count flag. A watcher may use `discharge` as a wake-up
+predicate, but the shipper must re-fetch current-revision evidence and re-run this same command
+immediately before enqueueing; no watcher result is merge authority.
 
 ### `epic-lock` — the epic mutation lock `status:planning` epic-lock (the originating work item)
 
@@ -274,91 +454,143 @@ It is a **control-plane** surface because it can update the shared primary check
 fast-forwards a clean `main` and otherwise leaves the checkout untouched.
 
 
-### `ref-guard` — caller-agnostic ref-transaction guard for the shared primary (the originating work item diverging `main`; the originating work item HEAD detach)
+### `ref-guard` — caller-agnostic ref-transaction guard for the configured shared primary
 
-A fail-closed guardrail wired as git's own **`reference-transaction`** hook that refuses two
-shared-primary hazards at git's own ref boundary:
+A fail-closed guardrail at Git's own **`reference-transaction`** boundary that refuses two
+shared-primary hazards before Git changes any ref:
 
-1. **A diverging `refs/heads/main` ref-move** (the originating work item, the primary-branch fast-forward guard) — any update that would make
-   local `main` a **non-fast-forward** of `origin/main`. It closes the documented failure loaded-gun class:
-   the orchestrator role force-moved primary `main` off the merge seam (a bare
-   `branch -f main` / `checkout -B main` / `update-ref refs/heads/main`), diverging it from
-   `origin/main` and staging a large deletion — one `git push -f` from clobbering `origin/main`.
-2. **A bare HEAD-detaching checkout on the shared primary** (the originating work item) — a `git checkout <sha>` /
-   `checkout FETCH_HEAD` / `switch --detach` that detaches the human's shared `HEAD` off its
-   branch. This is the exact corruption a worktree-isolated agent triggers when its cwd resets
-   to the primary between Bash calls. `decideHeadDetach` catches it via the same
-   `reference-transaction` boundary, and only on the **primary** checkout (git-dir ==
-   git-common-dir). A linked worktree's own HEAD detach — and the reattach `checkout main`,
-   which queues no `HEAD` ref update — stay allowed. The signal is grounded in git's real
-   `reference-transaction` behavior (verified against git 2.40, not assumed).
+1. **A diverging `refs/heads/<primary>` ref-move** — an update that makes the configured or
+   Git-discovered primary branch a non-fast-forward of its configured/discovered remote-tracking
+   branch. This catches a direct `branch -f`, `checkout -B`, or `update-ref`, not merely a
+   pipeline-initiated sync.
+2. **A bare HEAD-detaching checkout on the shared primary** — `git checkout <sha>`,
+   `checkout FETCH_HEAD`, or `switch --detach` that strands the human's shared checkout off its
+   branch. The guard is scoped to the primary checkout (`git-dir == git-common-dir`); a linked
+   worktree's own detach remains allowed. Symbolic HEAD retargets and attached commits paired with
+   a branch update are also allowed across Git's differing transaction representations.
 
-**Why the ref boundary, not a Bash hook.** The the originating work item `worktree-guard` bash-pin only arms for
-a `$WORKTREE_ROOT` subagent and only matches its `HEAD_MOVING` set — so it is disarmed for
-the orchestrator (no `$WORKTREE_ROOT`), a ref force-move is not in its set, and the documented failure
-keystroke was outside the agent Bash tool-call path entirely. Git's `reference-transaction`
-boundary fires for **every** ref update regardless of caller, which is exactly the reach a
-`PreToolUse` Bash hook lacks.
+**Why this is a Git hook, not an agent hook.** `worktree-guard` regulates managed agent tool calls.
+Git's transaction boundary also sees a human shell, raw `git update-ref`, another hook, and every
+other Git caller. This is the caller-agnostic primary-checkout containment layer those hooks cannot
+provide.
 
-Safe by construction (the pure core `ref-guard.ts` decides, `command.ts` runs it):
+Safe by construction (the pure `ref-guard.ts` decides; `command.ts` only gathers Git facts):
 
-- The pure `decideRefUpdate` allows every non-`refs/heads/main` update untouched, and on
-  `refs/heads/main` allows **only a fast-forward** of `origin/main`; a non-ff divergence — or a
-  delete — **refuses**. The legitimate `merge --ff-only origin/main` is a fast-forward, so it
-  always passes; the reattach `checkout main` moves no ref on `main` at all.
-- **Fail-open on infra absence, fail-closed on divergence.** An unresolvable `origin/main`
-  (a fresh clone before the first fetch) allows the update (nothing to diverge from); an
-  ancestry probe that *fails* is treated as non-ff and refuses on the guarded ref. The
-  `lefthook.yml` wrapper aborts the transaction only on the guard's **dedicated refuse exit
-  code (3)** and fail-opens on any other non-zero, so a not-yet-installed / stripped-PATH CLI
-  (the originating work item) can never wedge every ref transaction repo-wide (the documented failure fail-open invariant).
+- Updates outside the resolved primary ref are untouched. A delete of the primary is refused; an
+  equal-tip or provable fast-forward is allowed; an identified primary divergence, including an
+  unprovable ancestry probe, is refused.
+- A missing comparison ref allows a non-delete update: a fresh clone has no remote tip from which
+  to diverge. An unresolvable primary branch is a no-op rather than an implicit `main`/`origin`
+  assumption.
+- The command uses a dedicated refusal exit code (`3`). The installed wrapper turns only that code
+  into a Git abort; missing Node, an unpacked toolkit, or another runtime failure fails open and
+  cannot wedge every ref transaction in the repository.
 
-Installed via `lefthook.yml` (the hook-manager threshold), so it lands in the shared `.git/hooks` and fires for
-the primary checkout and every worktree that shares that `.git`. Git honors the exit status
-only in the `prepared` state, so the guard evaluates + can refuse only there; `committed` /
-`aborted` drain stdin and no-op.
+The command and hook are core checkout safety. `pipeline init` installs the managed Git hook
+automatically, just as the original repository's package prepare step installed its Lefthook
+wrapper. `git.primaryBranch` and `git.primaryRemote` remain optional overrides only for repositories
+where Git cannot unambiguously discover the primary branch and remote. Inspect its installed state
+with:
 
 ```bash
-# git invokes this itself as the reference-transaction hook; the manual shape (for a test):
-printf '%s %s refs/heads/main\n' "$OLD" "$NEW" \
+pipeline cli ref-guard status
+```
+
+The installer writes only an empty hook slot or an exact prior managed hook. It refuses a foreign or
+modified `reference-transaction` hook, never changes `core.hooksPath` or global Git configuration,
+and removes only its exact wrapper through `pipeline cli ref-guard uninstall`. The shared hook
+location covers the primary checkout and linked worktrees, while the runtime preserves their distinct
+HEAD contexts.
+
+Git passes `<old> <new> <ref>` lines on stdin and honors a refusal only in `prepared`; `committed`
+and `aborted` drain/no-op. The manual shape is:
+
+```bash
+printf '%s %s refs/heads/<primary>\n' "$OLD" "$NEW" \
   | node packages/pipeline-cli/src/bin.ts ref-guard reference-transaction prepared
-# exit 0 = allow · exit 3 = REFUSE (a diverging main move OR a bare HEAD detach on the primary) · other non-zero = CLI couldn't run (fail-open)
+# exit 0 = allow · exit 3 = deliberate refusal; other non-zero errors fail open in the wrapper
 ```
 
-It protects the shared primary checkout at Git's ref boundary: a diverging `main` update or a
-bare `HEAD` detach is refused before it can alter the primary's state.
+It protects the shared primary checkout at Git's ref boundary: a divergent/deleted configured
+primary ref or bare primary `HEAD` detach is refused before it changes checkout state.
 
+### `primary-index-guard` — staged-deletion containment at Git pre-commit
 
-### `ship-digest` — the merged-since founder projection (the originating work item)
+`primary-index-guard pre-commit` protects a different boundary from `ref-guard`: a mass deletion
+can be a fast-forward and therefore pass a reference-transaction check. The guard reads only the
+staged deletion set (`git diff --cached --name-status --diff-filter=D`) and refuses only when all
+of the following are true:
 
-Renders a **founder-facing** ship digest for a `--since` window from a pre-gathered
-merged-work entries JSON. Unlike `changelog-derive`'s builder-oriented Keep-a-Changelog
-version sections, this groups **product vs infra** at the top level, then by **milestone**
-(`Uncategorized` when none), then by **`type:*`** — a readout a non-builder can scan. An
-entry with no milestone / area / type is surfaced under `Uncategorized`, never dropped.
+- the checkout is proven to be the shared primary checkout (`git-dir == git-common-dir`);
+- the repository has explicitly enabled `git.primaryIndexGuard`; and
+- configured protected-path deletions meet the configured blocking threshold.
 
-The tool is the pure projection only: it consumes a pre-gathered entries JSON (each
-`{issue?, pr, title, type?, milestone?, area?, joinedArea?, releaseState?}`), decoded with a
-`Schema` at the boundary (a malformed/unreadable file is a typed non-zero exit). The git-log
-`--since` + `gh` issue/milestone gather is the `/what-shipped` skill's job, not this tool's.
+It never resets, unstages, checks out, removes a worktree, or edits the index. Linked-worktree
+commits are allowed: the decision is scoped to the shared checkout, not a guessed branch name.
+Protected prefixes and thresholds are repository policy; the portable template deliberately ships
+none. The command exits `3` only for its established policy refusal. Normal allows exit `0`; Git,
+Node, toolkit, policy, or other runtime failures must not impersonate a refusal.
 
-The product/infra split prefers the **PR `area:*` signal** (`area`, set join-free from the merged
-PR's `area:product` / `area:infra` label), falling back to the gather's PR→issue→milestone join
-area (`joinedArea`) when the PR carries no label, then defaulting to `Product` — see
-`resolveSection` in `digest.ts`.
-
-The digest also carries the **merged-vs-live-to-users axis** (the originating work item): each entry's
-`releaseState` (`live` / `awaiting-release` / `dark` / `unknown`) drives an inline live/dark
-annotation per entry and a distinct **"Currently dark — awaiting your release"** callout that
-lists the merged-but-not-yet-live work. Per
-the live-state rule: report shipped work using authoritative serving-state data rather than merge status alone
-the *sourcing* of that state is the `/what-shipped` gather's IO job; this pure core consumes the
-state as passed-in input. A merged item with no resolvable state is surfaced as `unknown`, never
-silently treated as live.
+Install the Git hook explicitly after configuring policy:
 
 ```bash
-node packages/pipeline-cli/src/bin.ts ship-digest derive --entries <file> --since <YYYY-MM-DD> [--until <YYYY-MM-DD>] [--out <file>]
+pipeline primary-index-guard install-hook
+pipeline primary-index-guard check-hook
 ```
+
+The installer writes only a marked managed `pre-commit` wrapper in the shared Git common hooks
+directory. It refuses to replace an unrelated hook or hook runner. The wrapper turns only exit
+`3` into a blocked commit and fail-opens for every other nonzero exit, so a damaged local toolchain
+cannot wedge all commits. Local hooks remain bypassable; protected branches and CI remain the
+repository's final authority.
+
+`primary-index-guard record` is the optional read-only observability leg. It uses the same
+classifier, can record a lower-threshold JSONL event outside the repository, and never affects the
+pre-commit decision or exit result.
+
+
+### `ship-digest` — the merged-since stakeholder projection
+
+Renders a stakeholder-facing ship digest for a `--since` window from a pre-gathered merged-work
+entries JSON. Unlike `changelog-derive`'s builder-oriented Keep-a-Changelog version sections,
+this groups work by a repository-configured **category**, then by **milestone**, then by a
+repository-configured **type**. Missing or unrecognized category/type/milestone data is surfaced
+under a visible `Uncategorized` bucket; an entry is never discarded because the gather could not
+classify it.
+
+The tool is the pure projection only. It decodes the untrusted entries file at the command
+boundary and accepts `{issue?, pr, title, type?, milestone?, category?, joinedCategory?,
+releaseState?}`. `pr` and `title` are required. A malformed/unreadable file, invalid entry, or
+failed output write is a typed non-zero exit; an empty valid array is a successful report stating
+that nothing shipped in the window. The Git/GitHub/tracker gather belongs to `/what-shipped`, not
+this tool, and no release provider, network command, or mutation is embedded in the CLI.
+
+The category rule preserves the useful join-free mechanism without a product-specific taxonomy:
+the direct PR category (`category`) wins, then the gather's joined metadata (`joinedCategory`),
+then the policy's fallback category. Blank direct data is treated as absent. Temporary
+`area`/`joinedArea` aliases remain accepted only to let existing gathered entries migrate; new
+entries and policy examples use `category`/`joinedCategory`.
+
+`github.shipping.shipDigest` in `.pipeline/agent-policy.json` supplies category/type display
+order, labels, and fallback labels. It is display policy, not a provider configuration the CLI
+will execute. Missing or malformed display policy uses a deterministic generic layout and emits a
+diagnostic on stderr rather than borrowing another repository's taxonomy or hiding entries.
+
+The digest also carries the **merged-versus-user-visible release-state axis**: each entry's
+`releaseState` (`live` / `awaiting-release` / `dark` / `unknown`) gets an inline annotation, and
+`dark`/`awaiting-release` entries get a distinct **"Currently dark — awaiting your release"**
+callout before the grouped report. State comes from the gather's explicitly configured,
+read-only release-state adapter. No resolvable evidence becomes `unknown`, never an assertion
+that the work is live; `unknown` is deliberately not claimed as awaiting release.
+
+```bash
+node packages/pipeline-cli/src/bin.ts ship-digest derive --entries <file> --since <YYYY-MM-DD> [--until <YYYY-MM-DD>] [--out <file>] [--root <repository-root>]
+```
+
+With no `--out`, the Markdown body is stdout. With `--out`, stdout stays empty and a concise
+completion line is emitted on stderr. The `--until` default is the current UTC date. The command
+is intentionally a renderer: use the repository's authorized release process after reading the
+report; do not treat it as a release action.
 
 ### `token-spend` — offline per-stage token-spend reporter (the originating work item)
 
@@ -519,40 +751,35 @@ node packages/pipeline-cli/src/bin.ts wayfinder-map 2421
 node packages/pipeline-cli/src/bin.ts wayfinder-map 2421 --json
 ```
 
-### `reachability-guard` — a flag can't graduate while its UI slice is unbuilt (the feature reachability requirement, the originating work item)
+### `reachability-guard` — optional configured feature reachability
 
-The single deterministic reachability contract both `plan-epic` (the originating work item) and `/release`
-(the originating work item) key off — the enforcement seam that makes an unreachable-feature graduation
-unrepresentable (the reachability rule: do not graduate a user-facing flag until it has a consuming UI and registered journey coverage, unless explicitly exempt). Given a
-Flagship flag key, it asserts the flag's vertical has a **user-facing slice** before the flag
-can reach 100%:
+`reachability-guard check <feature-key>` preserves the source pipeline's useful completeness
+contract without assuming a feature-flag provider, application layout, language, or test runner.
+It is an **optional adapter**. With the default
+`optionalAdapters.featureReachability.enabled: false`, it reports that no reachability gate was
+evaluated and exits successfully; it does not invent a source model or scan unrelated files.
 
-- **Consuming UI** — the flag-key constant declared in `apps/web/src/flags/keys.ts` is
-  referenced by ≥1 `apps/web/src/**/*.tsx` component (the feature reachability requirement §1a/§2).
-- **Registered journey e2e** — a spec under `apps/web/tests/e2e/` carries an in-title
-  `@journey:<flag-key>` tag (the feature reachability requirement §2). The checker asserts *registration*; the e2e job
-  runs the spec.
-- **Exemption** — a legitimately UI-less infra/containment flag opts out with a
-  `@reachability-exempt: <reason>` marker at its `keys.ts` definition (the feature reachability requirement §3), so the
-  gate refuses unreachable *user-facing* flags without blocking infra flags.
-
-It **fails closed** (the zero-scope fail-closed invariant) and **names precisely** which assertion failed (missing UI
-consumer / missing journey e2e / unknown flag / zero scope), so `/release` can surface the
-gap to the human. The pure core (`reachability-guard.ts`) is unit-tested directly; the
-filesystem boundary (`gate.ts`) is crossed over a fake repo dir.
+An adopter enabling it supplies repository-owned relative paths and regular expressions in
+`.pipeline/agent-policy.json`: one declaration source, consumer roots and filename pattern,
+journey roots and filename pattern, a declaration pattern (capture 1 = symbol, capture 2 =
+feature key), a journey pattern (capture 1 = key), and an exemption pattern (capture 1 = reason).
+Once enabled, the guard keeps the original strict behavior: a declared feature needs a configured
+consumer **and** a configured journey registration, unless an immediately preceding doc comment
+contains the configured exemption and a reason. Zero parsed declarations and unknown keys fail
+closed, and failures name the missing evidence.
 
 ```bash
-# exit 0 iff <flag-key> is reachable (consuming UI + registered journey) or @reachability-exempt
-node packages/pipeline-cli/src/bin.ts reachability-guard check example-repo-reactions
+# Disabled safely unless the adopting repository has enabled and configured the adapter.
+node packages/pipeline-cli/src/bin.ts reachability-guard check billing-redesign
 
-# point at a specific repo root (default: walk up for a workspace marker)
-node packages/pipeline-cli/src/bin.ts reachability-guard check pano-feed-edge-cache --root /path/to/repo
+# Evaluate an explicitly configured repository root.
+node packages/pipeline-cli/src/bin.ts reachability-guard check billing-redesign --root /path/to/repo
 ```
 
 ## Building and testing
 
 ```bash
-pnpm --filter @kampus/pipeline-cli typecheck
-pnpm --filter @kampus/pipeline-cli test
-pnpm --filter @kampus/pipeline-cli build   # src → dist ESM
+pnpm --filter pipeline-cli typecheck
+pnpm --filter pipeline-cli test
+pnpm --filter pipeline-cli build   # src → dist ESM
 ```

@@ -527,45 +527,50 @@ the field's grammar stays defined exactly once. See the rule that repository-spe
 for the why (agents deploy / humans release) and the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository
 for the portability guarantee the graceful-absence contract delivers.
 
-## The PR `$PIPELINE_AREA` signal — a join-free product/infra tag for the ship digest
+## The PR category signal — a join-free repository tag for the ship digest
 
-The **product-vs-infra split** is the top level of the founder-facing `ship-digest` readout
-(`pipeline-cli ship-digest`) — did this shipped work touch a kamp.us **product** surface, or the
-pipeline / infra **substrate**? That split lives naturally on the **issue** (via its milestone /
-campaign), but a **merged PR carries no milestone** — milestones live on issues only. So the digest
-would have to recover the split by a fragile **PR→issue→milestone join** on every readout. The
-`$PIPELINE_AREA` **PR label** is the cheap tag that makes the split **join-free**: stamp the merged work's
-section directly on the PR, and the digest reads it without touching the issue graph.
+A repository may use a **category** as the top level of its stakeholder-facing `ship-digest`
+readout (`pipeline-cli ship-digest`) — for example, a customer-facing, platform, compliance, or
+internal category defined in `github.shipping.shipDigest`. That classification often lives on an
+issue, milestone, campaign, or another tracker object, while a merged PR may not carry that parent
+metadata. Reconstructing it for every report requires a potentially incomplete **PR→tracker
+record→group** join. A repository-defined **PR category label** is the cheap optional tag that
+makes the readout **join-free**: stamp the merged work's category directly on the PR and the
+digest can read that fact without traversing the tracker graph.
 
-**The convention.** A merged PR may carry **exactly one** of two labels:
+**The convention.** The repository owns the label prefix, allowed category keys, and whether at
+most one category label is allowed. Document those values in repository policy; do not infer them
+from another project's label taxonomy. For example, a repository could define a single
+`category:<key>` label whose `<key>` appears in `github.shipping.shipDigest.categories.order`:
 
-| Label | Meaning |
+| Repository-configured label | Meaning |
 |---|---|
-| `$PIPELINE_AREA` | The work touches a **kamp.us user-facing product** surface (configured content feature / pano / the web app). |
-| `$PIPELINE_AREA` | The work touches the **pipeline / infra / platform substrate** — no user-facing surface. |
+| `category:<key-a>` | Work in the repository-defined `<key-a>` stakeholder category. |
+| `category:<key-b>` | Work in the repository-defined `<key-b>` stakeholder category. |
 
-**Who applies it.** `ship-it` stamps it **at merge**, echoing the section the PR's linked
-`Fixes #N` issue already implies (its milestone / product surface) — the merge authority is the one
-point that reliably knows the PR↔issue link, so it echoes the signal onto the PR join-free for
-later readouts. A **human** may set it earlier (on the PR at open) when the section is obvious;
-`triage` does **not** — it operates on issues, not PRs, and this is a PR-level tag. It is **not**
-enforced by any gate (retrofitting it onto historical PRs, and any enforcement guard, are
-explicitly out of scope — a later chore if wanted).
+**Who applies it.** `ship-it` may stamp the label **at merge**, echoing the category the linked
+tracker record already implies. The merge authority is often the one point that can reliably see
+the PR↔tracker link, so recording the result on the PR makes later readouts cheaper and more
+resilient. A **human** may set it earlier when the category is obvious. `triage` should not create
+a PR-level signal while operating only on an issue. This convention is not a universal merge gate:
+retrofitting historical PRs and enforcing a repository-specific label policy are separate,
+explicit decisions.
 
-**The absent-default (tolerant read).** The label is **optional**: a PR without an `$PIPELINE_AREA` label
-is well-formed, not a defect (the same tolerant-read stance as a missing `milestone`). When it is
-absent the `ship-digest` gather falls back to the **PR→issue→milestone join** to recover the
-section, and when *that* yields nothing the digest defaults the entry to **`Product`** (the
-reader's default frame) — never dropped. So the signal only ever makes the readout *richer and
-cheaper*; its absence degrades cleanly to the pre-convention join behaviour, never worse.
+**The absent-default (tolerant read).** The label is **optional**: a PR without a category label
+is well-formed, just like a PR without a milestone. When absent, the `ship-digest` gather falls
+back to its repository-defined **PR→tracker→group** join. When that also yields nothing, the
+renderer places the entry in its visible **`Uncategorized`** fallback — never drops it. The signal
+therefore only makes the readout richer and cheaper; its absence degrades safely to the joined
+metadata path and then to an explicit uncertainty bucket.
 
-**Who reads it.** `ship-digest` is the consumer. Its pure core resolves each entry's section with a
-**PR-signal-preferred precedence** (`resolveSection` in
-`packages/pipeline-cli/src/tools/ship-digest/digest.ts`): the entry's `area` (the PR `$PIPELINE_AREA`
-signal, join-free) wins; when absent the gather-supplied `joinedArea` (the PR→issue→milestone join
-fallback) is consulted; when neither is present it defaults to `Product`. The `/what-shipped`
-gather is what populates `area` from the PR label (join-free) and `joinedArea` from the join when
-the label is missing.
+**Who reads it.** `ship-digest` is the consumer. Its pure core applies
+**PR-signal-preferred precedence** (`resolveCategory` in
+`packages/pipeline-cli/src/tools/ship-digest/digest.ts`): an entry's direct `category` signal
+wins; when it is absent the gather-supplied `joinedCategory` fallback is consulted; when neither
+is present the configured visible fallback is used. The `/what-shipped` gather populates
+`category` from the PR label (join-free) and `joinedCategory` from its repository-owned join when
+the label is missing. Legacy `area` / `joinedArea` input keys are temporary CLI compatibility
+aliases only; new gatherers must emit the generic keys.
 
 ---
 
@@ -1403,8 +1408,8 @@ since a gate/merge agent's own instructions are a self-weakening surface; the **
 were escaping the boundary; the **lint/GritQL governance config** — `biome.jsonc` and
 `biome-plugins/**` — added by the applicable safety invariant,
 since an ungated path to weaken a lint rule is a guard-relaxing vector). Everything else — `$PIPELINE_CODE_PATHS`,
-**non**-guard `$PIPELINE_CODE_PATHS`, `.decisions/**` (**except a guard-touching ADR** — see the content
-clause below), `.patterns/**`, every prose doc `*.md` (the
+**non**-guard `$PIPELINE_CODE_PATHS`, repository decision records (**except a configured candidate
+classified guard-touching by the content clause below), `.patterns/**`, every prose doc `*.md` (the
 §DOC class), and every **non**-gate-critical `skills/**` — is **non-blocking** and
 auto-merges through its matching gate on a PASS. (This set governs *who merges*, not *which gate verifies* — a
 code-root `*.md` is non-blocking here yet rides `review-code`, not `review-doc`, per §DOC.)
@@ -1417,29 +1422,26 @@ code-root `*.md` is non-blocking here yet rides `review-code`, not `review-doc`,
 
 ### The canonical matcher
 
-Every consumer matches the set with this **one** anchored regex (POSIX ERE; the jq/`grep`
-form below). The regex is **single-sourced** in the `CONTROL_PLANE_RE` const at
-[`packages/pipeline-cli/src/tools/control-plane-paths/control-plane-re.ts`](repository-owned record URL)
-(issue documented repository precedent) — run `pipeline-cli control-plane-paths` to print it (or `--paths` for the expanded
-§CP path set). Cite it; do **not** re-hard-code the path list. The one machine-readable
-`CONTROL_PLANE_RE=` copy below is kept **byte-in-sync with that const** — guarded by `codeowners-cp`
-and `validate-gate-path-drift.sh`, both of which fail closed on any divergence — and is retained
-**only** because the live merge-deciding gates re-resolve it from THIS file on `$PIPELINE_BASE_REF` (documented repository precedent);
-that $PIPELINE_BASE_REF read is the anti-self-authorization property (a boundary-editing PR is classified
-against configured base branch's boundary, not its own edit) and must not move to an in-tree import.
+Every consumer matches the set through **one policy-backed authority**: `pipeline-cli
+protected-change-policy`. The repository-owned `github.shipping.controlPlanePaths` list is
+read from `$PIPELINE_BASE_REF`, never from the PR head or an injected skill snapshot. The command
+can print its configured paths, derive the compatibility regex used by existing shell checks, or
+classify a complete changed-file list. Cite the command and policy; do **not** re-hard-code the
+path list. This base-ref read retains the anti-self-authorization property: a boundary-editing PR
+is classified against its configured base branch boundary, not its own proposed boundary.
 
 ```bash
-# the single probe ship-it Step 0, review-code Step 2, review-doc Step 0, and review-skill
-# Step 0 all use — kept byte-in-sync with the pipeline-cli const (issue documented repository precedent); the live gates
-# re-resolve THIS line from $PIPELINE_BASE_REF (documented repository precedent), so it stays here as the one un-importable copy:
-CONTROL_PLANE_RE='^(\.claude|\.github)/|^claude-plugins/kampus-pipeline/skills/(ship-it|review-code|review-doc|review-skill|review-design|review-plan|triage|write-code|plan-epic|release|review-trivial)/|^claude-plugins/kampus-pipeline/skills/([^/]+/)*[^/]+\.sh$|^claude-plugins/kampus-pipeline/agents/|^claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats\.md$|^claude-plugins/kampus-pipeline/hooks(/|\.json$)|^packages/ci-required/|^packages/pipeline-cli/|^biome\.jsonc$|^biome-plugins/'
+# The shared probe used by ship-it and every review gate. The policy reference is the
+# trusted base ref; a missing/unreadable/malformed policy is treated as protected by the
+# command, so callers must preserve their stronger human-review fallback.
 # --paginate + a STREAMING --jq ('.[].filename', one line per file) is the canonical pattern: gh
 # concatenates the per-page element streams, so grep aggregates §CP matches across ALL pages. The
 # API caps per_page at 100 regardless of the value, so a single non-paginated call truncates a
 # >100-file PR — hiding a control-plane file in the tail. Never pair --paginate with an AGGREGATE
 # --jq (`[ … ]` / `length` / `add`): gh runs the filter PER PAGE and emits one result each (documented repository precedent).
 gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename' \
-  | grep -Eq "$CONTROL_PLANE_RE" && echo "BLOCKING — control plane (manual merge)"
+  | pipeline-cli protected-change-policy classify --policy-ref "$PIPELINE_BASE_REF" \
+  | grep -qx 'protected' && echo "BLOCKING — configured protected change (manual merge)"
 ```
 
 **The §CP-deciding consumers resolve this line from `$PIPELINE_BASE_REF` at run time, not from the
@@ -1460,57 +1462,66 @@ The **0052 instruction-trust set** (root `CLAUDE.md`, `.claude/**`, `.decisions/
 concern, not a merge-blocking one. Keep them apart (review-code Step 2 spells out the
 distinction). This section governs **only** the merge-blocking / control-plane set above.
 
-### The guard-touching ADR predicate — a §CP membership test by CONTENT (the applicable safety invariant)
+### The guard-content predicate — a configured protected-change membership test by CONTENT (the applicable safety invariant)
 
-The path matcher above is **necessary but not sufficient**: a `.decisions/**` ADR that
-**relaxes, amends, or widens an exemption on a documented guard** is control-plane by *nature*
-(it weakens the pipeline's own guardrails — the exact class §CP exists to hold for human
-ratification), yet its **path** is indistinguishable from an ordinary ADR's. `.decisions/**` is
-otherwise non-blocking (it auto-merges on a `review-doc` PASS), so a guard-relaxing ADR would
-auto-ship past founder ratification with no mechanical hold — a control-plane fail-open (the applicable safety invariant,
-documented repository precedent).
+The path matcher above is **necessary but not sufficient**: an adopter-configured decision
+record can **relax, amend, or widen an exemption on a repository safeguard** while looking like an
+ordinary knowledge artifact by path. That record is protected by *nature* (it weakens a
+repository's own guardrails — the exact class the protected-change route exists to hold for
+non-author approval), yet its **path** is indistinguishable from an ordinary decision record.
+Decision records are otherwise routed through their normal artifact gate, so a safeguard-relaxing
+record would auto-ship past the configured approval route with no mechanical hold — a protected
+change fail-open (the applicable safety invariant, documented repository precedent).
 
-So §CP membership has a **second, content-inferred clause** for `.decisions/**` files, alongside
-the path `CONTROL_PLANE_RE`: a touched `.decisions/**` ADR whose **content cites or amends a
-documented guard** is §CP. The signal is **inferred from the ADR prose, never an author-declared
-tag** — an author-declared marker (`relaxes:` / `guard-change`) is self-defeating (the agent that
-lacks the discipline to hold the ADR also won't add the tag; the applicable safety invariant MECHANISM). The predicate is
-**deliberately conservative / fail-closed**: it over-matches on any guard-vocabulary mention
-(routing a merely-guard-*citing* ADR to a cheap human approval) rather than risk missing a
-guard-*relaxer* (which would auto-ship a weakened gate) — "you cannot relax a guard without naming
-it," so a content probe over guard vocabulary catches the class an author tag would let slip. This
-is the same fail-closed stance as §ZS / the applicable safety invariant.
+The protected-change route therefore has a **second, content-inferred clause**, alongside the
+path `CONTROL_PLANE_RE`: a changed path selected by the repository-owned
+`github.shipping.guardContent.decisionRecordPaths` policy whose **content matches its configured
+`vocabularyPatterns`** is protected. The signal is inferred from the record's prose, never an
+author-declared tag — an author-declared marker (`relaxes:` / `guard-change`) is self-defeating
+(the author that lacks the discipline to hold the record also will not reliably add the tag; the
+applicable safety invariant MECHANISM). The predicate is deliberately conservative / fail-closed:
+it over-matches on the adopter's safeguard vocabulary (routing a merely safeguard-*citing* record
+to the configured approval route) rather than risk missing a safeguard-*relaxer* (which would
+auto-ship a weakened gate). This is the same fail-closed stance as §ZS / the applicable safety
+invariant.
 
-The predicate is **single-sourced here** as one canonical regex — the same discipline that keeps
-`CONTROL_PLANE_RE` from drifting (the skill-review rule that gives skills their own behavioral gate §6). Cite this line; do **not** re-hard-code the
-vocabulary. `validate-gate-path-drift.sh` locks `ship-it`'s copy byte-identical to this canonical.
-
-```
-GUARD_ADR_RE='guard|invariant|fail-closed|fail-open|fail closed|fail open|containment|control-plane|control plane|§cp|self-weakening|blocking set|adversarial review|must never|hard-gate|hard gate|enforcement|\bgat(e|es|ing|ed)\b|relax|loosen|weaken|soften|widen|broaden|waive|bypass|exempt|carve[ -]?out|opt[ -]?out'
-```
+The predicate is **single-sourced in executable, repository-owned policy**, not in this document
+and not in a skill-local regex. `pipeline-cli guard-content-probe candidates --policy-ref` selects
+configured decision-record paths, and `classify --policy-ref` evaluates their content against the trusted base
+policy. Cite the command and policy; do **not** re-hard-code a decision-record directory,
+vocabulary, source repository terminology, or a duplicate inline classifier. The policy ref is
+load-bearing: a pull request must not relax its own protection by editing the policy at head.
 
 ```bash
-# §CP content clause (the applicable safety invariant): a touched .decisions/** ADR whose CONTENT matches GUARD_ADR_RE is
-# §CP. Resolve GUARD_ADR_RE from $PIPELINE_BASE_REF at run time (like CONTROL_PLANE_RE, documented repository precedent); read each
-# ADR's body at the PR head. FAIL CLOSED: an unreadable boundary ⇒ match-everything; an unreadable
-# ADR (delete/404) ⇒ §CP — never auto-ship an ADR that could not be read and proven guard-free.
-GUARD_ADR_RE='guard|invariant|fail-closed|fail-open|fail closed|fail open|containment|control-plane|control plane|§cp|self-weakening|blocking set|adversarial review|must never|hard-gate|hard gate|enforcement|\bgat(e|es|ing|ed)\b|relax|loosen|weaken|soften|widen|broaden|waive|bypass|exempt|carve[ -]?out|opt[ -]?out'
-GA_LIVE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep '^GUARD_ADR_RE=' | head -n1 || true)"
-if [ -n "$GA_LIVE" ]; then GUARD_ADR_RE="$(printf '%s' "$GA_LIVE" | sed "s/^GUARD_ADR_RE='//; s/'$//")"; else GUARD_ADR_RE='.'; fi   # FAIL CLOSED: '.' ⇒ every ADR word matches ⇒ every touched ADR is §CP
+# Protected-content clause: begin with every changed path, then let the shared executable select
+# only configured decision-record candidates from the trusted base policy. A policy-selection
+# failure is conservative: `candidates` returns every non-empty input path, and the classifier
+# treats an untrusted policy or unreadable/empty body as guard-touching.
+BASE_POLICY_REF="${PIPELINE_BASE_REF:?PIPELINE_BASE_REF must name the trusted base policy ref}"
 HEAD_SHA="$(gh api "repos/$REPO/pulls/$PR" --jq '.head.sha')"
-echo "$FILES" | grep -E '^\.decisions/.*\.md$' | while IFS= read -r adr; do
-  [ -z "$adr" ] && continue
-  body="$(gh api "repos/$REPO/contents/$adr?ref=$HEAD_SHA" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
-  if [ -z "$body" ]; then echo "BLOCKING ($adr — unreadable at head ⇒ §CP, fail-closed)"
-  elif printf '%s' "$body" | grep -Eiq "$GUARD_ADR_RE"; then echo "BLOCKING ($adr — guard-touching ADR ⇒ §CP, the applicable safety invariant)"; fi
-done
+GUARD_CANDIDATES="$(printf '%s\n' "$FILES" \
+  | pnpm pipeline cli guard-content-probe candidates --policy-ref "$BASE_POLICY_REF")" || GUARD_CANDIDATES="$FILES"
+while IFS= read -r candidate; do
+  [ -z "$candidate" ] && continue
+  body="$(gh api "repos/$REPO/contents/$candidate?ref=$HEAD_SHA" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
+  classify_status=0
+  classification="$(printf '%s' "$body" \
+    | pnpm pipeline cli guard-content-probe classify --policy-ref "$BASE_POLICY_REF" --path "$candidate")" || classify_status=$?
+  if [ "$classification" != "not-guard-touching" ] || [ "$classify_status" -ne 1 ]; then
+    echo "BLOCKING ($candidate — guard-touching or unprovable at head ⇒ protected change, fail-closed)"
+  fi
+done <<EOF
+$GUARD_CANDIDATES
+EOF
 ```
 
-A guard-touching ADR classifies **§CP for merge-authority** exactly like a path-§CP file:
-`ship-it` STOPS at `awaiting control-plane approval` until a current-head `configured approval authority`
-approval is present (per POLICY, the founder's; the control-plane rule that requires non-author approval of the current head before the pipeline enqueues). Its **verdict routing is unchanged** —
-it is still doc-class, `review-doc`-verified (this set governs *who merges*, not *which gate
-verifies*); the content clause adds only the merge-authority hold.
+A guard-touching configured decision record classifies **protected for merge-authority** exactly
+like a control-plane path: `ship-it` STOPS at `awaiting control-plane approval` until a
+current-head `configured approval authority` approval is present (per repository policy; the
+control-plane rule that requires non-author approval of the current head before the pipeline
+enqueues). Its **verdict routing is unchanged** — it remains verified by the artifact gate selected
+for that record (this set governs *who merges*, not *which gate verifies*); the content clause adds
+only the merge-authority hold.
 
 ---
 
@@ -1593,10 +1604,21 @@ sibling class, a late stall (documented repository precedent; PR documented repo
 only `review-doc: PASS`).
 
 So these probes are **single-sourced here** as canonical named `_RE=` lines — the same
-discipline that single-sources `CONTROL_PLANE_RE`/`GUARD_ADR_RE` (§CP) and `UI_RE`
+discipline that single-sources `CONTROL_PLANE_RE` and `UI_RE`, while keeping the independent
+guard-content decision in executable repository-owned policy,
 (`ship-it/SKILL.md`). A third inline copy in `reviewer.md` is the exact drift `documented repository precedent`/`documented repository precedent`/`documented repository precedent`
 fought — the class probes were previously inline grep literals in `ship-it` Step 0 *only*, with
 no reusable line for the reviewer to consume:
+
+> **Current executable authority.** The detailed regex discussion below is retained as historical
+> rationale for inclusive fan-out and fail-closed routing; it is not an instruction to recreate a
+> shell classifier. The active authority is `pipeline-cli class-probe classify`, whose rules are
+> the repository-owned `github.review.classification` object in
+> `.pipeline/agent-policy.json`. Reviewer, `ship-it`, review-design, and delivery CI invoke that
+> command with the configured base-policy ref. It emits every required `review-*` namespace in
+> stable order, routes an unknown non-empty path to `review-code`, and over-dispatches all gates
+> when policy is unavailable or invalid. This keeps the rationale while removing source taxonomy
+> as an active generic default.
 
 ```bash
 HAS_CODE_RE='^(apps|packages|\.glossary|infra)/'

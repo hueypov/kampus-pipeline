@@ -1,4 +1,4 @@
-# @kampus/pipeline-crew-mcp
+# pipeline-crew-mcp
 
 The crew's channels-backed messaging substrate — the peer-to-peer transport the pipeline
 crew talk over, exposed to each agent as MCP channels (the MCP-channel rule: crew roles communicate through MCP channels instead of a terminal relay). The crew is a flat
@@ -65,13 +65,13 @@ through the shared claim map, claim-liveness riding presence, the two-keyspace s
 ## Usage
 
 Built on Effect + `effect/unstable/cli`, run from source with Node's TypeScript loader (the
-pipeline-tooling idiom, mirroring `@kampus/pipeline-cli`):
+pipeline-tooling idiom, mirroring `pipeline-cli`):
 
 ```bash
 # run one live crew session (stdio MCP server + channel peer) for a standing role
-pnpm --filter @kampus/pipeline-crew-mcp cli session --role engineering-manager
-pnpm --filter @kampus/pipeline-crew-mcp typecheck  # tsgo typecheck
-pnpm --filter @kampus/pipeline-crew-mcp test       # @effect/vitest suite
+pnpm --filter pipeline-crew-mcp cli session --role engineering-manager
+pnpm --filter pipeline-crew-mcp typecheck  # tsgo typecheck
+pnpm --filter pipeline-crew-mcp test       # @effect/vitest suite
 ```
 
 The `--role` is one of the four standing `CREW_ROLES` (`chief-of-staff`, `cartographer`,

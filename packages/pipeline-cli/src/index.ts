@@ -1,5 +1,5 @@
 /**
- * @kampus/pipeline-cli — the subcommand-router home all pipeline tooling folds
+ * pipeline-cli — the subcommand-router home all pipeline tooling folds
  * into (the originating initiative). Phase 1 (the originating work item) ships the shell: the registry seam, the
  * pure router core, and one tracer tool (`version`).
  *

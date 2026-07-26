@@ -245,36 +245,29 @@ Pull the file list first. This gate applies to a PR that **changes rendered UI**
 under `$PIPELINE_APPLICATION_PATH/src/**` (React components, styles, tokens, routes). If the diff touches **no**
 UI-affecting path at all, this is the wrong gate.
 
-This off-ramp predicate is the **SAME one live `UI_RE`** ship-it *requires* on and reviewer.md
-*dispatches* on — re-resolved from `ship-it/SKILL.md@configured base branch` via the `?ref=$PIPELINE_BASE_REF` idiom, NOT a
-hardcoded third copy. Wiring it to the single source is the documented repository precedent fix: a hardcoded off-ramp narrower
-than ship-it's require (`^$PIPELINE_APPLICATION_PATH/src/` vs the old `^$PIPELINE_APPLICATION_PATH/src/|\.tsx$|\.css$`) let a `.tsx`/`.css`
-outside `$PIPELINE_APPLICATION_PATH/src` be *required* yet off-ramped here with no marker → an unroutable phantom gate
-that deadlocked ship-it. Fail closed to **has-ui** (proceed and verdict) if the line is unreadable —
-never silently off-ramp, which is the failure that mints the phantom gate.
+This off-ramp predicate is the **same base-ref `github.review.classification.design` policy**
+that shipping requires and the reviewer dispatches through `class-probe`. It is not a copied UI
+regex, filename heuristic, or a rule embedded in this skill. The command preserves the routing
+invariant: a design review proceeds exactly when the shared classifier can require and dispatch a
+`review-design` verdict. Missing, unreadable, malformed, or invalid policy fail-closes to proceed
+for a non-empty diff; never silently off-ramp a gate another stage may require.
 
 ```bash
 PR=<pr number>
-# UI-affecting = the ONE live source (ship-it/SKILL.md@configured base branch's `UI_RE=` line) — the SAME predicate
-# ship-it requires on and reviewer.md dispatches on, so require == dispatch == off-ramp by
-# construction (documented repository precedent). The literal is the fail-closed REFERENCE, not the live decision source.
-UI_RE='^$PIPELINE_APPLICATION_PATH/src/'
-UI_EXCLUDE_RE='\.(test|spec)\.tsx?$'   # documented repository precedent: carve src-colocated test/spec out (no rendered surface); mirrors §CLASS has-docs carve-then-test — ERE has no lookahead, hence the exclude pair
-UI_RAW="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/ship-it/SKILL.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
-UI_LIVE="$(printf '%s\n' "$UI_RAW" | grep '^UI_RE=' | head -n1 || true)"; UX_LIVE="$(printf '%s\n' "$UI_RAW" | grep '^UI_EXCLUDE_RE=' | head -n1 || true)"
-if [ -n "$UI_LIVE" ]; then UI_RE="$(printf '%s' "$UI_LIVE" | sed "s/^UI_RE='//; s/'$//")"; else UI_RE='.'; fi   # unreadable ⇒ '.' ⇒ every path is UI-affecting ⇒ proceed & verdict (never silently off-ramp)
-if [ -n "$UX_LIVE" ]; then UI_EXCLUDE_RE="$(printf '%s' "$UX_LIVE" | sed "s/^UI_EXCLUDE_RE='//; s/'$//")"; else UI_EXCLUDE_RE='$^'; fi   # unreadable ⇒ '$^' never-match ⇒ carve nothing ⇒ proceed & verdict (fail-closed)
-UI_TOUCHED="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
-  --jq '.[].filename' | grep -Ev "$UI_EXCLUDE_RE" | grep -E "$UI_RE" || true)"
+BASE_POLICY_SHA="$(gh api "repos/$REPO/pulls/$PR" --jq '.base.sha')"
+git fetch --no-tags origin "$BASE_POLICY_SHA"
+REQUIRED_NAMESPACES="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename' \
+  | pipeline-cli class-probe classify --policy-ref "$BASE_POLICY_SHA" --namespaces)"
+printf '%s\n' "$REQUIRED_NAMESPACES"
 ```
 
-- **Empty** (the diff changes no `$PIPELINE_APPLICATION_PATH/src/**` surface — a pure backend / infra / docs / skill
-  PR) → **mis-route off-ramp.** Post a **plain note** (no `review-design:` marker — there is no
-  rendered UI to verdict) saying `not a UI-affecting PR — no rendered surface to gate; route to
-  review-code / review-doc / review-skill by class` and **stop**. Never emit a `review-design` marker
+- **No `review-design` line** (the diff changes no configured design surface) → **mis-route
+  off-ramp.** Post a **plain note** (no `review-design:` marker — there is no configured design
+  surface to verdict) saying `not a design-surface PR — route by the shared class probe` and
+  **stop**. Never emit a `review-design` marker
   on a non-UI PR, and never emit a foreign gate's marker — routing to the right gate is the sibling's
   Step 0, not yours to stamp.
-- **Non-empty** → this is a UI PR; proceed. (A **mixed** PR — UI *and* code/docs — is gated by the
+- **`review-design` is present** → this is a design-surface PR; proceed. (A **mixed** PR — design *and* code/docs — is gated by the
   matching gate per class: you verdict the design surface and emit `review-design`; `review-code` /
   `review-doc` verdict their classes. `ship-it` requires the latest PASS in **each** namespace
   present before it merges.)
@@ -285,13 +278,13 @@ drift-lockstep target, not the live decision source; a stale injected snapshot o
 now-control-plane PR, documented repository precedent):
 
 ```bash
-# §CP boundary is single-sourced in pipeline-cli (control-plane-paths/control-plane-re.ts, documented repository precedent);
-# run `pipeline-cli control-plane-paths` to print it. It is re-resolved from $PIPELINE_BASE_REF right below
+# §CP boundary is single-sourced in repository policy through `pipeline-cli protected-change-policy`;
+# it is re-resolved from $PIPELINE_BASE_REF right below
 # (the documented repository precedent anti-self-authorization read), so this is only a fail-closed sentinel, never the live source.
 CONTROL_PLANE_RE='.'   # fail-closed default: every path is control-plane until $PIPELINE_BASE_REF resolves
-CP_LIVE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep '^CONTROL_PLANE_RE=' | head -n1 || true)"
+CP_LIVE="$(pnpm pipeline cli protected-change-policy regex --policy-ref "$PIPELINE_BASE_REF" 2>/dev/null || true)"
 if [ -n "$CP_LIVE" ]; then
-  CONTROL_PLANE_RE="$(printf '%s' "$CP_LIVE" | sed "s/^CONTROL_PLANE_RE='//; s/'$//")"
+  CONTROL_PLANE_RE="$CP_LIVE"
 else
   CONTROL_PLANE_RE='.'   # FAIL CLOSED: can't read $PIPELINE_BASE_REF's boundary ⇒ treat as blocking (advisory)
 fi

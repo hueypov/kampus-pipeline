@@ -14,7 +14,7 @@ It never changes a release, flag, issue, pull request, or deployment. Read
 when no release-state adapter is configured, report merged work without claiming live state.
 
 You are the **gather-and-present** layer of the stakeholder-facing ship digest. The
-pure projection core — grouping merged work product/infra → milestone → type, and rendering the
+pure projection core — grouping merged work category → milestone → type, and rendering the
 live/dark axis — already lives in `pipeline-cli ship-digest` (`packages/pipeline-cli/src/tools/ship-digest/`,
 That core is **deliberately IO-free**: it consumes a pre-gathered entries JSON and renders. This
 skill does the IO the core refuses to — read git, read GitHub metadata, and optionally read a
@@ -78,7 +78,7 @@ echo "window: $SINCE → $UNTIL"
 
 ## Step 1 — Gather the merged PRs in the window
 
-Get the PRs merged into `main` since `$SINCE`. The **merged-PR number is the primary key** of
+Get the PRs merged into the repository's configured base branch since `$SINCE`. The **merged-PR number is the primary key** of
 every entry (`ShipEntry.pr` is always present); everything else is joined onto it.
 
 Read merged PRs via `gh api` REST (never GraphQL). The `search/issues` endpoint filters on
@@ -105,9 +105,10 @@ gh api "repos/$REPO/pulls/$PR" --jq '{title: .title, body: .body, labels: [.labe
 ```
 
 - **`title`** → the entry's `title` (prefer the linked-issue title once resolved in Step 2).
-- **Repository category label** → the entry's optional **`area`**. Use it only when the
-  repository documents its meaning; otherwise leave `area` unset and let the Step-2 join supply
-  `joinedArea` when available.
+- **Repository category label** → the entry's optional **`category`**. Use it only when the
+  repository documents its meaning; otherwise leave `category` unset and let the Step-2 join supply
+  `joinedCategory` when available. The CLI accepts legacy `area` / `joinedArea` keys during the
+  migration, but new gathered entries use the generic names.
 
 ---
 
@@ -128,11 +129,11 @@ Populate each entry from the join:
 - **`title`** — prefer the **closed-issue title**; fall back to the PR title when there is no link.
 - **`milestone`** — the issue's milestone title, or omit (→ `Uncategorized`).
 - **`type`** — a repository-defined type value when one exists, or omit (→ `Uncategorized`).
-- **`joinedArea`** — the **fallback** category recovered from the linked issue or milestone when
-  the PR carried no category metadata. The core prefers the PR `area` and only consults
-  `joinedArea` when `area` is absent (`resolveSection`).
+- **`joinedCategory`** — the **fallback** category recovered from the linked issue or milestone when
+  the PR carried no category metadata. The core prefers the PR `category` and only consults
+  `joinedCategory` when `category` is absent (`resolveCategory`).
 
-A PR that closes no issue is not dropped — carry it with just `pr` + `title` (+ `area` if known);
+A PR that closes no issue is not dropped — carry it with just `pr` + `title` (+ `category` if known);
 the core surfaces it under a generic uncategorized section, flagged, never dropped.
 
 ---
@@ -193,8 +194,8 @@ repository's configured schema checks). Each entry:
     "title": "isolate the shipper dispatch in drive-issue.js to a worktree",
     "type": "chore",                 // optional — repository type value; absent ⇒ Uncategorized
     "milestone": "Pipeline hardening", // optional — issue milestone; absent ⇒ Uncategorized
-    "area": "infra",                 // optional — repository category signal (preferred, join-free)
-    "joinedArea": "infra",           // optional — join fallback; consulted only when area absent
+    "category": "platform",          // optional — repository category signal (preferred, join-free)
+    "joinedCategory": "platform",    // optional — join fallback; consulted only when category absent
     "releaseState": "live"           // optional — live/awaiting-release/dark/unknown; absent ⇒ unknown
   }
 ]

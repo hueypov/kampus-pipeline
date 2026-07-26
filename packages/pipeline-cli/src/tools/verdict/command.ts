@@ -71,10 +71,11 @@ const fail = (reason: string): Effect.Effect<never> =>
 	});
 
 const parseGate = (raw: string): Effect.Effect<VerdictGate, never> => {
-	const gate = raw.trim().toLowerCase();
+	const supplied = raw.trim().toLowerCase();
+	const gate = supplied.startsWith("review-") ? supplied.slice("review-".length) : supplied;
 	return (GATES as ReadonlyArray<string>).includes(gate)
 		? Effect.succeed(gate as VerdictGate)
-		: fail(`unknown gate '${raw}' — expected one of ${GATES.join(" | ")}`);
+		: fail(`unknown gate '${raw}' — expected one of ${GATES.join(" | ")} or its review-* namespace`);
 };
 
 const parseExpect = (raw: Option.Option<string>): Effect.Effect<Polarity, never> => {

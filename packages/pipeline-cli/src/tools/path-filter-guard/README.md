@@ -43,5 +43,5 @@ Wired as the always-on `.github/workflows/path-filter-guard.yml` gate (the `read
 `path-filter-guard.unit.test.ts`, the filesystem gate in `gate.unit.test.ts`.
 
 ```bash
-pnpm --filter @kampus/pipeline-cli test    # vitest over the core + gate
+pnpm --filter pipeline-cli test    # vitest over the core + gate
 ```

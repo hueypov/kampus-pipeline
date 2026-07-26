@@ -187,7 +187,7 @@ The tools add one thing the raw `peer.send` you called does not: `channel_send` 
 `InvalidMessageError` before it ever leaves the sender. Everything else — the role lookup, the
 direct dial, the granted/collision reply — is the same code you just ran.
 
-To see the tools live: run `pnpm --filter @kampus/pipeline-crew-mcp cli session --role
+To see the tools live: run `pnpm --filter pipeline-crew-mcp cli session --role
 engineering-manager` in one terminal and the same for a second role in another; each is a stdio MCP
 server exposing `channel_send` and `channel_claim` to its MCP client. The
 [reference's CLI surface](./reference.md#stand-up-cli) documents every subcommand.

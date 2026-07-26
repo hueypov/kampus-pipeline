@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import {spawnSync} from "node:child_process";
-import {existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
+import {chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {dirname, join, relative, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {ARCHIVED_SKILL_NAMES, CORE_AGENT_NAMES, CORE_AGENT_SKILL_NAMES, CORE_SKILL_DEPENDENCIES, CORE_SKILL_NAMES, CORE_WORKFLOW_SUPPORT_FILES, renderWorkflowCatalog} from "./payload.ts";
@@ -28,10 +28,16 @@ const DOCUMENT_TOPOLOGY_TEMPLATES = [
 const WORKFLOW_CATALOG_RELATIVE_PATH = "claude-plugins/kampus-pipeline/workflow-catalog.json";
 const WORKFLOW_CATALOG_CONSUMER_PATH = ".pipeline/workflow-catalog.json";
 const LEGACY_PLUGIN_LINK_RELATIVE_PATH = "claude-plugins/kampus-pipeline";
+const PRIMARY_INDEX_GUARD_HOOK_MARKER = "# kampus-pipeline primary-index-guard managed hook";
+const PRIMARY_INDEX_GUARD_HOOK_NAME = "pre-commit";
 const GITHUB_WORKFLOW_TEMPLATES = [
 	{source: "templates/github/workflows/pipeline-toolkit.yml", destination: ".github/workflows/pipeline-toolkit.yml"},
 	{source: "templates/github/workflows/pipeline-doc-safety.yml", destination: ".github/workflows/pipeline-doc-safety.yml"},
 	{source: "templates/github/workflows/pipeline-delivery-gate.yml", destination: ".github/workflows/pipeline-delivery-gate.yml"},
+	{source: "templates/github/workflows/pipeline-gitleaks.yml", destination: ".github/workflows/pipeline-gitleaks.yml"},
+	{source: "templates/github/workflows/pipeline-doc-links.yml", destination: ".github/workflows/pipeline-doc-links.yml"},
+	{source: "templates/github/workflows/pipeline-settings-env-guard.yml", destination: ".github/workflows/pipeline-settings-env-guard.yml"},
+	{source: "templates/github/workflows/pipeline-unresolved-threads.yml", destination: ".github/workflows/pipeline-unresolved-threads.yml"},
 ] as const;
 type ManagedPath = {path: string; target: string};
 type PipelineConfig = {
@@ -123,12 +129,77 @@ const parseOptionalWorkflowPolicy = (value: unknown): OptionalWorkflowPolicy | u
 const isStringArray = (value: unknown): value is string[] =>
 	Array.isArray(value) && value.every((entry) => typeof entry === "string");
 
+const isStringRecord = (value: unknown): value is Record<string, string> =>
+	isRecord(value) && Object.values(value).every((entry) => typeof entry === "string" && entry.trim() !== "");
+
+const isNormalizedRepositoryPrefix = (value: string): boolean =>
+	value !== "" &&
+	value === value.trim() &&
+	!value.startsWith("/") &&
+	!value.includes("\\") &&
+	value.split("/").every((part) => part !== "" && part !== "." && part !== "..");
+
+const hasCaptureGroups = (pattern: string, minimum: number): boolean =>
+	(pattern.match(/(^|[^\\])\((?!\?)/g) ?? []).length >= minimum;
+
+const isRegexWithCaptures = (value: unknown, captures: number): value is string => {
+	if (typeof value !== "string" || !value.trim() || !hasCaptureGroups(value, captures)) return false;
+	try { new RegExp(value); return true; } catch { return false; }
+};
+
+const featureReachabilityPolicy = (policy: Record<string, unknown>): boolean => {
+	const adapters = policy.optionalAdapters;
+	if (adapters === undefined) return true;
+	if (!isRecord(adapters)) return false;
+	const reachability = adapters.featureReachability;
+	if (reachability === undefined) return true;
+	if (!isRecord(reachability) || typeof reachability.enabled !== "boolean") return false;
+	const disabledFields = ["definitionsPath", "consumerFilePattern", "journeyFilePattern", "definitionPattern", "journeyPattern", "exemptionPattern"] as const;
+	if (!reachability.enabled) {
+		return disabledFields.every((field) => reachability[field] === null) &&
+			Array.isArray(reachability.consumerRoots) && reachability.consumerRoots.length === 0 &&
+			Array.isArray(reachability.journeyRoots) && reachability.journeyRoots.length === 0;
+	}
+	return isNormalizedRepositoryPrefix(reachability.definitionsPath as string) &&
+		isStringArray(reachability.consumerRoots) && reachability.consumerRoots.length > 0 && reachability.consumerRoots.every(isNormalizedRepositoryPrefix) &&
+		isRegexWithCaptures(reachability.consumerFilePattern, 0) &&
+		isStringArray(reachability.journeyRoots) && reachability.journeyRoots.length > 0 && reachability.journeyRoots.every(isNormalizedRepositoryPrefix) &&
+		isRegexWithCaptures(reachability.journeyFilePattern, 0) &&
+		isRegexWithCaptures(reachability.definitionPattern, 2) &&
+		isRegexWithCaptures(reachability.journeyPattern, 1) &&
+		isRegexWithCaptures(reachability.exemptionPattern, 1);
+};
+
+type PrimaryIndexGuardPolicy = {
+	enabled: boolean;
+	protectedPathPrefixes: string[];
+	blockThreshold: number;
+	attribution: {enabled: boolean; threshold: number; logPath: string | null};
+};
+
+const primaryIndexGuardPolicy = (policy: Record<string, unknown>): PrimaryIndexGuardPolicy | undefined => {
+	const git = policy.git;
+	if (!isRecord(git) || git.primaryIndexGuard === undefined) return undefined;
+	const guard = git.primaryIndexGuard;
+	if (!isRecord(guard) || typeof guard.enabled !== "boolean" || !isStringArray(guard.protectedPathPrefixes) ||
+		guard.protectedPathPrefixes.some((prefix) => !isNormalizedRepositoryPrefix(prefix)) ||
+		!Number.isInteger(guard.blockThreshold) || (guard.blockThreshold as number) <= 0) return undefined;
+	if (guard.enabled && guard.protectedPathPrefixes.length === 0) return undefined;
+	if (!isRecord(guard.attribution) || typeof guard.attribution.enabled !== "boolean" ||
+		!Number.isInteger(guard.attribution.threshold) || (guard.attribution.threshold as number) <= 0 ||
+		(guard.attribution.logPath !== null && (typeof guard.attribution.logPath !== "string" || !guard.attribution.logPath.trim())) ||
+		(guard.attribution.enabled && (guard.attribution.threshold as number) > (guard.blockThreshold as number))) return undefined;
+	return guard as unknown as PrimaryIndexGuardPolicy;
+};
+
 const parseAgentPolicy = (value: unknown): Record<string, unknown> | undefined => {
 	if (!isRecord(value) || value.schemaVersion !== 1 || !isRecord(value.github)) return undefined;
 	if (value.git !== undefined) {
 		if (!isRecord(value.git)) return undefined;
 		if (value.git.primaryBranch !== undefined && value.git.primaryBranch !== null && (typeof value.git.primaryBranch !== "string" || !value.git.primaryBranch.trim())) return undefined;
+		if (value.git.primaryRemote !== undefined && value.git.primaryRemote !== null && (typeof value.git.primaryRemote !== "string" || !value.git.primaryRemote.trim())) return undefined;
 		if (value.git.postSyncCommand !== undefined && value.git.postSyncCommand !== null && (!isStringArray(value.git.postSyncCommand) || value.git.postSyncCommand.length === 0 || value.git.postSyncCommand.some((part) => !part.trim()))) return undefined;
+		if (value.git.primaryIndexGuard !== undefined && !primaryIndexGuardPolicy(value)) return undefined;
 	}
 	if (value.worktrees !== undefined) {
 		if (!isRecord(value.worktrees)) return undefined;
@@ -136,11 +207,70 @@ const parseAgentPolicy = (value: unknown): Record<string, unknown> | undefined =
 		if (value.worktrees.reviewPrefixes !== undefined && !isStringArray(value.worktrees.reviewPrefixes)) return undefined;
 		if (value.worktrees.idleMinutes !== undefined && (!Number.isInteger(value.worktrees.idleMinutes) || (value.worktrees.idleMinutes as number) < 0)) return undefined;
 	}
+	if (!featureReachabilityPolicy(value)) return undefined;
 	const review = (value.github as Record<string, unknown>).review;
 	if (review !== undefined && !isRecord(review)) return undefined;
+	const classification = isRecord(review) ? review.classification : undefined;
+	if (classification !== undefined) {
+		if (!isRecord(classification)) return undefined;
+		for (const [name, allowEmptyIncludes] of [["code", false], ["docs", false], ["skills", false], ["design", true]] as const) {
+			const rules = classification[name];
+			if (!isRecord(rules) || !isStringArray(rules.includePatterns) || (!allowEmptyIncludes && rules.includePatterns.length === 0) || rules.includePatterns.some((pattern) => !pattern.trim()) || !isStringArray(rules.excludePatterns) || rules.excludePatterns.some((pattern) => !pattern.trim())) return undefined;
+		}
+	}
 	const trivialDiff = isRecord(review) ? review.trivialDiff : undefined;
 	if (trivialDiff !== undefined) {
 		if (!isRecord(trivialDiff) || typeof trivialDiff.enabled !== "boolean" || !Number.isInteger(trivialDiff.maxChangedLines) || (trivialDiff.maxChangedLines as number) < 0 || !isStringArray(trivialDiff.protectedPaths)) return undefined;
+	}
+	const compatibility = (value.github as Record<string, unknown>).cliCompatibility;
+	if (compatibility !== undefined) {
+		if (!isRecord(compatibility) || typeof compatibility.enabled !== "boolean" || !isRecord(compatibility.pathShim) || typeof compatibility.pathShim.enabled !== "boolean" || !isRecord(compatibility.graphql) || (compatibility.graphql.mode !== "passthrough" && compatibility.graphql.mode !== "rest-only") || !isStringArray(compatibility.graphql.blockVerbs) || !isStringArray(compatibility.graphql.unsupportedJsonFields) || typeof compatibility.graphql.rewriteIssueAndPrEdit !== "boolean" || !isRecord(compatibility.skillLint) || typeof compatibility.skillLint.strictYamlFrontmatter !== "boolean" || typeof compatibility.skillLint.forbidConfiguredGraphqlPaths !== "boolean" || !isStringArray(compatibility.skillLint.selfExemptPaths)) return undefined;
+		for (const key of ["targetRepository", "realGhPath"] as const) {
+			const configured = compatibility[key];
+			if (configured !== null && configured !== undefined && (typeof configured !== "string" || !configured.trim())) return undefined;
+		}
+	}
+	const shipping = (value.github as Record<string, unknown>).shipping;
+	if (shipping !== undefined) {
+		if (!isRecord(shipping)) return undefined;
+		if (shipping.enabled !== undefined && typeof shipping.enabled !== "boolean") return undefined;
+		if (shipping.controlPlanePaths !== undefined && !isStringArray(shipping.controlPlanePaths)) return undefined;
+		if (shipping.requiredApprovals !== undefined && (!Number.isInteger(shipping.requiredApprovals) || (shipping.requiredApprovals as number) < 0)) return undefined;
+		const shipDigest = shipping.shipDigest;
+		if (shipDigest !== undefined) {
+			if (!isRecord(shipDigest) || !isRecord(shipDigest.categories) || !isRecord(shipDigest.types) || !isRecord(shipDigest.releaseState)) return undefined;
+			for (const group of [shipDigest.categories, shipDigest.types]) {
+				if (!isStringArray(group.order) || group.order.some((entry) => !entry.trim()) || !isStringRecord(group.labels) || typeof group.fallbackLabel !== "string" || !group.fallbackLabel.trim()) return undefined;
+			}
+			const releaseState = shipDigest.releaseState;
+			if (releaseState.adapter !== null && releaseState.adapter !== undefined && (typeof releaseState.adapter !== "string" || !releaseState.adapter.trim())) return undefined;
+			if (releaseState.mergedWithoutReleaseEvidence !== "unknown" && releaseState.mergedWithoutReleaseEvidence !== "live") return undefined;
+		}
+		const guardContent = shipping.guardContent;
+		if (guardContent !== undefined) {
+			if (!isRecord(guardContent) || typeof guardContent.enabled !== "boolean" || !isStringArray(guardContent.decisionRecordPaths) || !isStringArray(guardContent.vocabularyPatterns)) return undefined;
+			const paths = guardContent.decisionRecordPaths;
+			const vocabulary = guardContent.vocabularyPatterns;
+			if (paths.some((pattern) => !pattern.trim()) || vocabulary.some((pattern) => !pattern.trim())) return undefined;
+			try {
+				for (const pattern of [...paths, ...vocabulary]) new RegExp(pattern);
+			} catch {
+				return undefined;
+			}
+			if (guardContent.enabled && (paths.length === 0 || vocabulary.length === 0)) return undefined;
+			if (!guardContent.enabled && (paths.length !== 0 || vocabulary.length !== 0)) return undefined;
+		}
+		const protectedChangeApproval = shipping.protectedChangeApproval;
+		if (protectedChangeApproval !== undefined) {
+			if (!isRecord(protectedChangeApproval) || !isRecord(protectedChangeApproval.authority) || !Number.isInteger(protectedChangeApproval.requiredNonAuthorApprovals) || (protectedChangeApproval.requiredNonAuthorApprovals as number) < 1 || !isRecord(protectedChangeApproval.soleAuthorException) || typeof protectedChangeApproval.soleAuthorException.enabled !== "boolean") return undefined;
+			const authority = protectedChangeApproval.authority;
+			const soleAuthorException = protectedChangeApproval.soleAuthorException;
+			if (typeof authority.provider !== "string" || !authority.provider.trim() || (authority.organization !== null && (typeof authority.organization !== "string" || !authority.organization.trim())) || (authority.teamSlug !== null && (typeof authority.teamSlug !== "string" || !authority.teamSlug.trim())) || (soleAuthorException.commentPattern !== null && (typeof soleAuthorException.commentPattern !== "string" || !soleAuthorException.commentPattern.trim()))) return undefined;
+			if (soleAuthorException.enabled) {
+				if (soleAuthorException.commentPattern === null) return undefined;
+				try { new RegExp(soleAuthorException.commentPattern); } catch { return undefined; }
+			} else if (soleAuthorException.commentPattern !== null) return undefined;
+		}
 	}
 	return value;
 };
@@ -165,6 +295,115 @@ const enabledOptionalWorkflowNames = (policy: OptionalWorkflowPolicy): Set<strin
 
 const lstatSyncSafe = (path: string) => {
 	try { return lstatSync(path); } catch { return undefined; }
+};
+
+type GitProbe = {ok: boolean; status: number | null; stdout: string; stderr: string};
+
+const probeGit = (projectRoot: string, args: string[]): GitProbe => {
+	const result = spawnSync("git", args, {cwd: projectRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]});
+	return {
+		ok: !result.error && result.status === 0,
+		status: result.status,
+		stdout: result.stdout ?? "",
+		stderr: result.stderr ?? "",
+	};
+};
+
+type PrimaryIndexGuardHookLocation = {hooksDirectory: string} | {error: string};
+
+/** Resolve the shared hook directory; a repository-owned hooksPath is never replaced or redirected. */
+const primaryIndexGuardHookLocation = (projectRoot: string): PrimaryIndexGuardHookLocation => {
+	const commonDir = probeGit(projectRoot, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+	if (!commonDir.ok || !commonDir.stdout.trim()) return {error: "could not resolve the shared Git common directory"};
+	const configuredHooksPath = probeGit(projectRoot, ["config", "--get", "core.hooksPath"]);
+	if (configuredHooksPath.ok && configuredHooksPath.stdout.trim()) {
+		return {error: "core.hooksPath is configured; refusing to replace a repository-owned hook integration"};
+	}
+	if (configuredHooksPath.status !== 0 && configuredHooksPath.status !== 1) {
+		return {error: "could not inspect core.hooksPath"};
+	}
+	return {hooksDirectory: join(commonDir.stdout.trim(), "hooks")};
+};
+
+const renderPrimaryIndexGuardHook = (): string => `#!/usr/bin/env sh
+${PRIMARY_INDEX_GUARD_HOOK_MARKER}
+# This hook deliberately blocks only the guard's dedicated exit 3. Runtime failures fail open.
+project_root="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "primary-index-guard: unable to resolve repository root; allowing commit" >&2
+  exit 0
+}
+pipeline="$project_root/.pipeline/toolkit/bin/pipeline"
+if [ ! -x "$pipeline" ]; then
+  echo "primary-index-guard: pinned pipeline binary is unavailable; allowing commit" >&2
+  exit 0
+fi
+status=0
+"$pipeline" cli primary-index-guard pre-commit || status=$?
+if [ "$status" -eq 3 ]; then
+  exit 1
+fi
+if [ "$status" -ne 0 ]; then
+  echo "primary-index-guard: guard could not run (exit $status); allowing commit" >&2
+fi
+exit 0
+`;
+
+type PrimaryIndexGuardHookState = {state: "installed" | "missing-or-drifted"; path?: string; error?: string};
+
+const primaryIndexGuardHookState = (projectRoot: string): PrimaryIndexGuardHookState => {
+	const location = primaryIndexGuardHookLocation(projectRoot);
+	if ("error" in location) return {state: "missing-or-drifted", error: location.error};
+	const path = join(location.hooksDirectory, PRIMARY_INDEX_GUARD_HOOK_NAME);
+	const stat = lstatSyncSafe(path);
+	if (!stat) return {state: "missing-or-drifted", path, error: "managed pre-commit hook is missing"};
+	if (!stat.isFile()) return {state: "missing-or-drifted", path, error: "pre-commit exists but is not a managed regular file"};
+	try {
+		if (readFileSync(path, "utf8") !== renderPrimaryIndexGuardHook()) {
+			return {state: "missing-or-drifted", path, error: "pre-commit is not the expected managed primary-index-guard wrapper"};
+		}
+	} catch {
+		return {state: "missing-or-drifted", path, error: "could not read the managed pre-commit hook"};
+	}
+	if ((stat.mode & 0o111) === 0) return {state: "missing-or-drifted", path, error: "managed pre-commit hook is not executable"};
+	return {state: "installed", path};
+};
+
+const primaryIndexGuardHookIntegration = (): string => [
+	"refusing to overwrite an unrelated pre-commit hook",
+	"integrate this command in the existing hook and preserve its exit-3 mapping:",
+	'  status=0; "$project_root/.pipeline/toolkit/bin/pipeline" cli primary-index-guard pre-commit || status=$?; [ "$status" -eq 3 ] && exit 1',
+].join("\n");
+
+const readAgentPolicy = (projectRoot: string): Record<string, unknown> | undefined =>
+	parseAgentPolicy(safeJson(join(projectRoot, ".pipeline/agent-policy.json")));
+
+const installPrimaryIndexGuardHook = (projectRoot: string): void => {
+	assertToolkit(projectRoot);
+	const policy = readAgentPolicy(projectRoot) ?? fail(".pipeline/agent-policy.json has an unsupported shape");
+	if (!primaryIndexGuardPolicy(policy)?.enabled) fail("primary-index-guard is disabled by repository policy; enable it before installing a hook");
+	const location = primaryIndexGuardHookLocation(projectRoot);
+	const hooksDirectory = "hooksDirectory" in location ? location.hooksDirectory : fail(location.error);
+	const path = join(hooksDirectory, PRIMARY_INDEX_GUARD_HOOK_NAME);
+	const existing = lstatSyncSafe(path);
+	if (existing) {
+		let managed = false;
+		try { managed = existing.isFile() && readFileSync(path, "utf8").includes(PRIMARY_INDEX_GUARD_HOOK_MARKER); } catch {}
+		if (!managed) fail(primaryIndexGuardHookIntegration());
+	} else {
+		mkdirSync(hooksDirectory, {recursive: true});
+	}
+	writeFileSync(path, renderPrimaryIndexGuardHook());
+	chmodSync(path, 0o755);
+	console.log(`pipeline: installed primary-index-guard hook at ${path}`);
+};
+
+const checkPrimaryIndexGuardHook = (projectRoot: string): string | undefined => {
+	const policy = readAgentPolicy(projectRoot);
+	if (!policy) return ".pipeline/agent-policy.json has an unsupported shape";
+	const guard = primaryIndexGuardPolicy(policy);
+	if (!guard?.enabled) return undefined;
+	const hook = primaryIndexGuardHookState(projectRoot);
+	return hook.state === "installed" ? undefined : hook.error ?? "managed pre-commit hook is missing or drifted";
 };
 
 const retireLegacyPluginLink = (projectRoot: string, prior: Map<string, string>): void => {
@@ -324,8 +563,12 @@ const hasCrewConfigPlaceholders = (projectRoot: string): boolean => {
 
 const installToolkit = (toolkitRoot: string): void => {
 	run("pnpm", ["install", "--frozen-lockfile"], toolkitRoot);
-	run("pnpm", ["--filter", "@kampus/pipeline-cli", "build"], toolkitRoot);
+	run("pnpm", ["--filter", "pipeline-cli", "build"], toolkitRoot);
 };
+
+/** Linked worktrees share the primary checkout's hook directory; install only from its owner. */
+const isPrimaryCheckout = (projectRoot: string): boolean =>
+	run("git", ["rev-parse", "--git-dir"], projectRoot) === run("git", ["rev-parse", "--git-common-dir"], projectRoot);
 
 const supportsTypeStripping = (): boolean => {
 	const [major = 0, minor = 0] = process.versions.node.split(".").map(Number);
@@ -357,13 +600,21 @@ const resolveStatus = (projectRoot: string): {errors: string[]; policy: "valid" 
 		? configValue as unknown as PipelineConfig
 		: undefined;
 	const toolkitRoot = toolkitRootFor(projectRoot);
-	const policy = parseAgentPolicy(safeJson(join(projectRoot, ".pipeline/agent-policy.json"))) ? "valid" : "missing-or-malformed";
+	const parsedAgentPolicy = readAgentPolicy(projectRoot);
+	const policy = parsedAgentPolicy ? "valid" : "missing-or-malformed";
+	const primaryIndexGuard = parsedAgentPolicy ? primaryIndexGuardPolicy(parsedAgentPolicy) : undefined;
 	const optionalPolicy = parseOptionalWorkflowPolicy(safeJson(join(projectRoot, ".pipeline/optional-workflow-policy.json")));
 	const expectedCatalog = expectedLinkTarget(projectRoot, toolkitRoot, WORKFLOW_CATALOG_RELATIVE_PATH, WORKFLOW_CATALOG_CONSUMER_PATH);
 	const catalogue = existsSync(join(toolkitRoot, WORKFLOW_CATALOG_RELATIVE_PATH)) &&
 		readFileSync(join(toolkitRoot, WORKFLOW_CATALOG_RELATIVE_PATH), "utf8") === renderWorkflowCatalog() &&
 		managedLinkState(projectRoot, config, WORKFLOW_CATALOG_CONSUMER_PATH, expectedCatalog) === "installed"
 		? "current" : "missing-or-drifted";
+	const primaryIndexGuardStatus: StatusItem[] = primaryIndexGuard?.enabled
+		? (() => {
+			const hook = primaryIndexGuardHookState(projectRoot);
+			return [{name: "primary-index-guard", type: "git-hook", state: hook.state, ...(hook.path ? {path: hook.path} : {})}];
+		})()
+		: [];
 	const core: StatusItem[] = [
 		...Array.from(CORE_SKILL_NAMES).map((name) => ({name, type: "skill", path: `.claude/skills/${name}`,
 			state: managedLinkState(projectRoot, config, `.claude/skills/${name}`, expectedLinkTarget(projectRoot, toolkitRoot, `claude-plugins/kampus-pipeline/skills/${name}`, `.claude/skills/${name}`))})),
@@ -373,8 +624,9 @@ const resolveStatus = (projectRoot: string): {errors: string[]; policy: "valid" 
 			state: managedLinkState(projectRoot, config, `.claude/agents/${name}.md`, expectedLinkTarget(projectRoot, toolkitRoot, `claude-plugins/kampus-pipeline/agents/${name}.md`, `.claude/agents/${name}.md`))})),
 		...GITHUB_WORKFLOW_TEMPLATES.map((template): StatusItem => ({name: template.destination, type: "generated-workflow", path: template.destination,
 			state: config?.managedPaths.some((entry) => entry.path === template.destination && entry.target === `template:${template.source}`) && existsSync(join(projectRoot, template.destination)) ? "installed" : "missing-or-drifted"})),
-		...(["main-sync", "trivial-diff classify", "worktree-sweep"] as const).map((name): StatusItem => ({name, type: "cli-command", path: ".pipeline/toolkit/bin/pipeline",
+		...(["main-sync", "trivial-diff classify", "class-probe classify", "guard-content-probe", "cp-cardinality decide", "cp-cardinality evidence-github-team", "reachability-guard check", "worktree-sweep", "gh-compat lint-skills", "ship-digest derive", "primary-index-guard pre-commit"] as const).map((name): StatusItem => ({name, type: "cli-command", path: ".pipeline/toolkit/bin/pipeline",
 			state: existsSync(join(projectRoot, ".pipeline/toolkit/bin/pipeline")) ? "installed" : "missing-or-drifted"})),
+		...primaryIndexGuardStatus,
 	];
 	const optional = Array.from(ARCHIVED_SKILL_NAMES).map((name) => {
 		const enabled = optionalPolicy?.workflows[name]?.enabled === true;
@@ -407,13 +659,18 @@ const check = (projectRoot: string): string[] => {
 		return errors;
 	}
 	const agentPolicyPath = join(projectRoot, ".pipeline/agent-policy.json");
+	let agentPolicy: Record<string, unknown> | undefined;
 	try {
 		const policy = parseAgentPolicy(JSON.parse(readFileSync(agentPolicyPath, "utf8")) as unknown);
 		if (!policy) {
 			errors.push("agent policy has an unsupported shape");
-		}
+		} else agentPolicy = policy;
 	} catch {
 		errors.push("missing or invalid .pipeline/agent-policy.json");
+	}
+	if (agentPolicy && primaryIndexGuardPolicy(agentPolicy)?.enabled) {
+		const hookError = checkPrimaryIndexGuardHook(projectRoot);
+		if (hookError) errors.push(`primary-index-guard hook: ${hookError}`);
 	}
 	let enabledOptionalWorkflows = new Set<string>();
 	const optionalWorkflowPolicyPath = join(projectRoot, ".pipeline/optional-workflow-policy.json");
@@ -537,6 +794,10 @@ const init = (args: string[]): void => {
 		});
 	const managedHooks = mergeSettings(projectRoot, toolkitRoot);
 	mergePackageScript(projectRoot);
+	// The generic equivalent of Phoenix's `prepare: lefthook install`: ref safety is core
+	// checkout containment. The command is idempotent and refuses a foreign hook instead of
+	// silently taking another hook manager's ownership.
+	if (isPrimaryCheckout(projectRoot)) run(join(toolkitRoot, "bin/pipeline"), ["cli", "ref-guard", "install"], projectRoot);
 	const managedPaths = [
 		...(languageVocabulary ? [languageVocabulary] : []),
 		...(domainVocabulary ? [domainVocabulary] : []),
@@ -595,6 +856,31 @@ const status = (args: string[]): void => {
 	if (state.errors.length) process.exitCode = 1;
 };
 
+const primaryIndexGuard = (args: string[]): void => {
+	const [action, ...rest] = args;
+	if (action !== "install-hook" && action !== "check-hook") {
+		fail("usage: pipeline primary-index-guard <install-hook|check-hook> [--project-root <path>]");
+	}
+	const requested = rest.includes("--project-root") ? rest[rest.indexOf("--project-root") + 1] : undefined;
+	if (rest.includes("--project-root") && !requested) fail("--project-root requires a path");
+	const unknown = rest.filter((arg) => arg !== "--project-root" && arg !== requested);
+	if (unknown.length) fail(`unknown primary-index-guard argument(s): ${unknown.join(", ")}`);
+	const projectRoot = findProjectRoot(requested);
+	if (action === "install-hook") {
+		installPrimaryIndexGuardHook(projectRoot);
+		return;
+	}
+	const policy = readAgentPolicy(projectRoot) ?? fail(".pipeline/agent-policy.json has an unsupported shape");
+	const guard = primaryIndexGuardPolicy(policy);
+	if (!guard?.enabled) {
+		console.log("pipeline: primary-index-guard is disabled by repository policy; no hook is required");
+		return;
+	}
+	const hook = primaryIndexGuardHookState(projectRoot);
+	if (hook.state !== "installed") fail(`primary-index-guard hook check failed: ${hook.error ?? "missing or drifted managed hook"}`);
+	console.log(`pipeline: primary-index-guard hook check passed (${hook.path})`);
+};
+
 const forward = (packagePath: string, args: string[]): never => {
 	const result = spawnSync("node", ["--experimental-strip-types", join(sourceToolkitRoot, packagePath), ...args], {stdio: "inherit"});
 	process.exit(result.status ?? 1);
@@ -604,6 +890,7 @@ const [command, ...args] = process.argv.slice(2);
 if (command === "init" || command === "sync") init(args);
 else if (command === "enable") enable(args);
 else if (command === "status") status(args);
+else if (command === "primary-index-guard") primaryIndexGuard(args);
 else if (command === "check") {
 	const errors = check(findProjectRoot(args[0]));
 	if (errors.length) fail(`check failed:\n${errors.map((error) => `- ${error}`).join("\n")}`);
@@ -613,4 +900,4 @@ else if (command === "check") {
 	forward("packages/pipeline-cli/src/bin.ts", args);
 }
 else if (command === "crew") forward("packages/pipeline-crew-mcp/src/bin.ts", args);
-else fail("usage: pipeline <init|sync|check|status|enable|cli|crew> [args]");
+else fail("usage: pipeline <init|sync|check|status|enable|primary-index-guard|cli|crew> [args]");

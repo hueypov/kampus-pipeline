@@ -49,21 +49,20 @@ jobs:
           printf 'head_sha=%s\n' "$head_sha" >> "$GITHUB_OUTPUT"
 
           gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" --jq '.[].filename' > "$RUNNER_TEMP/changed-files"
-          node - "$RUNNER_TEMP/changed-files" "$RUNNER_TEMP/gates" "$RUNNER_TEMP/required-checks" <<'NODE'
+          base_sha="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.base.sha')"
+          git fetch --no-tags origin "$base_sha"
+          ./.pipeline/toolkit/bin/pipeline cli class-probe classify \
+            --root "$GITHUB_WORKSPACE" \
+            --policy-ref "$base_sha" \
+            --files-from "$RUNNER_TEMP/changed-files" \
+            --namespaces > "$RUNNER_TEMP/gates"
+          node - "$RUNNER_TEMP/required-checks" <<'NODE'
           const fs = require("node:fs");
-          const [changedFile, gatesFile, checksFile] = process.argv.slice(2);
-          const changed = fs.readFileSync(changedFile, "utf8").split("\n").filter(Boolean);
+          const [checksFile] = process.argv.slice(2);
           const policy = JSON.parse(fs.readFileSync(".pipeline/agent-policy.json", "utf8"));
           const review = policy.github?.review ?? {};
-          const uiPaths = review.uiPaths ?? [];
           const requiredChecks = review.requiredChecks ?? [];
-          if (!Array.isArray(uiPaths) || !uiPaths.every((path) => typeof path === "string")) throw new Error("github.review.uiPaths must be a string array");
           if (!Array.isArray(requiredChecks) || !requiredChecks.every((name) => typeof name === "string" && name.length > 0)) throw new Error("github.review.requiredChecks must be a non-empty-string array");
-          const gates = new Set(["code"]);
-          if (changed.some((path) => path.endsWith(".md") || path.startsWith(".decisions/") || path.startsWith(".patterns/") || path.startsWith(".glossary/"))) gates.add("doc");
-          if (changed.some((path) => path.endsWith("SKILL.md") || /(^|\/)skills\//.test(path))) gates.add("skill");
-          if (uiPaths.some((root) => changed.some((path) => path === root || path.startsWith(`${root.replace(/\/$/, "")}/`)))) gates.add("design");
-          fs.writeFileSync(gatesFile, `${[...gates].join("\n")}\n`);
           fs.writeFileSync(checksFile, `${requiredChecks.join("\n")}\n`);
           NODE
       - name: Verify SHA-bound review verdicts

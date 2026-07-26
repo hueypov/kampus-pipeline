@@ -12,21 +12,29 @@
  */
 import type {NodeServices} from "@effect/platform-node";
 import type {Command} from "effect/unstable/cli";
+import {adoptionLintCommand} from "./tools/adoption-lint/command.ts";
 import {campaignCommand} from "./tools/campaign/command.ts";
+import {catalogGuardCommand} from "./tools/catalog-guard/command.ts";
 import {changeDetectGuardCommand} from "./tools/change-detect-guard/command.ts";
 import {changelogDeriveCommand} from "./tools/changelog-derive/command.ts";
+import {classProbeCommand} from "./tools/class-probe/command.ts";
 import {ciRequiredCommand} from "./tools/ci-required/command.ts";
 import {claimCommand} from "./tools/claim/command.ts";
 import {commandsCommand} from "./tools/commands/command.ts";
+import {cpCardinalityCommand} from "./tools/cp-cardinality/command.ts";
 import {crabboxManifestCommand} from "./tools/crabbox-manifest/command.ts";
 import {crewFanoutGuardCommand} from "./tools/crew-fanout-guard/command.ts";
 import {decisionsIndexCommand} from "./tools/decisions-index/command.ts";
+import {designInventoryCommand} from "./tools/design-inventory/command.ts";
+import {designTokenGuardCommand} from "./tools/design-token-guard/command.ts";
 import {epicLedgerCommand} from "./tools/epic-ledger/command.ts";
 import {epicLockCommand} from "./tools/epic-lock/command.ts";
 import {epicSpliceCommand} from "./tools/epic-splice/command.ts";
 import {evalHarnessCommand} from "./tools/eval-harness/command.ts";
 import {failureClassifierCommand} from "./tools/failure-classifier/command.ts";
 import {glossaryDriftCommand} from "./tools/glossary-drift/command.ts";
+import {guardContentProbeCommand} from "./tools/guard-content-probe/command.ts";
+import {ghCompatCommand} from "./tools/gh-compat/command.ts";
 import {intakeComposeCommand} from "./tools/intake-compose/command.ts";
 import {intakeDedupCommand} from "./tools/intake-dedup/command.ts";
 import {leakGuardCommand} from "./tools/leak-guard/command.ts";
@@ -36,13 +44,20 @@ import {orphanHealCommand} from "./tools/orphan-heal/command.ts";
 import {patchGuardCommand} from "./tools/patch-guard/command.ts";
 import {pathFilterGuardCommand} from "./tools/path-filter-guard/command.ts";
 import {pointerGuardCommand} from "./tools/pointer-guard/command.ts";
+import {primaryIndexGuardCommand} from "./tools/primary-index-guard/command.ts";
+import {protectedChangePolicyCommand} from "./tools/protected-change-policy/command.ts";
+import {protectedFanoutCommand} from "./tools/protected-fanout/command.ts";
+import {protectedOwnershipCommand} from "./tools/protected-ownership/command.ts";
+import {reachabilityGuardCommand} from "./tools/reachability-guard/command.ts";
 import {readmeGuardCommand} from "./tools/readme-guard/command.ts";
 import {redactLeaksCommand} from "./tools/redact-leaks/command.ts";
+import {refGuardCommand} from "./tools/ref-guard/command.ts";
 import {resumePolicyCommand} from "./tools/resume-policy/command.ts";
 import {reviewHeadCommand} from "./tools/review-head/command.ts";
 import {roadmapCommand} from "./tools/roadmap/command.ts";
 import {roadmapGuardCommand} from "./tools/roadmap-guard/command.ts";
 import {settingsEnvGuardCommand} from "./tools/settings-env-guard/command.ts";
+import {shipDigestCommand} from "./tools/ship-digest/command.ts";
 import {spawnGuardCommand} from "./tools/spawn-guard/command.ts";
 import {splitGuardCommand} from "./tools/split-guard/command.ts";
 import {structuredOutputGuardCommand} from "./tools/structured-output-guard/command.ts";
@@ -91,10 +106,13 @@ export type RegisteredTool = Command.Command<any, any, object, unknown, Platform
  */
 export const registeredTools: ReadonlyArray<RegisteredTool> = [
 	versionCommand,
+	adoptionLintCommand,
 	epicLedgerCommand,
 	epicLockCommand,
 	epicSpliceCommand,
 	decisionsIndexCommand,
+	designTokenGuardCommand,
+	designInventoryCommand,
 	readmeGuardCommand,
 	roadmapCommand,
 	roadmapGuardCommand,
@@ -102,6 +120,17 @@ export const registeredTools: ReadonlyArray<RegisteredTool> = [
 	mainSyncCommand,
 	worktreeSweepCommand,
 	trivialDiffCommand,
+	guardContentProbeCommand,
+	cpCardinalityCommand,
+	classProbeCommand,
+	ghCompatCommand,
+	shipDigestCommand,
+	refGuardCommand,
+	primaryIndexGuardCommand,
+	protectedChangePolicyCommand,
+	protectedOwnershipCommand,
+	protectedFanoutCommand,
+	reachabilityGuardCommand,
 	spawnGuardCommand,
 	leakGuardCommand,
 	mergeQueueClassifyCommand,
@@ -126,6 +155,7 @@ export const registeredTools: ReadonlyArray<RegisteredTool> = [
 	settingsEnvGuardCommand,
 	verdictCommand,
 	campaignCommand,
+	catalogGuardCommand,
 	changeDetectGuardCommand,
 	patchGuardCommand,
 	intakeDedupCommand,

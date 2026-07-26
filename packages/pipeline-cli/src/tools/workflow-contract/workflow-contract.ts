@@ -1,5 +1,5 @@
 /**
- * `@kampus/pipeline-cli` — the `workflow-contract` pure core (the originating work item).
+ * `pipeline-cli` — the `workflow-contract` pure core (the originating work item).
  *
  * The IO-free derivation behind the Workflow-script contract gate: given a
  * `.claude/workflows/*.js` source string, decide whether it conforms to the

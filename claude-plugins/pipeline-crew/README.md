@@ -3,7 +3,7 @@
 The **pipeline-crew** plugin is the sole definition of the adopting organization's crew: **four
 channel-native agent defs on a flat topology** that *conduct* the
 the companion pipeline skill suite's skills as a standing operation. The defs address
-each other over a channel substrate (the in-repo `@kampus/pipeline-crew-mcp`), not a hand-run terminal relay, and the plugin ships the crew **doctrine as its default** — the rules that keep an
+each other over a channel substrate (the in-repo `pipeline-crew-mcp`), not a hand-run terminal relay, and the plugin ships the crew **doctrine as its default** — the rules that keep an
 agent factory honest are baked in, and only genuinely per-install values ride the
 personalization seam.
 

@@ -32,7 +32,7 @@ const fixture = (): {consumer: string; mockBin: string} => {
 	mkdirSync(join(toolkit, "packages/pipeline/src"), {recursive: true});
 	copyFileSync(join(process.cwd(), "src/bin.ts"), join(toolkit, "packages/pipeline/src/bin.ts"));
 	copyFileSync(join(process.cwd(), "src/payload.ts"), join(toolkit, "packages/pipeline/src/payload.ts"));
-	write(join(toolkit, "packages/pipeline-cli/src/bin.ts"), 'import {appendFileSync} from "node:fs";\nappendFileSync(new URL("../../../bin/pipeline.calls", import.meta.url), process.argv.slice(2).join(" ") + "\\n");\n');
+	write(join(toolkit, "packages/pipeline-cli/src/bin.ts"), 'import {appendFileSync} from "node:fs";\nappendFileSync(new URL("../../../bin/pipeline.calls", import.meta.url), process.argv.slice(2).join(" ") + "\\n");\nprocess.exit(Number(process.env.PIPELINE_CLI_STATUS ?? 0));\n');
 	write(join(toolkit, "packages/pipeline-crew-mcp/src/bin.ts"), "export {};\n");
 	write(join(toolkit, "claude-plugins/pipeline-crew/crew.config.template.jsonc"), '{"operator":"<operator-name>"}\n');
 	write(join(toolkit, "templates/glossary/LANGUAGE.md"), "# Fixture language\n");
@@ -46,6 +46,10 @@ const fixture = (): {consumer: string; mockBin: string} => {
 	write(join(toolkit, "templates/github/workflows/pipeline-toolkit.yml"), "name: Fixture toolkit\n");
 	write(join(toolkit, "templates/github/workflows/pipeline-doc-safety.yml"), "name: Fixture docs\n");
 	write(join(toolkit, "templates/github/workflows/pipeline-delivery-gate.yml"), "name: Fixture delivery gate\n");
+	write(join(toolkit, "templates/github/workflows/pipeline-gitleaks.yml"), "name: Fixture Gitleaks\n");
+	write(join(toolkit, "templates/github/workflows/pipeline-doc-links.yml"), "name: Fixture doc links\n");
+	write(join(toolkit, "templates/github/workflows/pipeline-settings-env-guard.yml"), "name: Fixture settings env\n");
+	write(join(toolkit, "templates/github/workflows/pipeline-unresolved-threads.yml"), "name: Fixture unresolved threads\n");
 	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/example/SKILL.md"), "# Example\n");
 	for (const name of CORE_SKILL_NAMES) write(join(toolkit, `claude-plugins/kampus-pipeline/skills/${name}/SKILL.md`), `# ${name}\n`);
 	for (const name of CORE_WORKFLOW_SUPPORT_FILES) write(join(toolkit, `claude-plugins/kampus-pipeline/skills/${name}`), `# ${name}\n`);
@@ -84,6 +88,19 @@ afterEach(() => {
 	for (const root of roots.splice(0)) rmSync(root, {recursive: true, force: true});
 });
 
+const enabledPrimaryIndexGuardPolicy = JSON.stringify({
+	schemaVersion: 1,
+	github: {},
+	git: {
+		primaryIndexGuard: {
+			enabled: true,
+			protectedPathPrefixes: ["protected"],
+			blockThreshold: 2,
+			attribution: {enabled: false, threshold: 1, logPath: null},
+		},
+	},
+});
+
 describe("pipeline init", () => {
 	it("creates project-local wiring, preserves settings, and is idempotent", () => {
 		const {consumer, mockBin} = fixture();
@@ -110,6 +127,10 @@ describe("pipeline init", () => {
 		expect(command(consumer, ["init"], mockBin).stderr).toContain("fill every placeholder in .claude/crew.config.jsonc before running pipeline crew stand-up");
 		expect(readFileSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"), "utf8")).toBe("name: Fixture toolkit\n");
 		expect(readFileSync(join(consumer, ".github/workflows/pipeline-delivery-gate.yml"), "utf8")).toBe("name: Fixture delivery gate\n");
+		expect(readFileSync(join(consumer, ".github/workflows/pipeline-gitleaks.yml"), "utf8")).toBe("name: Fixture Gitleaks\n");
+		expect(readFileSync(join(consumer, ".github/workflows/pipeline-doc-links.yml"), "utf8")).toBe("name: Fixture doc links\n");
+		expect(readFileSync(join(consumer, ".github/workflows/pipeline-settings-env-guard.yml"), "utf8")).toBe("name: Fixture settings env\n");
+		expect(readFileSync(join(consumer, ".github/workflows/pipeline-unresolved-threads.yml"), "utf8")).toBe("name: Fixture unresolved threads\n");
 		expect(existsSync(join(consumer, "claude-plugins/kampus-pipeline"))).toBe(false);
 		expect(existsSync(join(consumer, "claude-plugins/pipeline-crew"))).toBe(false);
 		for (const agent of CORE_AGENT_NAMES) expect(existsSync(join(consumer, ".claude/agents", `${agent}.md`))).toBe(true);
@@ -178,6 +199,23 @@ describe("pipeline init", () => {
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(1);
 		write(join(consumer, ".pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{}}\n');
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
+		write(join(consumer, ".pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{"shipping":{"guardContent":{"enabled":false,"decisionRecordPaths":[],"vocabularyPatterns":[]}}}}\n');
+		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
+		write(join(consumer, ".pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{"shipping":{"guardContent":{"enabled":true,"decisionRecordPaths":["^records/.*\\\\.md$"],"vocabularyPatterns":["safeguard|approval"]}}}}\n');
+		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
+		write(join(consumer, ".pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{"shipping":{"guardContent":{"enabled":true,"decisionRecordPaths":[],"vocabularyPatterns":["safeguard"]}}}}\n');
+		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(1);
+		write(join(consumer, ".pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{"shipping":{"guardContent":{"enabled":false,"decisionRecordPaths":["^records/"],"vocabularyPatterns":[]}}}}\n');
+		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(1);
+		write(join(consumer, ".pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{"shipping":{"protectedChangeApproval":{"authority":{"provider":"github-team","organization":null,"teamSlug":null},"requiredNonAuthorApprovals":1,"soleAuthorException":{"enabled":false,"commentPattern":null}}}}}\n');
+		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
+		write(join(consumer, ".pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{"shipping":{"protectedChangeApproval":{"authority":{"provider":"github-team","organization":null,"teamSlug":"delivery-approvers"},"requiredNonAuthorApprovals":2,"soleAuthorException":{"enabled":true,"commentPattern":"^sole approval @ [0-9a-f]+$"}}}}}\n');
+		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
+		write(join(consumer, ".pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{"shipping":{"protectedChangeApproval":{"authority":{"provider":"github-team","organization":null,"teamSlug":"delivery-approvers"},"requiredNonAuthorApprovals":0,"soleAuthorException":{"enabled":false,"commentPattern":null}}}}}\n');
+		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(1);
+		write(join(consumer, ".pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{"shipping":{"protectedChangeApproval":{"authority":{"provider":"github-team","organization":null,"teamSlug":"delivery-approvers"},"requiredNonAuthorApprovals":1,"soleAuthorException":{"enabled":true,"commentPattern":"["}}}}}\n');
+		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(1);
+		write(join(consumer, ".pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{}}\n');
 		write(join(consumer, ".pipeline/optional-workflow-policy.json"), "{not-json}\n");
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(1);
 		write(join(consumer, ".pipeline/optional-workflow-policy.json"), '{"schemaVersion":1,"workflows":{"release":{"enabled":true}}}\n');
@@ -202,6 +240,45 @@ describe("pipeline init", () => {
 		expect(result.stderr).toContain("refusing to replace existing .pipeline/workflow-catalog.json");
 		expect(readFileSync(join(consumer, ".pipeline/workflow-catalog.json"), "utf8")).toBe("adopter catalogue\n");
 	});
+
+	it("installs an explicit shared pre-commit wrapper and blocks only exit 3", () => {
+		const {consumer, mockBin} = fixture();
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		write(join(consumer, ".pipeline/agent-policy.json"), `${enabledPrimaryIndexGuardPolicy}\n`);
+		expect(command(consumer, ["primary-index-guard", "check-hook"], mockBin).status).toBe(1);
+		expect(command(consumer, ["primary-index-guard", "install-hook"], mockBin).status).toBe(0);
+		const commonDir = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {cwd: consumer, encoding: "utf8"}).trim();
+		const hook = join(commonDir, "hooks/pre-commit");
+		expect(readFileSync(hook, "utf8")).toContain("kampus-pipeline primary-index-guard managed hook");
+		expect(lstatSync(hook).mode & 0o111).not.toBe(0);
+		expect(command(consumer, ["primary-index-guard", "check-hook"], mockBin).status).toBe(0);
+		for (const [cliStatus, expectedHookStatus] of [["0", 0], ["3", 1], ["2", 0]] as const) {
+			const result = spawnSync(hook, [], {
+				cwd: consumer,
+				encoding: "utf8",
+				env: {...process.env, PATH: `${mockBin}:${process.env.PATH}`, PIPELINE_CLI_STATUS: cliStatus},
+			});
+			expect(result.status).toBe(expectedHookStatus);
+		}
+		expect(readFileSync(join(consumer, ".pipeline/toolkit/bin/pipeline.calls"), "utf8")).toContain("primary-index-guard pre-commit");
+		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
+		expect(JSON.parse(command(consumer, ["status", "--json"], mockBin).stdout).core).toContainEqual(expect.objectContaining({name: "primary-index-guard", type: "git-hook", state: "installed"}));
+	}, 20_000);
+
+	it("preserves an unrelated pre-commit hook and rejects invalid enabled policy", () => {
+		const {consumer, mockBin} = fixture();
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		write(join(consumer, ".pipeline/agent-policy.json"), `${enabledPrimaryIndexGuardPolicy}\n`);
+		const commonDir = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {cwd: consumer, encoding: "utf8"}).trim();
+		const hook = join(commonDir, "hooks/pre-commit");
+		write(hook, "#!/usr/bin/env sh\necho adopter hook\n", true);
+		const install = command(consumer, ["primary-index-guard", "install-hook"], mockBin);
+		expect(install.status).toBe(1);
+		expect(install.stderr).toContain("refusing to overwrite an unrelated pre-commit hook");
+		expect(readFileSync(hook, "utf8")).toBe("#!/usr/bin/env sh\necho adopter hook\n");
+		write(join(consumer, ".pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{},"git":{"primaryIndexGuard":{"enabled":true,"protectedPathPrefixes":[],"blockThreshold":2}}}\n');
+		expect(command(consumer, ["primary-index-guard", "check-hook"], mockBin).status).toBe(1);
+	}, 20_000);
 
 	it("requires a CLI tool name", () => {
 	const result = spawnSync(join(process.cwd(), "../../bin/pipeline"), ["cli"], {

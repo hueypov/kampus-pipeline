@@ -1,0 +1,38 @@
+name: pipeline-doc-links
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check:
+    name: Check internal Markdown links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: List tracked Markdown files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-files -z '*.md' | tr '\0' '\n' > lychee-files.txt
+          [ -s lychee-files.txt ] || { echo "::error::No tracked Markdown files found."; exit 1; }
+      - name: Install Lychee
+        shell: bash
+        env:
+          LYCHEE_VERSION: v0.24.2
+        run: |
+          set -euo pipefail
+          target="lychee-$(uname -m)-unknown-linux-gnu"
+          temp="$(mktemp -d)"
+          curl -fsSL -o "$temp/lychee.tar.gz" "https://github.com/lycheeverse/lychee/releases/download/lychee-${LYCHEE_VERSION}/${target}.tar.gz"
+          tar -xzf "$temp/lychee.tar.gz" -C "$temp"
+          install -Dt "$HOME/.local/bin" "$temp/${target}/lychee"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Check internal Markdown links
+        run: lychee --offline --no-progress --root-dir "$GITHUB_WORKSPACE" --files-from lychee-files.txt

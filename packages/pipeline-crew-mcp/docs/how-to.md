@@ -130,8 +130,8 @@ fail-closed preconditions instead.
 1. **Typecheck and test the package:**
 
    ```bash
-   pnpm --filter @kampus/pipeline-crew-mcp typecheck   # tsgo
-   pnpm --filter @kampus/pipeline-crew-mcp test         # @effect/vitest suite
+   pnpm --filter pipeline-crew-mcp typecheck   # tsgo
+   pnpm --filter pipeline-crew-mcp test         # @effect/vitest suite
    ```
 
    The suite already unit-tests the whole orchestration with injected seams (no real tmux, claude,

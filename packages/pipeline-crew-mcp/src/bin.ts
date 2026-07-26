@@ -44,7 +44,7 @@
  * NB: an MCP stdio server owns stdout for JSON-RPC, so the one startup line goes to STDERR — a
  * log on stdout would corrupt the protocol stream.
  *
- * Wired per effect-smol's CLI guidance (mirrors `@kampus/pipeline-cli`'s bin): `effect/unstable/cli`
+ * Wired per effect-smol's CLI guidance (mirrors `pipeline-cli`'s bin): `effect/unstable/cli`
  * for the typed command, the Node platform over `NodeServices.layer`, run via `NodeRuntime.runMain`.
  */
 import {NodeRuntime, NodeServices} from "@effect/platform-node";

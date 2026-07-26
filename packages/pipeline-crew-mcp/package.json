@@ -1,5 +1,5 @@
 {
-	"name": "@kampus/pipeline-crew-mcp",
+	"name": "pipeline-crew-mcp",
 	"version": "0.0.0",
 	"description": "pipeline-crew-mcp — the crew's channels-backed messaging substrate: a generic tracker + p2p peers + MCP channel edge, with a thin crew consumer module (the MCP-channel rule: crew roles communicate through MCP channels instead of a terminal relay)",
 	"private": true,

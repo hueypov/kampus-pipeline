@@ -1,0 +1,28 @@
+name: pipeline-settings-env-guard
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check Claude settings environment values
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.6.0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Install toolkit dependencies
+        run: pnpm --dir .pipeline/toolkit install --frozen-lockfile
+      - name: Reject literal environment-variable tokens
+        run: ./.pipeline/toolkit/bin/pipeline cli settings-env-guard check

@@ -26,8 +26,8 @@ jobs:
       - name: Install toolkit dependencies
         run: pnpm --dir .pipeline/toolkit install --frozen-lockfile
       - name: Test bootstrap
-        run: pnpm --dir .pipeline/toolkit --filter @kampus/pipeline test
+        run: pnpm --dir .pipeline/toolkit --filter pipeline test
       - name: Check workflow catalogue
-        run: pnpm --dir .pipeline/toolkit --filter @kampus/pipeline check:workflow-catalog
+        run: pnpm --dir .pipeline/toolkit --filter pipeline check:workflow-catalog
       - name: Test pipeline CLI
-        run: pnpm --dir .pipeline/toolkit --filter @kampus/pipeline-cli test
+        run: pnpm --dir .pipeline/toolkit --filter pipeline-cli test

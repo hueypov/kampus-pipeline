@@ -1,0 +1,40 @@
+name: pipeline-unresolved-threads
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check:
+    name: Check unresolved review threads
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.6.0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Install toolkit dependencies
+        run: pnpm --dir .pipeline/toolkit install --frozen-lockfile
+      - name: Skip batch ref
+        if: github.event_name == 'merge_group'
+        run: echo "Review threads are checked before the pull request enters the merge queue."
+      - name: Verify unresolved review threads are accounted for
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./.pipeline/toolkit/bin/pipeline cli unresolved-threads-guard check --pr "${{ github.event.pull_request.number }}"

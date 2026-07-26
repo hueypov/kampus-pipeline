@@ -90,7 +90,7 @@ than bootstrap requirements.
 ### 2. What `pipeline init` does
 
 1. Installs dependencies only in the toolkit workspace from its lockfile.
-2. Builds `@kampus/pipeline-cli` from the pinned lockfile.
+2. Builds `pipeline-cli` from the pinned lockfile.
 3. Merges pipeline hook entries into `.claude/settings.json` without removing
    unrelated existing settings.
 4. Creates neutral `CLAUDE.md`, `.decisions/README.md`, `.patterns/index.md`,
@@ -165,7 +165,7 @@ release, and product-specific plugin material remains optional; default
 initialization does not generate crew configuration, link optional plugins, or
 write user-level Claude settings.
 
-## Package: `@kampus/pipeline`
+## Package: `pipeline`
 
 This is the bootstrap package behind `bin/pipeline`. It is the boundary between
 an adopting repository and the toolkit implementation.
@@ -180,7 +180,7 @@ Its commands are:
 | `cli <tool> …` | Forward to locally retained CLI material. Its individual tools are not part of the portable-core contract unless an adapter documents them. |
 | `crew <command> …` | Forward to the crew MCP runtime for an explicitly configured integration; it is not initialized by default. |
 
-## Package: `@kampus/pipeline-cli`
+## Package: `pipeline-cli`
 
 This package is the local command router for both core hooks and quarantined
 source utilities. `commands compact` is the authoritative runtime index, but it
@@ -188,7 +188,7 @@ is not a list of portable features. A consumer should invoke an additional CLI
 tool only through a repository-owned adapter that documents its dependencies,
 authority, and compatibility assumptions.
 
-## Package: `@kampus/pipeline-crew-mcp`
+## Package: `pipeline-crew-mcp`
 
 This is the crew's runtime substrate. It provides:
 

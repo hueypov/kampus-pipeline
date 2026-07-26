@@ -2,6 +2,8 @@ import {execFileSync, spawnSync} from "node:child_process";
 import {Console, Effect} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
 import {readLifecyclePolicy, remotePrimaryBranch, repositoryRoot} from "../lifecycle-policy.ts";
+import {classifyProtectedDeletions, parseNameStatus} from "../primary-index-guard/primary-index-guard.ts";
+import {readPrimaryIndexGuardPolicy} from "../primary-index-guard/policy.ts";
 import {decideMainSync} from "./main-sync.ts";
 
 const executeFlag = Flag.boolean("execute").pipe(Flag.withDescription("perform the safe fetch and fast-forward (default: dry-run)"));
@@ -22,6 +24,20 @@ const hasTrackedChanges = (root: string): boolean => {
 	return !result.ok || result.stdout.trim() !== "";
 };
 
+/**
+ * Use the primary-index guard's one classifier for this sibling safety path.
+ * A missing or invalid optional policy deliberately leaves main-sync's
+ * established tracked-change protection unchanged.
+ */
+const protectedStagedDeletionState = (root: string): {readonly count: number; readonly threshold: number} | undefined => {
+	const loaded = readPrimaryIndexGuardPolicy(root);
+	if (!loaded.trusted || loaded.policy === null || !loaded.policy.enabled) return undefined;
+	const staged = git(root, ["diff", "--cached", "--name-status", "--diff-filter=D"]);
+	if (!staged.ok) return undefined;
+	const summary = classifyProtectedDeletions(parseNameStatus(staged.stdout), loaded.policy.protectedPathPrefixes);
+	return {count: summary.protectedDeletionCount, threshold: loaded.policy.blockThreshold};
+};
+
 const fail = (message: string): Effect.Effect<never> =>
 	Effect.sync(() => {
 		process.stderr.write(`main-sync: ${message}\n`);
@@ -37,7 +53,15 @@ const mainSync = Command.make(
 		const policy = readLifecyclePolicy(root);
 		const primaryBranch = policy?.git.primaryBranch ?? remotePrimaryBranch(root);
 		const postSyncCommand = policy?.git.postSyncCommand ?? null;
-		const decision = decideMainSync({primaryBranch, currentBranch: currentBranch(root), trackedChanges: hasTrackedChanges(root)});
+		const primaryIndex = protectedStagedDeletionState(root);
+		const decision = decideMainSync({
+			primaryBranch,
+			currentBranch: currentBranch(root),
+			trackedChanges: hasTrackedChanges(root),
+			...(primaryIndex === undefined
+				? {}
+				: {protectedStagedDeletionCount: primaryIndex.count, protectedStagedDeletionThreshold: primaryIndex.threshold}),
+		});
 		if (decision.kind === "refuse") return yield* fail(`${decision.reason}; refusing to alter the checkout`);
 		const branch = primaryBranch as string;
 		yield* Console.log(`main-sync: primary ${branch}; ${decision.checkoutPrimary ? "would reattach" : "already attached"}${execute ? " (EXECUTE)" : " (dry-run)"}`);

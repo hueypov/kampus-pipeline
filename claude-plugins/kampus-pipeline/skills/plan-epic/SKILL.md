@@ -651,28 +651,33 @@ consuming UI. So when this plan contains **any** user-facing (dark-ship) child �
 `**Containment:** flag (default-off)` above — emit the reachability work as a **first-class,
 release-blocking child of its own**, never an optional tail.
 
-This is the plan-epic side of the vertical-completeness gate (the applicable safety invariant,
-documented repository precedent). Its runtime enforcer is `pipeline-cli reachability-guard check <flag-key>` (documented repository precedent) and the
-`/release` refusal (documented repository precedent) is its sibling consumer — the emitted child and both enforcers key off
-**one** notion of reachability, defined once in the applicable safety invariant; don't invent a second here.
+This is the plan-epic side of the vertical-completeness gate. When the repository explicitly
+enables `optionalAdapters.featureReachability`, its runtime enforcer is `pipeline-cli
+reachability-guard check <feature-key>` and the configured release/refusal path is its sibling
+consumer. The emitted child and both enforcers key off **one** repository-defined notion of
+reachability; do not invent a second in an issue body. When the adapter is disabled, retain this
+planning rationale and record that no automated reachability model is configured rather than
+claiming the command ran.
 
-**One reachability child per graduating flag key.** A user-facing epic ships behind a configured release service
-flag key (the `flag (default-off)` containment); emit one reachability child per such key. Its
+**One reachability child per configured feature key.** A user-facing epic may ship behind a
+repository-defined feature/release key (the `flag (default-off)` containment is one valid model);
+when the adapter is enabled, emit one reachability child per such key. Its
 `### What to build` names **both** halves of the reachability rule that defines both halves of the required behavior reachability contract concretely, so a
 `write-code` agent knows what to build and `reachability-guard` can verify it:
 
-- **A consuming UI** — a component under `$PIPELINE_APPLICATION_PATH/src/**` that references the flag-key constant
-  declared in `$PIPELINE_APPLICATION_PATH/src/flags/keys.ts` (beyond the definition itself), so the feature is
-  actually rendered to a user when the flag is on (the applicable safety invariant §1a).
-- **A registered journey e2e** — a spec under `$PIPELINE_APPLICATION_PATH/tests/e2e/` whose `test`/`describe` title
-  carries the `@journey:<flag-key>` tag, exercising the user's path through the feature (the applicable safety invariant §2).
+- **A consuming surface** — evidence matching the repository-configured consumer path and
+  reference pattern, so the feature is actually reachable when enabled. A component referencing a
+  feature-key constant is one valid configuration, not a universal framework rule.
+- **A registered journey** — evidence matching the repository-configured journey source and
+  marker pattern, exercising the user's path through the feature. An `@journey:<feature-key>` e2e
+  tag is one valid configuration, not a required runner or file extension.
 
 The child follows the normal format-2 shape, preserving every existing invariant: it carries a
 `**Stories:**` line as **bare numbers** tracing to the user-facing story(ies) it makes reachable
 (this child is what *covers* the "as a user I can see/use X" story — not scope creep), ≥ 1
-acceptance criterion phrased against the reachability contract (e.g. *"`pipeline-cli
-reachability-guard check <flag-key>` passes — a `.tsx` under `$PIPELINE_APPLICATION_PATH/src/**` consumes the
-flag-key constant AND a `@journey:<flag-key>` e2e under `$PIPELINE_APPLICATION_PATH/tests/e2e/` is registered"*),
+acceptance criterion phrased against the configured reachability contract (e.g. *"`pipeline-cli
+reachability-guard check <feature-key>` passes — the configured consumer and journey evidence are
+both present"*),
 and `**Containment:** flag (default-off)` (it is itself user-facing). A genuinely UI-less flag is
 the applicable safety invariant §3 exemption (a `@reachability-exempt: <reason>` marker in `keys.ts`), not a missing
 child — if the epic's flag is exempt, record that in the plan and emit no reachability child.
