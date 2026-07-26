@@ -72,7 +72,7 @@ Monday, November 11, 1918.
 
 The audience, which had at first been indifferent, became more and more interested.
 
-In this sentence the clause introduced by *which* does not serve to tell which of several possible audiences is meant; what audience is in question is supposed to be already known. The clause adds, parenthetically, a statement supplementing that in the main clause. The sentence is virtually a combination of two statements which might have been made independently:
+In this sentence the clause introduced by *which* does not serve to tell which of several possible audiences is meant; what audience is in question is supposed to be already known. The clause adds, parenthetically, a statement supplementing that in the configured base branch clause. The sentence is virtually a combination of two statements which might have been made independently:
 
 The audience had at first been indifferent. It became more and more interested.
 
@@ -90,7 +90,7 @@ The day will come when you will admit your mistake.
 
 Nether Stowey is completely identified by its name; the statement about Coleridge is therefore supplementary and parenthetic. The *day* spoken of is identified only by the dependent clause, which is therefore restrictive.
 
-Similar in principle to the enclosing of parenthetic expressions between commas is the setting off by commas of phrases or dependent clauses preceding or following the main clause of a sentence.
+Similar in principle to the enclosing of parenthetic expressions between commas is the setting off by commas of phrases or dependent clauses preceding or following the configured base branch clause of a sentence.
 
 Partly by hard fighting, partly by diplomatic skill, they enlarged their dominions to the east, and rose to royal rank with the possession of Sicily, exchanged afterwards for Sardinia.
 

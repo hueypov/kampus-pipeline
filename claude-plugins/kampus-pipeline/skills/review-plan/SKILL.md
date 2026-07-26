@@ -5,11 +5,16 @@ description: Verify a planned epic's ledger against the deterministic structural
 
 # review-plan
 
+## Repository-owned policy boundary
+
+This workflow is part of the default generic payload and `pipeline init` links it into `.claude/skills`. Availability is not authority: before external GitHub operations, resolve the consumer repository root and read `.pipeline/agent-policy.json`. Read `.pipeline/optional-workflow-policy.json` for repository-specific integration settings. Do not infer a platform, product lifecycle, branch, organization, or approval actor from examples below. When policy does not authorize an action or required configuration is unset, preserve the workflow context, explain the missing configuration, and fail closed before an external mutation.
+
+
 You are the **plan-layer gate**. `plan-epic` already turned a triaged epic into a
 PRD-grade ledger: a brief, a `## Dependencies` topology, and linked sub-issues each
-minted `status:planned` — **not** pickable by `write-code`. Your job is to verify that
+minted `$PIPELINE_STATUS` — **not** pickable by `write-code`. Your job is to verify that
 ledger against the **deterministic structural floor** and, on a clean pass, flip every
-child `status:planned → status:triaged` so `write-code` can pick them up. You are the
+child `$PIPELINE_STATUS → $PIPELINE_STATUS_CLASSIFIED` so `write-code` can pick them up. You are the
 symmetric twin of [`review-code`](../review-code/SKILL.md), one stage earlier: where
 `review-code` gates a PR against its acceptance criteria before merge, `review-plan`
 gates an epic ledger against the floor before `write-code` starts.
@@ -46,7 +51,7 @@ LLM prose verdict with a stable one a re-plan loop can converge against.
 
 ## All GitHub ops via `gh api` REST — never GraphQL
 
-The the adopting organization org's legacy Projects-classic integration breaks GraphQL issue queries.
+The the adopting organization org's legacy configured planning board integration breaks GraphQL issue queries.
 Every read and write goes through `gh api` REST. The deterministic action does this for
 you (it shells `gh api` through the `Github` capability); when you read context by hand,
 use REST too.
@@ -66,7 +71,7 @@ REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOw
 
 **You never mutate the git working tree of the checkout you run in** — the single canonical
 rule lives in [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §RO; cite it,
-don't restate the prohibition (the five verbatim copies were the <related work item>-class drift §RO closes).
+don't restate the prohibition (the five verbatim copies were the documented repository precedent-class drift §RO closes).
 This gate verifies the epic ledger over `gh api` — it has **no reason to touch the working
 tree at all**, so a checkout is never even needed.
 
@@ -77,7 +82,7 @@ validator checks against: [`../gh-issue-intake-formats.md`](../gh-issue-intake-f
 The load-bearing pieces:
 
 - **The `planned → triaged` flip** (§Pipeline labels) — `plan-epic` mints
-  `status:planned`; **you own the flip to `status:triaged`** and nothing else does it.
+  `$PIPELINE_STATUS`; **you own the flip to `$PIPELINE_STATUS_CLASSIFIED`** and nothing else does it.
 - **`## Dependencies` grammar** (format 1) — the topology the floor checks for cycles,
   dangling edges, and orphans.
 - **Sub-issue body** (format 2) — the `### Acceptance criteria` checklist (the `ZERO_AC`
@@ -89,23 +94,23 @@ The load-bearing pieces:
 You own the `planned → triaged` flip; `plan-epic` owns supersede/unlink/close on re-plan.
 Run concurrently on one epic they interleave: a re-plan supersedes child C at the same
 instant your gate flips C `triaged` (pickable), and `write-code` picks a story the plan just
-dropped (<related work item>, race X3). So **before the gate's first flip and before the convergence loop's
-first `rePlan`, acquire the `status:planning` epic-lock; release it when you reach PASS or
+dropped (documented repository precedent, race X3). So **before the gate's first flip and before the convergence loop's
+first `rePlan`, acquire the `$PIPELINE_STATUS_PLANNING` epic-lock; release it when you reach PASS or
 park, on every exit path including failure** (the planning lock that gives one active planner ownership and releases on completion or expiry).
 
 **Acquire (fails closed, two layers).** The lock is **coarse label + agent-distinguishable
 claim**, per the claim-ownership rule that gives work to the earliest authorized session-stamped claim
-(<related work item>) and the `### The status:planning epic-lock` contract in
-[`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md): the `status:planning` label
+(documented repository precedent) and the `### The $PIPELINE_STATUS_PLANNING epic-lock` contract in
+[`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md): the `$PIPELINE_STATUS_PLANNING` label
 alone is the coarse "is this epic being planned at all?" gate, but under the single shared
-`<shared-automation-login>` login two runs that both read it absent both `POST` the same shared label and neither
-can tell it won the post-`/labels` TOCTOU (the <related work item> double-plan; here the same login degeneracy
+`configured automation identity` login two runs that both read it absent both `POST` the same shared label and neither
+can tell it won the post-`/labels` TOCTOU (the documented repository precedent double-plan; here the same login degeneracy
 lets a `plan-epic` run and a `review-plan` run co-acquire one epic's lock). So after `POST`ing the
 label you post the §7 claim-comment primitive on the epic and resolve to **exactly one holder by
 the earliest authorized claim** (the claim-ownership rule that gives work to the earliest authorized session-stamped claim §2) — the **same** contract `plan-epic` uses; this is
-the `review-plan` consumer of the canonical §`status:planning` claim, never a second
+the `review-plan` consumer of the canonical §`$PIPELINE_STATUS_PLANNING` claim, never a second
 implementation. Every step **fails closed**: a held label, a missing label (the 422 when
-`status:planning` hasn't been created in the repo — a canonical lock label, see the planning lock that gives one active planner ownership and releases on completion or expiry §Setup and the formats doc's status-label table),
+`$PIPELINE_STATUS_PLANNING` hasn't been created in the repo — a canonical lock label, see the planning lock that gives one active planner ownership and releases on completion or expiry §Setup and the formats doc's status-label table),
 a missing `CLAUDE_CODE_SESSION_ID`, a failed claim post, or a lost resolution must **not** fall
 through to the gate flip or the loop's first `rePlan` — each backs off and exits 0, so a missing
 label, a flaky write, or a co-acquire loss never lets you flip/loop unlocked. **The back-off
@@ -117,12 +122,12 @@ re-run) rather than treat `exit 0` as "the epic was gated".
 The whole protocol — the missing-session fail-closed, the coarse-label Rule-0 defer, the
 label `POST` (fail-closed on a 422 missing label), the claim-comment `POST`, the checkpoint-GET,
 and the earliest-authorized-claim resolution — lives in one deterministic, unit-tested tool,
-`pipeline-cli epic-lock` (the planning lock that gives one active planner ownership and releases on completion or expiry, <related work item>), so this skill **calls** it rather than
+`pipeline-cli epic-lock` (the planning lock that gives one active planner ownership and releases on completion or expiry, documented repository precedent), so this skill **calls** it rather than
 re-implementing ~50 lines of `jq` inline. Resolve the tool the same way `$GATE` is resolved —
 in-repo first, published fallback (the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package) — then branch on its exit status:
 
 ```bash
-# Resolve the epic-lock CLI once — in-repo first, published fallback (the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package; epic <related work item>).
+# Resolve the epic-lock CLI once — in-repo first, published fallback (the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package; epic documented repository precedent).
 if [ -x .pipeline/toolkit/bin/pipeline ]; then
   LOCK="pnpm pipeline cli epic-lock"   # the adopting repository-local: the in-repo consolidated bin
 else
@@ -162,19 +167,19 @@ can fail mid-flight, so this is not hypothetical. As an LLM agent you must still
 `DELETE`s — your own claim comment **and** the label — before you stop on those paths; a release
 that fires only on the clean PASS-and-flipped-or-parked fall-through LEAKS the lock on the raise
 path (wedging the epic against every later plan-epic/review-plan run until a human clears it —
-<related work item>). **Only release a lock YOU won** (the step-5 win branch above), never the held label you
+documented repository precedent). **Only release a lock YOU won** (the step-5 win branch above), never the held label you
 backed off from and never a co-acquire loser's shared label — the loser retracts only its **own**
 claim comment (acquire step 5) and leaves the label, which the winner still holds. A leaked lock
 is silent and only a human clears it.
 
 Neither `POST .../labels` nor the comment API is compare-and-swap (no `If-Match`), so this is
-**detect-and-serialize, not a mutex** (the §7/<related work item> TOCTOU over the whole child set): the label is
+**detect-and-serialize, not a mutex** (the §7/documented repository precedent TOCTOU over the whole child set): the label is
 the coarse availability signal and the **earliest authorized claim** resolves the co-acquirers to
 one holder, serializing the *common* flip-vs-supersede interleaving; the residual co-acquire
-window is backstopped by plan-epic's epic-body splice+recheck (<related work item>) and the convergence loop's
+window is backstopped by plan-epic's epic-body splice+recheck (documented repository precedent) and the convergence loop's
 signature checkpoint (below). Don't claim a guarantee the API can't give — claim "of any set of
 co-acquirers, exactly one plans; every loser self-retracts and backs off." **Resolving to one
-holder is also what makes "two convergence loops on one epic" unrepresentable** (<related work item>, race X4): a
+holder is also what makes "two convergence loops on one epic" unrepresentable** (documented repository precedent, race X4): a
 second `review-plan` either finds the label held and backs off, or co-acquires and loses the
 earliest-authorized-claim tiebreak, before its first `rePlan` — so only one loop ever drives an
 epic.
@@ -185,8 +190,8 @@ epic.
 
 The gate action is built: `epic-ledger`'s `runGate(epicNumber)` (`packages/pipeline-cli/src/tools/epic-ledger/gate.ts`).
 Given an epic number it fetches the `EpicLedger` via the `Github` capability, runs
-`validateLedger`, and on a **clean** ledger flips every `status:planned` child to
-`status:triaged` and posts a PASS verdict; on **≥1 hard defect** it posts a per-defect
+`validateLedger`, and on a **clean** ledger flips every `$PIPELINE_STATUS` child to
+`$PIPELINE_STATUS_CLASSIFIED` and posts a PASS verdict; on **≥1 hard defect** it posts a per-defect
 FAIL verdict and flips **nothing**. It returns a structured `GateVerdict`
 (`{_tag: "pass", flipped}` or `{_tag: "fail", defects, signature}`).
 
@@ -229,7 +234,7 @@ yourself — the validator is the single source of truth, and re-judging it in p
 reintroduces exactly the non-determinism this gate removes. The action's verdict *is* the
 gate's verdict.
 
-- **`pass`** → every `status:planned` child is now `status:triaged` (pickable), and a PASS
+- **`pass`** → every `$PIPELINE_STATUS` child is now `$PIPELINE_STATUS_CLASSIFIED` (pickable), and a PASS
   verdict comment is on the epic. Go to Step 2 (the soft-advisor) to *annotate* that pass.
 - **`fail`** → a FAIL verdict listing each defect is on the epic; **no child was flipped**.
   Skip Step 2 (the soft-advisor only annotates a PASS — there's nothing to annotate on a
@@ -282,7 +287,7 @@ If the soft-advisor finds nothing, say so (`No advisory caveats — the plan rea
 
 The soft-advisor's reads are the plan-layer call site of the **specialist fan-out +
 route-don't-grade** mechanism — defined once in
-[`review-code`'s shared reference](../review-code/SKILL.md#specialist-fan-out--route-dont-grade-the specialist-fan-out rule that routes expert concerns without duplicating the main review--the-shared-reference)
+[`review-code`'s shared reference](../review-code/SKILL.md#specialist-fan-out--route-dont-grade-the specialist-fan-out rule that routes expert concerns without duplicating the configured base branch review--the-shared-reference)
 (the applicable safety invariant
 §1–§2), with the append shape + provenance tag + four fences in
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §2. **Cite them; do not
@@ -310,7 +315,7 @@ Route each soft finding:
   via the §2 surface (tag `ac:review-plan`), *and* keep the prose caveat. Subject to all four
   §2 fences (append-only · in-scope-only · ACL-gated/fail-closed · frozen-after-round-K),
   enforced by the reference's
-  [four-fences-enforced procedure](../review-code/SKILL.md#performing-the-append--the-four-fences-enforced-at-this-site-the specialist-fan-out rule that routes expert concerns without duplicating the main review)
+  [four-fences-enforced procedure](../review-code/SKILL.md#performing-the-append--the-four-fences-enforced-at-this-site-the specialist-fan-out rule that routes expert concerns without duplicating the configured base branch review)
   — fail-closed ACL self-check, round-K freeze, append-only body reconstruction — with the append
   target being the **child issue** (`$ISSUE` = the child), never a PR.
 - **Out-of-scope** — a real defect that doesn't trace to any child's story (a gap the brief
@@ -324,20 +329,20 @@ other three gates.
 
 ### Worked example — PASS with caveats
 
-Epic <related work item>'s ledger is structurally clean: deps present, no cycle, every child has ≥1 AC, a
+Epic documented repository precedent's ledger is structurally clean: deps present, no cycle, every child has ≥1 AC, a
 `**Stories:**` line, and a full label set; every declared story is covered. **`runGate`
-returns `pass` and flips <related work item>, <related work item>, <related work item> to `status:triaged`.** The soft-advisor then
+returns `pass` and flips documented repository precedent, documented repository precedent, documented repository precedent to `$PIPELINE_STATUS_CLASSIFIED`.** The soft-advisor then
 reads:
 
-- <related work item>'s AC "the importer is reliable" — **not externally checkable** (caveat: suggest "the
+- documented repository precedent's AC "the importer is reliable" — **not externally checkable** (caveat: suggest "the
   importer retries a failed row up to 3× and surfaces a `RowImportError` after").
 - Story 4 ("as an admin, I want an audit log") — the brief never mentions auditing
   (caveat: brief-fidelity drift; either drop story 4 or point at the brief line that
   motivates it).
 
 The verdict is **still PASS, the children are still flipped and pickable.** The two caveats
-ride along so a human (or a follow-up `plan-epic` run) can sharpen <related work item>'s AC and resolve
-the story-4 drift — but `write-code` is free to pick <related work item>/<related work item>/<related work item> right now. **A
+ride along so a human (or a follow-up `plan-epic` run) can sharpen documented repository precedent's AC and resolve
+the story-4 drift — but `write-code` is free to pick documented repository precedent/documented repository precedent/documented repository precedent right now. **A
 soft caveat never costs the pipeline a flip.** That is the invariant this whole skill is
 built to hold.
 
@@ -360,14 +365,14 @@ On a **FAIL**, the ledger has hard defects and nothing flipped. Repair is **not*
    same ledger came back) it parks; the count check (defects fail to shrink) is a secondary
    stop, never the primary convergence signal. This is load-bearing under concurrency: a
    count-only check could declare convergence on a ledger a concurrent run mutated — two runs
-   landing on the same count over different content (<related work item>, race X4). Keying on the signature
+   landing on the same count over different content (documented repository precedent, race X4). Keying on the signature
    means the stall test is **content-keyed, not count-keyed**: the loop parks on a *repeated*
    signature (a cycle) rather than declaring convergence on a count two runs happened to share.
    (It does not abort on arbitrary mid-loop drift — a *different* signature reads as progress;
    `loop.ts` parks only on a repeat. The epic-lock above is what stops a concurrent mutator
    from drifting the ledger out from under the loop in the first place.) (The
    epic-lock above is the primary defense — it stops two loops from running at all; the
-   signature checkpoint is the in-loop backstop for the lock's residual window. the planning lock that gives one active planner ownership and releases on completion or expiry.) Park the epic `status:needs-info` with
+   signature checkpoint is the in-loop backstop for the lock's residual window. the planning lock that gives one active planner ownership and releases on completion or expiry.) Park the epic `$PIPELINE_STATUS` with
    a diagnostic naming the unresolved defects. Convergence is the stop condition; a high flat
    ceiling (`DEFAULT_CEILING`) is only a runaway backstop, expressed as a `Schedule` (the applicable safety invariant
    Decision 3).
@@ -392,7 +397,7 @@ RePlanner = { rePlan: (epic) => <spawn a plan-epic agent on `epic`, resolve on c
 runConvergenceLoop(<EPIC>)  // provided Github + RePlanner — re-plans on FAIL, parks on stall
 ```
 
-A `parked` outcome is terminal for this invocation: the epic sits `status:needs-info` with
+A `parked` outcome is terminal for this invocation: the epic sits `$PIPELINE_STATUS` with
 its diagnostic, waiting on a human or a different plan. A `converged` outcome means the
 children flipped — run the soft-advisor (Step 2) over the now-clean ledger to annotate the
 pass.
@@ -436,7 +441,7 @@ wire a runner the repo doesn't define (the orchestrator is deliberately out-of-r
 
 ## Running it
 
-A single invocation gates one epic: acquire the `status:planning` epic-lock (see [§Acquire
+A single invocation gates one epic: acquire the `$PIPELINE_STATUS_PLANNING` epic-lock (see [§Acquire
 the epic-lock](#acquire-the-epic-lock-before-you-flip-or-re-plan--release-it-on-every-exit)),
 then run the deterministic action (Step 1) — on a PASS the children are flipped and you
 annotate with the soft-advisor (Step 2), routing each in-scope soft finding by appending an AC
@@ -461,9 +466,9 @@ shared label semantics and the body/comment/dependency/story formats live in
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md); the gate architecture is
 the applicable safety invariant; the deterministic floor, the gate
 action, and the convergence loop are the local `epic-ledger` tool in the pinned toolkit. Your
-input is a `plan-epic`-output epic whose children are `status:planned`; your output — the
+input is a `plan-epic`-output epic whose children are `$PIPELINE_STATUS`; your output — the
 `planned → triaged` flip on a clean ledger (or a parked epic on an unfixable one), plus the
-verdict and any advisory caveats — is what makes `write-code`'s existing `status:triaged`
+verdict and any advisory caveats — is what makes `write-code`'s existing `$PIPELINE_STATUS_CLASSIFIED`
 pick predicate enforce the gate for free. You are the symmetric twin of `review-code`: the
 two gates bracket `write-code` on both sides — the plan it consumes is floor-verified going
 in, the PR it produces is AC-verified going out.

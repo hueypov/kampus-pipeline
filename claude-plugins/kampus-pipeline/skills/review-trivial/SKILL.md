@@ -6,6 +6,11 @@ description: >-
 
 # review-trivial
 
+## Repository-owned policy boundary
+
+This workflow is part of the default generic payload and `pipeline init` links it into `.claude/skills`. Availability is not authority: before external GitHub operations, resolve the consumer repository root and read `.pipeline/agent-policy.json`. Read `.pipeline/optional-workflow-policy.json` for repository-specific integration settings. Do not infer a platform, product lifecycle, branch, organization, or approval actor from examples below. When policy does not authorize an action or required configuration is unset, preserve the workflow context, explain the missing configuration, and fail closed before an external mutation.
+
+
 You are the **lighter gate** — the reduced-prompt fail-closed verify path the rule that permits the lightweight review path only for strictly trivial, non-control-plane changes
 §2 authorizes. `write-code` opened a PR whose diff a deterministic, fail-closed classifier
 (the trivial-diff classifier, the rule that permits the lightweight review path only for strictly trivial, non-control-plane changes §1) already established is **trivial**: small,
@@ -56,13 +61,13 @@ reaches a per-run ref; your session tree is never switched, reset, or checked ou
 
 ---
 
-> **Status: built dormant — not yet wired (the rule that permits the lightweight review path only for strictly trivial, non-control-plane changes §2, issue <related work item>).** This gate exists and
+> **Status: built dormant — not yet wired (the rule that permits the lightweight review path only for strictly trivial, non-control-plane changes §2, issue documented repository precedent).** This gate exists and
 > is correct, but **nothing invokes it yet**. The executor tier branch that routes a
 > trivially-classified PR *to* this gate (instead of the full `review-code` / `review-doc`
-> fan-out) is sibling issue <related work item>'s job — it wires the branch + the fail-closed fallback into
+> fan-out) is sibling issue documented repository precedent's job — it wires the branch + the fail-closed fallback into
 > `.claude/workflows/drive-issue.js`. The trivial-diff *classifier* (the predicate that
-> decides "is this diff trivial?") is sibling <related work item>. Adopting the lighter path at all is gated
-> behind the applicable safety invariant two-axis measurement of sibling <related work item> (a measured token win **and** held
+> decides "is this diff trivial?") is sibling documented repository precedent. Adopting the lighter path at all is gated
+> behind the applicable safety invariant two-axis measurement of sibling documented repository precedent (a measured token win **and** held
 > gate-accuracy, with a quality regression vetoing the lever). Until those land, this skill is
 > reachable only by an explicit operator invocation — the build is intentionally ahead of its
 > wiring.
@@ -79,18 +84,18 @@ under-gate a non-trivial change (the rule that permits the lightweight review pa
 relax it.
 
 Pull the file set and confirm the bound. **Re-resolve the live `CONTROL_PLANE_RE` from
-`origin/main` at run time** — never a stale snapshot (the <related work item> mis-classification class) — per
+`$PIPELINE_BASE_REF` at run time** — never a stale snapshot (the documented repository precedent mis-classification class) — per
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §CP, the single source; cite
 it, don't re-hard-code the list:
 
 ```bash
 PR=<pr number>
-FILES="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename')"   # --paginate + streaming --jq: full set past file <related work item> (<related work item>)
+FILES="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename')"   # --paginate + streaming --jq: full set past file documented repository precedent (documented repository precedent)
 NFILES=$(printf '%s\n' "$FILES" | grep -c . || true)
 ADD=$(gh api repos/$REPO/pulls/$PR --jq '.additions'); DEL=$(gh api repos/$REPO/pulls/$PR --jq '.deletions')
 
-# the live control-plane boundary, read from origin/main (raw, ?ref=main) — never the head, never a local snapshot
-CONTROL_PLANE_RE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=main" \
+# the live control-plane boundary, read from $PIPELINE_BASE_REF (raw, ?ref=$PIPELINE_BASE_REF) — never the head, never a local snapshot
+CONTROL_PLANE_RE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" \
   -H 'Accept: application/vnd.github.raw' \
   | sed -n "s/^CONTROL_PLANE_RE='\(.*\)'$/\1/p" | head -n1)"
 [ -n "$CONTROL_PLANE_RE" ] || { echo "review-trivial: cannot read live CONTROL_PLANE_RE — fail-closed, route to full path"; }   # unreadable boundary ⇒ not trivial
@@ -101,7 +106,7 @@ CONTROL_PLANE_RE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/
 - **A control-plane file is present** — any path matching the live `CONTROL_PLANE_RE`
   (`.claude/**`, `.github/**`, a gate-critical skill, the enforcement-guard packages). A
   control-plane diff is **never** trivial; it takes the full path **and the §CP approve-then-enqueue
-  gate** — a `<configured-control-plane-team>` approval at head before `ship-it` enqueues it (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues; the control-plane rule that requires human approval for changes to automation, CI, or merge safeguards / 0065 / 0100). It must never have routed here.
+  gate** — a `configured approval authority` approval at head before `ship-it` enqueues it (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues; the control-plane rule that requires human approval for changes to automation, CI, or merge safeguards / 0065 / 0100). It must never have routed here.
 - **The boundary could not be read** — an empty/unresolvable `CONTROL_PLANE_RE`. With no
   boundary you cannot prove the diff is non-control-plane, so you must not treat it as trivial
   (mirrors the gates' `CONTROL_PLANE_RE='.'` flag-everything posture).
@@ -114,7 +119,7 @@ CONTROL_PLANE_RE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/
 
 On any refusal, emit a `review-trivial: not-trivial — route to full path` note (a plain note,
 **not** a verdict marker — you are declining to be this PR's gate) and stop. The executor's
-fail-closed fallback (<related work item>) re-routes it to the full `review-code` / `review-doc` fan-out;
+fail-closed fallback (documented repository precedent) re-routes it to the full `review-code` / `review-doc` fan-out;
 the worst case of a miss is paying the full (correct) cost, never an under-gated merge.
 
 ```bash
@@ -129,9 +134,9 @@ fi
 
 **Source every file under review from the PR head — never the launched checkout's working
 copy.** This gate is frequently spawned with `isolation:worktree`, whose CWD is a branch cut
-from `origin/main` (the **base**); a plain `Read`/`cat`/`grep` in CWD reads the **pre-PR
+from `$PIPELINE_BASE_REF` (the **base**); a plain `Read`/`cat`/`grep` in CWD reads the **pre-PR
 base**, so you would review the wrong version while binding the verdict to the right head SHA
-(the §HEAD false-PASS hazard, <related work item>). Obey
+(the §HEAD false-PASS hazard, documented repository precedent). Obey
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §HEAD — cite it, don't
 re-derive: resolve the live head via REST, fetch it into a per-run ref, read every full file
 off that ref (never CWD), and re-check the live head before posting (§HEAD #4). The trust
@@ -140,8 +145,8 @@ come from the trusted base** — never load the head's `.claude/**` / `CLAUDE.md
 
 ```bash
 # Isolation preflight FIRST, before the head fetch below. If this review-trivial spawn expected
-# worktree isolation (reviewer agent-type) but the <related work item> harness no-op dropped it onto the shared
-# PRIMARY checkout ($WORKTREE_ROOT unset), fetching the head here is the <related work item>/<related work item>
+# worktree isolation (reviewer agent-type) but the documented repository precedent harness no-op dropped it onto the shared
+# PRIMARY checkout ($WORKTREE_ROOT unset), fetching the head here is the documented repository precedent/documented repository precedent
 # primary-checkout-detach surface — fail closed LOUD and route up. Single-sourced in
 # gh-issue-intake-formats.md §RO-iso (the applicable safety invariant; the write-code wt_preflight sibling). A genuine
 # standalone run on the owner's checkout still proceeds (the head read is via `git show`, checkout-free).
@@ -152,8 +157,8 @@ PR_REF="refs/review-trivial/$PR"
 git fetch --no-tags origin "pull/$PR/head:$PR_REF" >/dev/null 2>&1 || git fetch origin "$HEAD_SHA" >/dev/null 2>&1
 # read a head file WITHOUT a checkout:  git show "$PR_REF:<path>"   (or "$HEAD_SHA:<path>")
 # NEVER `git checkout` / `git switch` to inspect the head — the harness resets this cwd to the
-# shared PRIMARY between Bash calls, so a checkout lands there and detaches the human's `main`
-# (<related work item>/<related work item>); §RO in gh-issue-intake-formats.md forbids switching any working tree outright.
+# shared PRIMARY between Bash calls, so a checkout lands there and detaches the human's `configured base branch`
+# (documented repository precedent/documented repository precedent); §RO in gh-issue-intake-formats.md forbids switching any working tree outright.
 
 # the PR body carries Fixes #N; pin the linked issue and its acceptance criteria
 ISSUE=$(gh api repos/$REPO/pulls/$PR --jq '.body' | grep -ioE '(fix(es|ed)?|close[sd]?|resolve[sd]?)\s+#[0-9]+' | grep -oE '[0-9]+' | head -n1)
@@ -203,7 +208,7 @@ Verify **all** of the following over the head diff. Each is conjunctive; **one m
    ```bash
    git show "$PR_REF" | grep -nE '^\+' | grep -nE '(~/|/Users/|/home/|/private/var/folders/|[A-Za-z]:\\\\)' || echo "no local/home/absolute paths in added lines"
    ```
-   A repo-relative path (`apps/web/…`, `.decisions/…`) is fine; a machine-local/home/absolute/
+   A repo-relative path (`$PIPELINE_APPLICATION_PATH/…`, `.decisions/…`) is fine; a machine-local/home/absolute/
    sibling-repo path is a **FAIL**.
 
 A clean pass on **all three** (plus the Step 0 triviality re-affirm) is a PASS. Any miss, **or
@@ -216,7 +221,7 @@ any ambiguity you can't resolve from the diff**, is a FAIL — default-deny, nev
 
 The lighter gate **reuses the SHA-bound verdict contract unchanged** — it emits exactly the
 marker shape `ship-it` and `write-code`-repair already consume, so the lighter path needs **no
-change to `ship-it`** (that, plus the executor wiring, is <related work item>'s lane, not yours). The marker
+change to `ship-it`** (that, plus the executor wiring, is documented repository precedent's lane, not yours). The marker
 namespace is the **artifact class of the trivial diff**, resolved via the §DOC / §CP single-
 source probes in [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) — cite them,
 don't re-derive:
@@ -225,15 +230,15 @@ don't re-derive:
   root/top-level prose `*.md`) → emit a **`review-doc:`** marker.
 - **skills/** diff (a non-control-plane skill — control-plane skills were already refused in
   Step 0) → emit a **`review-skill:`** marker.
-- **code-class** diff (everything else — `apps/**`, `packages/**`, `.glossary/**`, a code-root
+- **code-class** diff (everything else — `$PIPELINE_CODE_PATHS`, `$PIPELINE_CODE_PATHS`, `.glossary/**`, a code-root
   `*.md`) → emit a **`review-code:`** marker.
 
 Whichever namespace, the verdict obeys the §5/§6/§6.5 matcher contract: the **first line** is
 the bare, canonical, SHA-bound marker, with `@ <sha>` **immediately after** the `PASS`/`FAIL`
 polarity and **before** the `— merge-ready` / `— not merge-ready` tail (token order is fixed;
 a trailing `@ <sha>` captures `sha=null` and `ship-it` refuses a correct PASS as `unverified`,
-<related work item>). The `@ <sha>` is **load-bearing**: `ship-it` and `write-code`-repair refuse any verdict
-not bound to the PR's current head, and refuse a SHA-less marker outright (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA, <related work item>).
+documented repository precedent). The `@ <sha>` is **load-bearing**: `ship-it` and `write-code`-repair refuse any verdict
+not bound to the PR's current head, and refuse a SHA-less marker outright (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA, documented repository precedent).
 
 **Re-check the live head before posting** (§HEAD #4): if the head moved while you reviewed, do
 **not** post a verdict bound to a SHA you no longer reviewed — re-resolve and re-review, or
@@ -275,7 +280,7 @@ review-code: PASS @ <HEAD_SHA> — merge-ready
 
 Lighter gate (the rule that permits the lightweight review path only for strictly trivial, non-control-plane changes §2) — trivial diff verified against #<ISSUE> with the scoped checklist:
 
-- [PASS] Triviality re-affirmed — <N> file(s), +<add>/-<del>, no control-plane (live CONTROL_PLANE_RE from origin/main), no new surface
+- [PASS] Triviality re-affirmed — <N> file(s), +<add>/-<del>, no control-plane (live CONTROL_PLANE_RE from $PIPELINE_BASE_REF), no new surface
 - [PASS] Right one-liner — diff satisfies the AC: <criterion> — <evidence: file:line>
 - [PASS] No leaked secret — added lines scanned, clean
 - [PASS] No leaked local/home/absolute/sibling-repo path — added lines scanned, clean

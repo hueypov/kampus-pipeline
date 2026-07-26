@@ -1,6 +1,6 @@
 ---
 name: diataxis
-description: Classify a documentation page by its Diátaxis mode — tutorial, how-to, reference, or explanation — and flag type-mixing (a single page trying to serve more than one mode). Trigger on "what Diátaxis mode is this doc", "classify this doc", "is this page mixing modes", "run diataxis", "does this doc mix tutorial and reference", "which quadrant does this belong in", or whenever write-code is authoring a doc and needs to pick the right surface/shape, or review-doc is gating a prose PR and needs to check the page holds a single mode. This is a shared writing-craft procedure consumed by write-code (author in the right mode) and review-doc (verify the page didn't drift into a second mode). It classifies by the reader's need and the page's shape, never by language — the TR/EN language law is untouched (structure is mode; wording stays Turkish for product copy). It does not gate code comments (that lane is deslop-comments) and does not rewrite docs (that is a separate authoring task).
+description: Classify a documentation page by its Diátaxis mode — tutorial, how-to, reference, or explanation — and flag type-mixing (a single page trying to serve more than one mode). Trigger on "what Diátaxis mode is this doc", "classify this doc", "is this page mixing modes", "run diataxis", "does this doc mix tutorial and reference", "which quadrant does this belong in", or whenever an author is drafting documentation or a reviewer is checking that prose holds one reader need. This is a shared writing-craft procedure: authors use it to choose the right shape and reviewers use it to detect drift into a second mode. It classifies by the reader's need and the page's shape, never by language. It does not gate code comments (that lane is deslop-comments) and does not rewrite docs (that is a separate authoring task).
 ---
 
 # diataxis
@@ -16,7 +16,7 @@ itself — the two axes and the four quadrants — is an uncopyrightable method,
 states it in its own words and **links out to diataxis.fr for the deep dive rather than
 vendoring its prose** (no Diátaxis text is copied here, so no CC BY-SA NOTICE is owed; if a
 future edit lifts Procida's phrasing verbatim, that file must carry a CC BY-SA 4.0 NOTICE per
-the <related work item> licensing mechanics). Read the source for the full treatment: [diataxis.fr](https://diataxis.fr).
+the documented repository precedent licensing mechanics). Read the source for the full treatment: [diataxis.fr](https://diataxis.fr).
 
 ## The two axes
 
@@ -37,9 +37,9 @@ one.
 | Mode | Reader is… | Serves | Shape | the adopting repository surface |
 | --- | --- | --- | --- | --- |
 | **Tutorial** | learning, by doing | acquisition + action | a guided lesson the reader follows start-to-finish; you guarantee it works; concrete over complete | onboarding walkthroughs; a "build your first X" |
-| **How-to guide** | working, on a goal | application + action | an ordered recipe to reach one real result; assumes competence; omits what a working reader already knows | `DEVELOPMENT.md` task recipes; a runbook; "how to add a worker" |
+| **How-to guide** | working, on a goal | application + action | an ordered recipe to reach one real result; assumes competence; omits what a working reader already knows | `DEVELOPMENT.md` task recipes; a runbook; "how to add a component" |
 | **Reference** | working, needs a fact | application + cognition | a dry, complete, look-it-up description of the machinery; structured to match the code; no teaching, no opinion | `.glossary/`, an API/binding table, a command list |
-| **Explanation** | studying, wants to understand | acquisition + cognition | a discussion that illuminates *why* — context, trade-offs, the roads not taken | `.decisions/` ADRs, `.patterns/` (the *why* of a shape) |
+| **Explanation** | studying, wants to understand | acquisition + cognition | a discussion that illuminates *why* — context, trade-offs, the roads not taken | decision records, design notes, or another repository-owned rationale surface |
 
 The one-line test for each:
 
@@ -97,15 +97,22 @@ a flag is a real result, not a non-answer.
 
 ## How the pipeline consumes this
 
-- **write-code (authoring a doc):** before writing, classify the reader-need the doc must
-  serve and pick the matching mode *and the adopting repository surface* (the table above maps modes to
-  surfaces — an ADR is explanation, a `DEVELOPMENT.md` recipe is how-to, `.glossary/` is
-  reference). Author to that one mode; when the material pulls toward a second mode, split it
-  out to the surface that owns that mode and link, rather than blending.
-- **review-doc (gating a prose PR):** run the classification on the changed page, then the
-  type-mixing flag. A page that has drifted into a second mode is a doc-hygiene finding on top
-  of the acceptance-criteria check — cite the host mode, the intruding passage, and the split.
-  This does not replace review-doc's AC verification; it's a lens it applies to the prose.
+- **Authoring a doc:** before writing, classify the reader-need the doc must serve and pick the
+  matching mode *and the adopting repository surface*. Use the repository's documented topology
+  when it has one: a decision record is commonly explanation, a task recipe is commonly a how-to,
+  and a glossary or API table is commonly reference. Those are shapes, not mandatory directories.
+  Author to that one mode; when the material pulls toward a second mode, split it out to the
+  repository surface that owns that mode and link, rather than blending.
+- **Reviewing prose:** run the classification on the changed page, then the type-mixing flag. A
+  page that has drifted into a second mode is a doc-hygiene finding on top of the repository's
+  own acceptance criteria — cite the host mode, the intruding passage, and the split. This
+  classification is a lens, not a replacement for repository-specific review requirements.
+
+The procedure is intentionally reusable outside a named pipeline stage. A person drafting a
+README, an agent updating an ADR, or a reviewer reading a pull request can all apply the same
+reader-need classification and get the same result. The invocation context determines who
+performs any subsequent edit or review; it does not change the mode definitions, turn this skill
+into a gate, or require a separate authoring/review skill to be installed.
 
 ## Scope boundaries
 
@@ -113,8 +120,10 @@ a flag is a real result, not a non-answer.
   a different lane owned by [`deslop-comments`](../deslop-comments/SKILL.md) — do not reach
   into it.
 - **Classify, don't rewrite.** This skill *names* the mode and *flags* the mix. Rewriting a
-  mixed doc into single-mode surfaces is a separate authoring task (a write-code job with its
-  own issue), not something this procedure performs.
+  mixed doc into single-mode surfaces is a separate authoring task with its own repository-owned
+  scope, not something this procedure performs.
 - **Language-agnostic.** Mode is a property of the reader's need and the page's shape, never
-  its language. The TR/EN language law is untouched: product/user-facing copy stays Turkish,
-  technical surfaces stay English, and this classification runs the same over both.
+  its language. Before suggesting an edit, read the adopting repository's documented language
+  and audience policy from its repository-root guidance (for example `CLAUDE.md` or a declared
+  language-vocabulary file). Apply that consumer-owned policy consistently to product and
+  technical copy; when the repository declares none, do not invent a language split.

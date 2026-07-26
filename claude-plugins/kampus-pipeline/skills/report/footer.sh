@@ -4,7 +4,7 @@
 #
 # PRIVACY CONTRACT (load-bearing, do not relax):
 #   - NO PII: never read git user.email / user.name or any author identity.
-#   - NO user-local absolute paths: nothing under /Users, ~, ~/.claude, ~/.<shared-automation-login>.
+#   - NO user-local absolute paths: nothing under /Users, ~, ~/.claude, ~/.configured automation identity.
 # Only machine/session context belongs here. If you add a field, it must satisfy both.
 set -euo pipefail
 

@@ -37,8 +37,9 @@ not intuition. Document every deliberate deviation from that host plugin specifi
 
 **Mechanism.** The plugin ships one **template**,
 [`crew.config.template.jsonc`](crew.config.template.jsonc), containing every seam key with
-`<placeholder>` values only. At stand-up the operator copies it to an **operator-owned**
-config file (never committed into the plugin) and fills every placeholder. Each crew def,
+`<placeholder>` values only. `pipeline init` materializes it at the **operator-owned**,
+git-ignored `.claude/crew.config.jsonc` (never committed into the plugin); the operator fills
+every placeholder there. Each crew def,
 at spawn, reads that file and binds its placeholders before acting.
 
 **Resolution order:** `$CREW_CONFIG` overrides the repository-local default:
@@ -113,17 +114,9 @@ The wayfinder map (the crew-architecture map) flagged three seam questions to re
 
 ## Stand-up
 
-```bash
-# 1. Copy the placeholder-only template to your operator-owned config (default path).
-cp .claude/crew.config.template.jsonc .claude/crew.config.jsonc
-#    (or keep it anywhere and point $CREW_CONFIG at it).
-
-# 2. Fill EVERY <placeholder> with your own people and machine. Leave no <...> behind.
-
-# 3. Ensure the config is git-ignored in your working repo — it holds your operator
-#    data and must never be committed into a shared tree.
-echo ".claude/crew.config.jsonc" >> .gitignore
-```
+`pipeline init` creates and git-ignores `.claude/crew.config.jsonc` from the shipped template.
+Fill EVERY `<placeholder>` with your own people and machine. Leave no `<...>` behind. To keep
+the config elsewhere, set `$CREW_CONFIG` to that path.
 
 ### The one stand-up command
 

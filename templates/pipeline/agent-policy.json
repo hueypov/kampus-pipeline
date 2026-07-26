@@ -1,0 +1,40 @@
+{
+	"schemaVersion": 1,
+	"git": {
+		"primaryBranch": null,
+		"postSyncCommand": null
+	},
+	"worktrees": {
+		"managedRoots": [".claude/worktrees"],
+		"reviewPrefixes": ["review-head-", "review-doc-head-", "review-skill-head-"],
+		"idleMinutes": 60
+	},
+	"github": {
+		"issueMutation": true,
+		"implementation": {
+			"enabled": true
+		},
+		"planning": {
+			"enabled": true,
+			"epicEligibilityQuery": null
+		},
+		"triage": {
+			"enabled": true,
+			"queueQuery": null
+		},
+		"review": {
+			"uiPaths": [],
+			"requiredChecks": [],
+			"trivialDiff": {
+				"enabled": false,
+				"maxChangedLines": 20,
+				"protectedPaths": []
+			}
+		},
+		"shipping": {
+			"enabled": true,
+			"controlPlanePaths": [],
+			"requiredApprovals": 0
+		}
+	}
+}

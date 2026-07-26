@@ -17,6 +17,9 @@ adopting Git repository
 │
 ├── .pipeline/toolkit/             pinned Git submodule: this repository
 ├── .pipeline/pipeline.json        generated managed-file manifest
+├── CLAUDE.md                      repository-owned contributor guidance
+├── .decisions/README.md           architecture-decision surface
+├── .patterns/index.md             code-pattern surface
 ├── .claude/
     ├── settings.json              existing settings plus pipeline-owned hooks
     ├── agents/                    links to Kampus Pipeline agent definitions
@@ -72,6 +75,8 @@ The command that owns this setup is:
 In the adopting repository:
 
 ```bash
+# Run this first only when creating a new repository.
+git init
 git submodule add <toolkit-remote> .pipeline/toolkit
 git submodule update --init --recursive
 ./.pipeline/toolkit/bin/pipeline init
@@ -88,18 +93,20 @@ than bootstrap requirements.
 2. Builds `@kampus/pipeline-cli` from the pinned lockfile.
 3. Merges pipeline hook entries into `.claude/settings.json` without removing
    unrelated existing settings.
-4. Creates neutral `.glossary/LANGUAGE.md` and `.glossary/TERMS.md` templates
-   when the consumer does not already own those files; it never replaces an
-   existing copy.
-5. Creates root `claude-plugins/<plugin>` links to the corresponding plugin
-   directories in `.pipeline/toolkit`, then points managed hooks at those
-   consumer-facing links.
-6. Creates `.claude/agents` links from the `kampus-pipeline` plugin and links
-   only the audited portable-core skills into `.claude/skills`.
+4. Creates neutral `CLAUDE.md`, `.decisions/README.md`, `.patterns/index.md`,
+   `.glossary/LANGUAGE.md`, and `.glossary/TERMS.md` templates when the consumer
+   does not already own those files; it never replaces an existing copy.
+5. Points managed hooks directly at the pinned `.pipeline/toolkit` submodule;
+   no consumer-root plugin link exposes the copied workflow archive.
+6. Creates `.claude/agents` links and links only the audited portable-core
+   skills into `.claude/skills`. The workflow catalog keeps retained archive
+   skills inside the toolkit until a repository-owned adapter enables them.
 7. Adds a project-local `pipeline` script to `package.json`, preserving all
    existing scripts and refusing to replace a conflicting `pipeline` script.
    If the repository has no `package.json`, it creates a minimal private one.
-8. Records all managed links and owned hooks in `.pipeline/pipeline.json`.
+8. Creates a consumer-owned optional-workflow policy with every workflow
+   disabled by default, then records all managed links and owned hooks in
+   `.pipeline/pipeline.json`.
 
 Initialization writes the generic workflows into `.github/workflows/` when
 those paths do not already exist. Once installed, `pipeline sync` preserves
@@ -122,8 +129,9 @@ Cloudflare, release, and approval-topology workflows. It contains only:
 
 - `pipeline-toolkit.yml` — checks out the consumer with its submodule, installs
   the pinned toolkit workspace, and runs the toolkit package test suites.
-- `pipeline-doc-safety.yml` — scans changed Markdown, ADR, pattern, and
-  glossary files for machine-local-path leaks using the pinned local CLI.
+- `pipeline-doc-safety.yml` — validates ADR filename/frontmatter consistency
+  and scans changed Markdown, ADR, pattern, and glossary files for
+  machine-local-path leaks using the pinned local CLI.
 
 The pack is a starting CI baseline. Repositories may add their own application
 tests and deployment workflows without changing toolkit-managed files.
@@ -149,10 +157,13 @@ organization-specific reviews, release operations, product UI checks, and the
 multi-session crew require a repository-owned integration with its own
 configuration and validation.
 
-The default installation contains only the core skills enumerated in
-`packages/pipeline/src/payload.ts`, neutral glossary templates, and
-project-local hook reconciliation. No crew configuration is generated, linked,
-or written to user-level Claude settings.
+The default installation contains the core skills enumerated in
+`packages/pipeline/src/payload.ts`, Kampus Pipeline agent definitions, neutral
+glossary templates, and project-local hook reconciliation. The agents use GitHub
+when their workflow calls for issues, pull requests, reviews, or shipping. Crew,
+release, and product-specific plugin material remains optional; default
+initialization does not generate crew configuration, link optional plugins, or
+write user-level Claude settings.
 
 ## Package: `@kampus/pipeline`
 

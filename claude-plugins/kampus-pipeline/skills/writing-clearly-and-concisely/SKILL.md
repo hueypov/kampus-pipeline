@@ -1,6 +1,6 @@
 ---
 name: writing-clearly-and-concisely
-description: Use when writing or editing English prose a human will read — docs, README/DEVELOPMENT, ADR and pattern bodies, PR descriptions, commit messages, issue bodies, error copy, and surviving load-bearing code comments. Applies Strunk's Elements of Style (write clearly, cut ruthlessly) plus a catalog of AI writing tells to avoid. This is the prose-craft skill review-doc's prose check and write-code's doc path read before they judge or generate prose. Trigger on "make this clearer/tighter", "cut the fluff", "this reads like AI", "writing-clearly-and-concisely", or any prose-authoring task. NOT for non-English product/brand copy (Turkish stays Turkish, .glossary/LANGUAGE.md) and NOT a bulk pass over existing prose (that is a separate, scoped campaign).
+description: Use when writing or editing prose a human will read — docs, README/DEVELOPMENT, ADR and pattern bodies, PR descriptions, commit messages, issue bodies, error copy, and surviving load-bearing code comments. Applies Strunk's Elements of Style (write clearly, cut ruthlessly) plus a catalog of AI writing tells to avoid. This is the prose-craft skill review-doc's prose check and write-code's doc path read before they judge or generate prose. Trigger on "make this clearer/tighter", "cut the fluff", "this reads like AI", "writing-clearly-and-concisely", or any prose-authoring task. NOT for product or brand copy governed by a consumer-owned language policy and NOT a bulk pass over existing prose (that is a separate, scoped campaign).
 ---
 
 # writing-clearly-and-concisely
@@ -49,9 +49,12 @@ frontmatter, the glossary's defined terms — are established vocabulary, not sl
 
 - **Applying this skill to existing prose in bulk** — the repo-wide cleanup is a separate,
   scoped campaign, not something to trigger opportunistically here.
-- **Non-English product/brand copy** — Turkish product names and user-facing copy stay
-  Turkish (CLAUDE.md; [`.glossary/LANGUAGE.md`](../../../../.glossary/LANGUAGE.md)). This
-  skill is for the *English technical* register only.
+- **Product/brand copy governed by a local language policy** — resolve the repository root with
+  `git rev-parse --show-toplevel`, then read its contributor guidance and, when present,
+  `<root>/.glossary/LANGUAGE.md`. That policy belongs to the adopting repository, not the
+  installed skill path: never use a multi-level relative Markdown link to reach it. Apply this
+  skill only to the prose register the consumer policy assigns to technical documentation; if no
+  policy exists, use the language and audience established by the requested artifact.
 
 ## What to do — Strunk
 

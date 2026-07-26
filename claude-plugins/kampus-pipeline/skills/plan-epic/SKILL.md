@@ -1,11 +1,16 @@
 ---
 name: plan-epic
-description: Turn a triaged epic into an executable, PRD-grade task ledger on the configured target repo — a plan whose product layer (problem, user stories, testing strategy) leads and engineering layer follows, split into tracer-bullet sub-issues that each trace to a user story, with a pinned `## Dependencies` topology. Trigger on "plan the epic", "plan epic #N", "break down the epic", "/plan-epic", or whenever a `type:epic` `status:triaged` issue needs its plan and children. Autonomous — no interview or approval gate; re-runs reconcile.
+description: Turn a triaged epic into an executable, PRD-grade task ledger on the configured target repo — a plan whose product layer (problem, user stories, testing strategy) leads and engineering layer follows, split into tracer-bullet sub-issues that each trace to a user story, with a pinned `## Dependencies` topology. Trigger on "plan the epic", "plan epic #N", "break down the epic", "/plan-epic", or whenever a `$PIPELINE_TYPE_EPIC` `$PIPELINE_STATUS_CLASSIFIED` issue needs its plan and children. Autonomous — no interview or approval gate; re-runs reconcile.
 ---
 
 # plan-epic
 
-You take a triaged epic (`type:epic` + `status:triaged`) and turn it into something
+## Repository-owned policy boundary
+
+This workflow is part of the default generic payload and `pipeline init` links it into `.claude/skills`. Availability is not authority: before external GitHub operations, resolve the consumer repository root and read `.pipeline/agent-policy.json`. Read `.pipeline/optional-workflow-policy.json` for repository-specific integration settings. Do not infer a platform, product lifecycle, branch, organization, or approval actor from examples below. When policy does not authorize an action or required configuration is unset, preserve the workflow context, explain the missing configuration, and fail closed before an external mutation.
+
+
+You take a triaged epic (`$PIPELINE_TYPE_EPIC` + `$PIPELINE_STATUS_CLASSIFIED`) and turn it into something
 a fleet of `write-code` agents can execute without you in the loop: a **PRD-grade plan**
 written into the epic body, a set of native GitHub sub-issues each carrying its own user-story
 trace and acceptance criteria, and a pinned `## Dependencies` section that says what gates what.
@@ -22,7 +27,7 @@ to a human for sign-off — there is **no interview, no propose-first, no approv
 author the product layer from the brief + the existing product + codebase exploration + your own
 product judgment; you do not ask the user questions (the human already approved the *epic* at
 triage). When a user story hinges on a genuine product decision you can't ground from the
-codebase, carve it as a `type:decision` child — never handwave it. Plan, split, link, done.
+codebase, carve it as a `$PIPELINE_WORK_ITEM_TYPE` child — never handwave it. Plan, split, link, done.
 
 The epic body is **append-down**: the triaged original brief stays untouched at the top — triage
 may collapse it into a `<details>` wrap-in-place, but it is preserved byte-for-byte and is still
@@ -69,7 +74,7 @@ You **write three of the five** shared formats; read them before you start:
   `**Containment:**` marker, defined once in the formats contract's
   [§The product-development cycle hook](../gh-issue-intake-formats.md#the-product-development-cycle-hook).
   plan-epic is the **only writer** of the marker: when the repo carries a
-  `product-development-cycle.md` you stamp each child's containment from the cycle's policy; when
+  `$PIPELINE_DEVELOPMENT_CYCLE_POLICY` you stamp each child's containment from the cycle's policy; when
   it's absent the step no-ops (graceful absence, the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository). See Step 3's *Stamp the containment
   marker*.
 - **Epic handoff note** (format 4) — you don't *post* these (that's `write-code` as
@@ -83,19 +88,19 @@ write it canonically. Tolerant reading is the safety margin, not the target.
 
 As you author the plan — user stories, the `### What to build` spec on each child, the
 identifiers you coin — reach for the repo-owned vocabulary register rather than inventing
-names (the one-concept-named-four-ways drift the audit found, <related work item>):
-[`.glossary/TERMS.md`](<repository URL>)
-(domain nouns) and [`.glossary/LANGUAGE.md`](<repository URL>)
+names (the one-concept-named-four-ways drift the audit found, documented repository precedent):
+[`.glossary/TERMS.md`](repository-owned record URL)
+(domain nouns) and [`.glossary/LANGUAGE.md`](repository-owned record URL)
 (architecture vocabulary). Point at the glossary, never copy a definition into this skill —
 the register is the single source. (the applicable safety invariant.)
 
 ## Vocabulary impact — surface the domain nouns an epic plan introduces
 
-Reading the glossary (above) keeps you *reusing* existing names; this is its complement — **surfacing the new ones you introduce.** An epic plan is a primary *coining site*: its user stories and `### What to build` specs name the domain nouns a whole fleet of `write-code` agents will then build against, and those names propagate before anyone routes them past a gate. The `review-code` glossary-freshness gate (Step 3c) only catches **structural** surfaces (a new feature folder / package / export); a **concept-level** noun coined in a plan — a new model, a redefined lever, a feature's Turkish brand name — sails past it. So catch it **at coinage, here**, where you already hold the concept (the vocabulary rule that captures newly coined or redefined terms at their source and through a backstop sweep prong (c), Fixes <related work item>; the parallel is the `/adr` skill's vocabulary-impact section — the two coining skills catch the routed-term class at its source).
+Reading the glossary (above) keeps you *reusing* existing names; this is its complement — **surfacing the new ones you introduce.** An epic plan is a primary *coining site*: its user stories and `### What to build` specs name the domain nouns a whole fleet of `write-code` agents will then build against, and those names propagate before anyone routes them past a gate. The `review-code` glossary-freshness gate (Step 3c) only catches **structural** surfaces (a new feature folder / package / export); a **concept-level** noun coined in a plan — a new model, a redefined lever, a feature's Turkish brand name — sails past it. So catch it **at coinage, here**, where you already hold the concept (the vocabulary rule that captures newly coined or redefined terms at their source and through a backstop sweep prong (c), Fixes documented repository precedent; the parallel is the `/adr` skill's vocabulary-impact section — the two coining skills catch the routed-term class at its source).
 
 This is a **required, not-silently-skippable** part of the plan. As you write Step 2, ask: *does this plan introduce domain nouns not already in `.glossary/TERMS.md`, or redefine an existing one?* You must land on **exactly one** of two explicit outcomes and record it in the plan's `### Vocabulary impact` subsection (Step 2) — you cannot leave it blank:
 
-- **Noun(s) introduced/redefined → feed the glossary.** Name each new domain noun the plan coins (a feature's brand name, a new entity/model, a redefined term), and route it to `.glossary/TERMS.md`: add/update its row when the canonical definition is short and clear, or **invoke `/glossary`** (`claude-plugins/kampus-pipeline/skills/glossary/SKILL.md`) / file a `report` for the fuller treatment. Surfacing it in the plan is what makes the child `write-code` agents inherit the canonical name instead of re-coining a synonym (the one-concept-named-four-ways drift, <related work item>).
+- **Noun(s) introduced/redefined → feed the glossary.** Name each new domain noun the plan coins (a feature's brand name, a new entity/model, a redefined term), and route it to `.glossary/TERMS.md`: add/update its row when the canonical definition is short and clear, or **invoke `/glossary`** (`claude-plugins/kampus-pipeline/skills/glossary/SKILL.md`) / file a `report` for the fuller treatment. Surfacing it in the plan is what makes the child `write-code` agents inherit the canonical name instead of re-coining a synonym (the one-concept-named-four-ways drift, documented repository precedent).
 - **No vocabulary impact → record it explicitly.** If the plan introduces no new domain noun (it sequences and splits work over already-named concepts), state `### Vocabulary impact` → "none" plainly. The explicit "none" is the recorded outcome — it separates *"checked, there is none"* from *"forgot to check."*
 
 This hook is **off the fail-closed gate by construction**: it is authoring-time judgment in this skill, it blocks no PR and no child, and it does not (and must not) alter `review-code`'s Step 3c. It is the routed-term half of the vocabulary rule that captures newly coined or redefined terms at their source and through a backstop sweep (alongside `/adr`); the un-routed code-PR class is the sibling drift-sweep backstop, not this skill's job.
@@ -104,22 +109,22 @@ This hook is **off the fail-closed gate by construction**: it is authoring-time 
 
 `plan-epic` and `review-plan` both mutate one epic's children (you supersede/unlink/close on
 re-plan; the gate flips `planned → triaged`). Run concurrently they interleave and corrupt
-the ledger (<related work item>). **Before you create, amend, supersede, unlink, or close any child — and
-before the body `PATCH` in Step 5 — acquire the `status:planning` epic-lock; release it when
+the ledger (documented repository precedent). **Before you create, amend, supersede, unlink, or close any child — and
+before the body `PATCH` in Step 5 — acquire the `$PIPELINE_STATUS_PLANNING` epic-lock; release it when
 you finish (PASS-or-park), on every exit path including failure.** This is the primary
 serialization (the planning lock that gives one active planner ownership and releases on completion or expiry); the Step 5
-splice+recheck (<related work item>) is the complementary backstop for its residual, not a replacement.
+splice+recheck (documented repository precedent) is the complementary backstop for its residual, not a replacement.
 
 **Acquire (fails closed, two layers).** The lock is **coarse label + agent-distinguishable
 claim**, per the claim-ownership rule that gives work to the earliest authorized session-stamped claim
-(<related work item>) and the `### The status:planning epic-lock` contract in
-[`gh-issue-intake-formats.md`](<repository URL>):
-the `status:planning` label alone is the coarse "is this epic being planned at all?" gate, but
-under the single shared `<shared-automation-login>` login two runs that both read it absent both `POST` the same
-shared label and neither can tell it won the post-`/labels` TOCTOU (the <related work item> double-plan, stray
-child <related work item>). So after `POST`ing the label you post the §7 claim-comment primitive on the epic and
+(documented repository precedent) and the `### The $PIPELINE_STATUS_PLANNING epic-lock` contract in
+[`gh-issue-intake-formats.md`](repository-owned record URL):
+the `$PIPELINE_STATUS_PLANNING` label alone is the coarse "is this epic being planned at all?" gate, but
+under the single shared `configured automation identity` login two runs that both read it absent both `POST` the same
+shared label and neither can tell it won the post-`/labels` TOCTOU (the documented repository precedent double-plan, stray
+child documented repository precedent). So after `POST`ing the label you post the §7 claim-comment primitive on the epic and
 resolve to **exactly one holder by the earliest authorized claim** (the claim-ownership rule that gives work to the earliest authorized session-stamped claim §2). Every step
-**fails closed**: a held label, a missing label (the 422 when `status:planning` hasn't been
+**fails closed**: a held label, a missing label (the 422 when `$PIPELINE_STATUS_PLANNING` hasn't been
 created in the repo — a canonical lock label, see the planning lock that gives one active planner ownership and releases on completion or expiry §Setup and
 the formats doc's status-label table), a missing `CLAUDE_CODE_SESSION_ID`, a failed claim post, or
 a lost resolution must **not** fall through to mutate — each backs off and exits 0, so a missing
@@ -132,12 +137,12 @@ epic was planned".
 The whole protocol — the missing-session fail-closed, the coarse-label Rule-0 defer, the
 label `POST` (fail-closed on a 422 missing label), the claim-comment `POST`, the checkpoint-GET,
 and the earliest-authorized-claim resolution — lives in one deterministic, unit-tested tool,
-`pipeline-cli epic-lock` (the planning lock that gives one active planner ownership and releases on completion or expiry, <related work item>), so this skill **calls** it rather than
+`pipeline-cli epic-lock` (the planning lock that gives one active planner ownership and releases on completion or expiry, documented repository precedent), so this skill **calls** it rather than
 re-implementing ~50 lines of `jq` inline. Resolve the tool in-repo first, published fallback
 (the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package), then branch on its exit status:
 
 ```bash
-# Resolve the epic-lock CLI once — in-repo first, published fallback (the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package; epic <related work item>).
+# Resolve the epic-lock CLI once — in-repo first, published fallback (the shared-CLI rule that provides reusable ledger mechanics outside a repository-local package; epic documented repository precedent).
 if [ -x .pipeline/toolkit/bin/pipeline ]; then
   LOCK="pnpm pipeline cli epic-lock"   # the adopting repository-local: the in-repo consolidated bin
 else
@@ -176,7 +181,7 @@ The release fires on **every** terminal path on purpose: you drive this as an LL
 many bash calls, and an agent that aborts (or whose `gh` call throws) part-way through the
 mutation must still issue the `DELETE` before it stops — a release that fires only on the clean
 fall-through LEAKS the lock on the error/abort path (wedging the epic against every later
-plan-epic/review-plan run until a human clears it — the exact catastrophe <related work item> warns about).
+plan-epic/review-plan run until a human clears it — the exact catastrophe documented repository precedent warns about).
 **Only release a lock YOU won** (the step-5 win branch above), never the held label you backed
 off from and never a co-acquire loser's shared label (the loser retracts only its **own** claim
 comment, in the acquire's step 5 — it never `DELETE`s the label, which the winner still holds; a
@@ -185,11 +190,11 @@ and only a human clears it.
 
 The acquire is **not** a mutex: neither `POST .../labels` (additive, no `If-Match`) nor the
 comment API offers a conditional write, so two runs can still both read the label absent and both
-`POST` it (the §7/<related work item> TOCTOU, over the whole child set). What closes the post-`/labels` window is
+`POST` it (the §7/documented repository precedent TOCTOU, over the whole child set). What closes the post-`/labels` window is
 the agent-distinguishable claim of the claim-ownership rule that gives work to the earliest authorized session-stamped claim
-(<related work item>): of any set of co-acquirers, the **earliest authorized claim** resolves exactly one
-planner; every loser self-retracts its claim and backs off (the <related work item> double-plan that produced
-stray child <related work item> is no longer reachable). This stays **detect-and-serialize**: it resolves the
+(documented repository precedent): of any set of co-acquirers, the **earliest authorized claim** resolves exactly one
+planner; every loser self-retracts its claim and backs off (the documented repository precedent double-plan that produced
+stray child documented repository precedent is no longer reachable). This stays **detect-and-serialize**: it resolves the
 co-acquirers deterministically, it does not provide kernel-grade exclusion, and the residual
 same-instant window is still backstopped by Step 5's splice+recheck. Don't claim a guarantee the
 API can't give — claim "of any set of co-acquirers, exactly one plans; every loser backs off."
@@ -209,7 +214,7 @@ conventions — that is the planning work. The epic brief often ends with open
 questions (triage leaves them for you). Answer them in the plan with a stated
 rationale; don't punt them downstream as unscoped ambiguity. If a question is
 genuinely a product or architecture fork that needs human-judgment — not something the
-codebase settles — carve it as its own `type:decision` child rather than blocking the
+codebase settles — carve it as its own `$PIPELINE_WORK_ITEM_TYPE` child rather than blocking the
 whole plan on it. (This is the autonomous substitute for the interview a human-facing PRD
 tool would run: you resolve what you can and turn the rest into decision work, you don't
 stop to ask.)
@@ -222,7 +227,7 @@ Every intermediate file below lives under `$RUN_SCRATCH`, the per-run scratch na
 once in [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §SP — never a fixed or
 epic-keyed `/tmp` path. An epic number is **not** unique (a re-plan of the same epic is a second
 run over it), so re-rooting the whole family under one per-run directory is what makes a
-cross-run clobber unrepresentable rather than merely unlikely (<related work item>).
+cross-run clobber unrepresentable rather than merely unlikely (documented repository precedent).
 
 Step 1 writes this state and **Step 5 reads it back from a different Bash call**, so the path
 must be *deterministic*, not randomly allocated: shell state doesn't survive between calls, and
@@ -234,14 +239,14 @@ session), then **re-derive** it with the same one-liner in every later block, pe
 ```bash
 # §SP: the per-run scratch namespace — deterministic + fail-closed, never a shared fallback.
 [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || {
-  echo "plan-epic: §SP — CLAUDE_CODE_SESSION_ID unset; refusing to write plan state to a shared path (<related work item>)." >&2; exit 1; }
+  echo "plan-epic: §SP — CLAUDE_CODE_SESSION_ID unset; refusing to write plan state to a shared path (documented repository precedent)." >&2; exit 1; }
 RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/$CLAUDE_CODE_SESSION_ID/plan-epic-<EPIC>"
 rm -rf "$RUN_SCRATCH" && mkdir -p "$RUN_SCRATCH" || {
-  echo "plan-epic: §SP could not create a per-run scratch dir — refusing to write plan state to a shared path (<related work item>)." >&2; exit 1; }
+  echo "plan-epic: §SP could not create a per-run scratch dir — refusing to write plan state to a shared path (documented repository precedent)." >&2; exit 1; }
 ```
 
 ```bash
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (<related work item>)}/plan-epic-<EPIC>"   # §SP re-derive (see the open step above)
+RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/plan-epic-<EPIC>"   # §SP re-derive (see the open step above)
 # the epic, its current body, its labels, and any children it already has
 gh api repos/$REPO/issues/<EPIC> --jq '{number,title,labels:[.labels[].name],sub_issues_summary}'
 # capture the body AND its revision marker from ONE GET — reading them in two calls lets a writer
@@ -291,7 +296,7 @@ of this plan block.) What each section holds:
   skim** — what this epic delivers and why it matters, in prose, no jargon — before the
   structured plan below. It **precedes, never replaces**, the product/engineering layers
   that follow (the human-first-summary mandate from
-  [<related work item>](<repository URL>)).
+  [documented repository precedent](repository-owned record URL)).
 - **Problem & who has it** — the problem from the user's perspective: who is affected
   (include automated agents — kamp.us is a human-*and*-agent surface), and why it matters
   now. Grounded in the brief + the existing product, not invented. This is the section
@@ -304,7 +309,7 @@ of this plan block.) What each section holds:
   stories produce thin tasks. Each story should be specific enough to demo. Actors include
   agents where the surface is agent-facing. **These stories are what you slice the children from
   in Step 3, and every child traces back to one** — so write them first and write them well.
-  A story that depends on an unresolved product decision becomes a `type:decision` child (Step
+  A story that depends on an unresolved product decision becomes a `$PIPELINE_WORK_ITEM_TYPE` child (Step
   1); don't bury the fork inside a vague story.
 
   **The story spine MUST be an ordered (`1.`) list — the story's number *is* its id, and the
@@ -320,7 +325,7 @@ of this plan block.) What each section holds:
   ```markdown
   ### User stories
 
-  1. As a yazar, I want to draft a başlık, so that I can publish it when it's ready.
+  1. As a earned contributor state, I want to draft a başlık, so that I can publish it when it's ready.
   2. As a moderator, I want reported entries in a review queue, so that I can act on them.
   3. As an agent, I want a stable fate view for the queue, so that I can drive it headless.
   ```
@@ -335,7 +340,7 @@ of this plan block.) What each section holds:
   deliberately doesn't (the brief's out-of-scope, sharpened).
 - **Resolved questions** — each open question from the brief, answered, with the one-line
   rationale grounded in the codebase. This is where the planning judgment shows. Genuine
-  human-judgment forks are carved as `type:decision` children instead of answered here.
+  human-judgment forks are carved as `$PIPELINE_WORK_ITEM_TYPE` children instead of answered here.
 - **Approach** — the shape of the solution: the modules/layers involved, the data flow, the
   conventions it must honor (cite the ADR/pattern docs). Enough that the child issues don't
   each re-derive the architecture. **No specific file paths or code snippets** — name modules
@@ -373,7 +378,7 @@ UI → tests) that delivers one narrow-but-complete piece of user-visible value,
 its own. Prefer **many thin slices over few thick ones**. A child a `write-code` agent can
 pick up cold and finish in a PR or two, with an unambiguous "done".
 
-`type:decision` and `type:investigation` children are the exception to "vertical slice" —
+`$PIPELINE_WORK_ITEM_TYPE` and `$PIPELINE_WORK_ITEM_TYPE` children are the exception to "vertical slice" —
 they produce a *record* (an ADR via `/adr`, or a diagnosis), not a layered code change. They
 still trace to the stories or forks they unblock.
 
@@ -432,7 +437,7 @@ The invariants you must hold:
   verifiable contract; `no` for config, docs, scaffolding, or an operational step. It's
   advice to write-code, not a gate.
 - **Containment marker stamped from the cycle-doc hook** (see *Stamp the containment marker*
-  below). When the repo has a `product-development-cycle.md`, every child carries a
+  below). When the repo has a `$PIPELINE_DEVELOPMENT_CYCLE_POLICY`, every child carries a
   `**Containment:**` line; when it's absent the step no-ops and children carry `none` (or no
   line). The marker's grammar is defined once in the formats contract — you stamp it, you don't
   re-derive it.
@@ -449,13 +454,13 @@ double-dispatch, or a decomposition that overlaps existing work creates **zero d
 This is the emission-code half of the skill's "re-runs reconcile" promise: the epic-lock
 (§Acquire the epic-lock) only serializes *concurrent* runs, it does **not** stop a *sequential*
 re-dispatch from re-minting a set the epic already has — a prior run's children, or open work
-another issue already tracks (the <related work item>/<related work item>/<related work item> set re-minted as <related work item>/<related work item>/<related work item> ~51s
-later; <related work item> and <related work item> the same verdict-resolver work in two places).
+another issue already tracks (the documented repository precedent/documented repository precedent/documented repository precedent set re-minted as documented repository precedent/documented repository precedent/documented repository precedent ~51s
+later; documented repository precedent and documented repository precedent the same verdict-resolver work in two places).
 
 **Read both sets once, before the create loop:**
 
 ```bash
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (<related work item>)}/plan-epic-<EPIC>"   # §SP re-derive (see the open step above)
+RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/plan-epic-<EPIC>"   # §SP re-derive (see the open step above)
 # 1. Already-emitted OPEN children of THIS epic — the re-dispatch idempotency set. A re-run must
 #    SKIP any proposed child that matches one of these (reconcile, don't re-create). The sub-issue
 #    list is the source of truth for what the epic already spawned; on a mixed open/closed epic
@@ -491,25 +496,25 @@ rationale and let `review-plan` weigh in.
 
 Create each child via REST. **Compose its format-2 body with
 `pipeline-cli intake-compose sub-issue`** — the one tested composer for the intake-formats
-prose contract §2 — rather than hand-re-deriving the format here (the <related work item> cite-the-verb
+prose contract §2 — rather than hand-re-deriving the format here (the documented repository precedent cite-the-verb
 rule). Hand it the child's fields as a spec JSON and it emits the body **by value** on
 stdout, so multi-line markdown and backticks survive the shell without a `<<EOF` heredoc; it
 enforces the format-2 invariants (the ≥ 1-acceptance-criterion hard floor) and owns the
 leak-safe handoff — a stdout-only verb has no scratchpad file to `@`-reference, so the
-`gh api -f body=@<path>` machine-local-path leak (<related work item> / <related work item> / PR <related work item>) is unreachable.
+`gh api -f body=@<path>` machine-local-path leak (documented repository precedent / documented repository precedent / PR documented repository precedent) is unreachable.
 Allocate the **spec** file with `mktemp` *inside* `$RUN_SCRATCH` (§SP), not a fixed
 `/tmp/plan-epic-child.json`: concurrent `plan-epic` runs on sibling epics share `/tmp`, so a
 fixed path lets one run's spec clobber another's before it is composed, filing a child under the
 right title but with a **sibling epic's `### What to build` + acceptance criteria** — a
 cross-epic body bleed the structural floor can't see (it checks markers, never body fidelity),
-caught only by `review-plan`'s non-blocking advisor (<related work item>, the same silent-clobber class as
-<related work item>'s `prref.txt`). The loop writes one spec per child, so the `mktemp` template matters here
+caught only by `review-plan`'s non-blocking advisor (documented repository precedent, the same silent-clobber class as
+documented repository precedent's `prref.txt`). The loop writes one spec per child, so the `mktemp` template matters here
 even within a single run:
 
 ```bash
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (<related work item>)}/plan-epic-<EPIC>"   # §SP re-derive (see the open step above)
+RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/plan-epic-<EPIC>"   # §SP re-derive (see the open step above)
 mkdir -p "$RUN_SCRATCH" || exit 1
-# write this child's spec into a per-run temp file, never a shared fixed path (<related work item>)
+# write this child's spec into a per-run temp file, never a shared fixed path (documented repository precedent)
 CHILD_SPEC_FILE="$(mktemp "$RUN_SCRATCH/child.XXXXXX")"
 cat > "$CHILD_SPEC_FILE" <<'EOF'
 {
@@ -522,13 +527,13 @@ EOF
 # The verb composes the format-2 body per the contract and emits it BY VALUE to stdout — no
 # hand-re-derived `### What to build` / `### Acceptance criteria`, no `-f body=@file` leak.
 BODY="$(pipeline-cli intake-compose sub-issue --spec "$CHILD_SPEC_FILE")"
-# ATOMIC create — body AND its type/priority/status:planned labels in ONE REST write. `POST /issues`
+# ATOMIC create — body AND its type/priority/$PIPELINE_STATUS labels in ONE REST write. `POST /issues`
 # accepts `labels` inline, so an interrupted run can never leave a label-less child: the create
 # either lands the issue WITH its labels or creates nothing. (Values chosen per the paragraph below.)
 gh api repos/$REPO/issues \
   -f title="<sharp single-unit title>" \
   -f body="$BODY" \
-  -f "labels[]=type:feature" -f "labels[]=p2" -f "labels[]=status:planned" \
+  -f "labels[]=$PIPELINE_WORK_ITEM_TYPE" -f "labels[]=p2" -f "labels[]=$PIPELINE_STATUS" \
   --jq '{number,id}'
 ```
 
@@ -536,22 +541,22 @@ Capture both `number` and `id` from the create — Step 4 links by the `id`, so 
 to re-fetch it. **Link the child as a native sub-issue (Step 4) immediately after this create** —
 the sooner the epic registers the child, the narrower the window a re-dispatch has to reconcile.
 
-Children get their own type from the work they are (`type:feature`, `type:chore`,
-`type:bug`, `type:decision`, `type:investigation`) — **not** inherited from the epic — plus a
-priority. Do **not** label children `status:needs-triage`: they were born from a triaged plan,
+Children get their own type from the work they are (`$PIPELINE_WORK_ITEM_TYPE`, `$PIPELINE_WORK_ITEM_TYPE`,
+`$PIPELINE_WORK_ITEM_TYPE`, `$PIPELINE_WORK_ITEM_TYPE`, `$PIPELINE_WORK_ITEM_TYPE`) — **not** inherited from the epic — plus a
+priority. Do **not** label children `$PIPELINE_STATUS_TRIAGE`: they were born from a triaged plan,
 they don't re-enter triage. But they are **not yet pickable either** — they're born
-**`status:planned`**, the pre-gate state. `write-code` keys on `status:triaged`, so a
-`status:planned` child stays unpickable until the `review-plan` gate validates the ledger and
-flips `planned → status:triaged` (per the applicable safety invariant — that flip *is* the whole enforcement
+**`$PIPELINE_STATUS`**, the pre-gate state. `write-code` keys on `$PIPELINE_STATUS_CLASSIFIED`, so a
+`$PIPELINE_STATUS` child stays unpickable until the `review-plan` gate validates the ledger and
+flips `planned → $PIPELINE_STATUS_CLASSIFIED` (per the applicable safety invariant — that flip *is* the whole enforcement
 mechanism: an unverified-but-pickable child is unrepresentable). This is the second half of the
 transactional-emission guarantee: because the birth labels go on **at create** (atomic, above) and
-the birth state is `status:planned` — not `status:triaged` — a half-finished run leaves **no
+the birth state is `$PIPELINE_STATUS` — not `$PIPELINE_STATUS_CLASSIFIED` — a half-finished run leaves **no
 pickable orphan**. A child interrupted after its atomic create but before its Step-4 sub-issue
-link carries `status:planned` (so `write-code` skips it) and is reconciled by the idempotency guard
-on the next run — it is never a label-less, pickable ghost (the <related work item>/<related work item>/<related work item> failure mode, born
+link carries `$PIPELINE_STATUS` (so `write-code` skips it) and is reconciled by the idempotency guard
+on the next run — it is never a label-less, pickable ghost (the documented repository precedent/documented repository precedent/documented repository precedent failure mode, born
 body-first with labels applied after).
 
-The child's `type:*` + `p*` + `status:planned` are therefore applied **inline in the create call
+The child's `$PIPELINE_WORK_ITEM_TYPE` + `p*` + `$PIPELINE_STATUS` are therefore applied **inline in the create call
 above**, never as a separate follow-up write. The standalone `POST .../labels` endpoint is
 **additive** (it appends, it doesn't replace) — reserve it for the re-plan *Amend* path, where you
 adjust labels on an **already-existing** child:
@@ -560,7 +565,7 @@ adjust labels on an **already-existing** child:
 # amend-only — append/adjust labels on an EXISTING child. Fresh children are labeled AT CREATE (above),
 # so this never runs on the create path; using it there would reopen the label-less-orphan window.
 gh api repos/$REPO/issues/<CHILD>/labels \
-  -f "labels[]=type:feature" -f "labels[]=p2" -f "labels[]=status:planned"
+  -f "labels[]=$PIPELINE_WORK_ITEM_TYPE" -f "labels[]=p2" -f "labels[]=$PIPELINE_STATUS"
 ```
 
 (Type and priority are your call as planner, the same authority triage has — you're
@@ -569,7 +574,7 @@ the one who understands the slice.)
 ### Inherit the epic's milestone (when it has one)
 
 Milestone is one more attribute applied at child creation, alongside the labels above —
-but unlike `type:*`/`p*`/`status:planned` it is **conditional and inherited, not your call
+but unlike `$PIPELINE_WORK_ITEM_TYPE`/`p*`/`$PIPELINE_STATUS` it is **conditional and inherited, not your call
 as planner**. A child **inherits the parent epic's milestone when the epic has one**, so a
 campaign milestone's burndown is **complete by construction**: if a "Search" epic is in the
 "Search" milestone, every child it spawns belongs to "Search" too, and the milestone can
@@ -606,12 +611,12 @@ re-derive it here.** The *why* is the rule that repository-specific release-cycl
 (agents own deployment / humans own release).
 
 Consult the cycle-doc hook using the contract's **one canonical probe** — a content read of
-the well-known repo-root `product-development-cycle.md`. Run it once per plan; absent ⇒ this
+the well-known repo-root `$PIPELINE_DEVELOPMENT_CYCLE_POLICY`. Run it once per plan; absent ⇒ this
 whole step no-ops (graceful absence, the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository):
 
 ```bash
 # the formats-contract canonical probe — absent ⇒ no marker stamped (children carry `none`)
-if gh api "repos/$REPO/contents/product-development-cycle.md" --jq '.path' >/dev/null 2>&1; then
+if gh api "repos/$REPO/contents/$PIPELINE_DEVELOPMENT_CYCLE_POLICY" --jq '.path' >/dev/null 2>&1; then
   CYCLE_DOC=present
 else
   CYCLE_DOC=absent
@@ -620,7 +625,7 @@ fi
 
 - **Cycle doc present.** For each child, consult the cycle's policy and decide the child's
   containment **as the planner** — the same authority you already exercise for the child's
-  `type:*` and `p*`. the adopting repository's cycle (per its `product-development-cycle.md`): a **user-facing**
+  `$PIPELINE_WORK_ITEM_TYPE` and `p*`. the adopting repository's cycle (per its `$PIPELINE_DEVELOPMENT_CYCLE_POLICY`): a **user-facing**
   child ships dark, so it carries `**Containment:** flag (default-off)`; an
   **internal / refactor / infra / docs** child has no user-facing surface to contain, so it
   carries `**Containment:** exempt (<reason>)` with the reason naming which (e.g. `exempt (docs)`,
@@ -647,27 +652,27 @@ consuming UI. So when this plan contains **any** user-facing (dark-ship) child �
 release-blocking child of its own**, never an optional tail.
 
 This is the plan-epic side of the vertical-completeness gate (the applicable safety invariant,
-<related work item>). Its runtime enforcer is `pipeline-cli reachability-guard check <flag-key>` (<related work item>) and the
-`/release` refusal (<related work item>) is its sibling consumer — the emitted child and both enforcers key off
+documented repository precedent). Its runtime enforcer is `pipeline-cli reachability-guard check <flag-key>` (documented repository precedent) and the
+`/release` refusal (documented repository precedent) is its sibling consumer — the emitted child and both enforcers key off
 **one** notion of reachability, defined once in the applicable safety invariant; don't invent a second here.
 
-**One reachability child per graduating flag key.** A user-facing epic ships behind a Flagship
+**One reachability child per graduating flag key.** A user-facing epic ships behind a configured release service
 flag key (the `flag (default-off)` containment); emit one reachability child per such key. Its
 `### What to build` names **both** halves of the reachability rule that defines both halves of the required behavior reachability contract concretely, so a
 `write-code` agent knows what to build and `reachability-guard` can verify it:
 
-- **A consuming UI** — a component under `apps/web/src/**` that references the flag-key constant
-  declared in `apps/web/src/flags/keys.ts` (beyond the definition itself), so the feature is
+- **A consuming UI** — a component under `$PIPELINE_APPLICATION_PATH/src/**` that references the flag-key constant
+  declared in `$PIPELINE_APPLICATION_PATH/src/flags/keys.ts` (beyond the definition itself), so the feature is
   actually rendered to a user when the flag is on (the applicable safety invariant §1a).
-- **A registered journey e2e** — a spec under `apps/web/tests/e2e/` whose `test`/`describe` title
+- **A registered journey e2e** — a spec under `$PIPELINE_APPLICATION_PATH/tests/e2e/` whose `test`/`describe` title
   carries the `@journey:<flag-key>` tag, exercising the user's path through the feature (the applicable safety invariant §2).
 
 The child follows the normal format-2 shape, preserving every existing invariant: it carries a
 `**Stories:**` line as **bare numbers** tracing to the user-facing story(ies) it makes reachable
 (this child is what *covers* the "as a user I can see/use X" story — not scope creep), ≥ 1
 acceptance criterion phrased against the reachability contract (e.g. *"`pipeline-cli
-reachability-guard check <flag-key>` passes — a `.tsx` under `apps/web/src/**` consumes the
-flag-key constant AND a `@journey:<flag-key>` e2e under `apps/web/tests/e2e/` is registered"*),
+reachability-guard check <flag-key>` passes — a `.tsx` under `$PIPELINE_APPLICATION_PATH/src/**` consumes the
+flag-key constant AND a `@journey:<flag-key>` e2e under `$PIPELINE_APPLICATION_PATH/tests/e2e/` is registered"*),
 and `**Containment:** flag (default-off)` (it is itself user-facing). A genuinely UI-less flag is
 the applicable safety invariant §3 exemption (a `@reachability-exempt: <reason>` marker in `keys.ts`), not a missing
 child — if the epic's flag is exempt, record that in the plan and emit no reachability child.
@@ -741,7 +746,7 @@ of, or a phase after, the backend slices it consumes — and carry a `requires: 
 slice whose surface it renders, so it sits on the critical path to graduation. A reachability
 child that nothing gates on, or that lands in a trailing catch-all phase no other slice depends
 on, *is* the "optional tail" this exists to prevent (the applicable safety invariant); the graduation the `/release`
-refusal (<related work item>) blocks and the child this topology pins are the same reachability edge.
+refusal (documented repository precedent) blocks and the child this topology pins are the same reachability edge.
 
 ```markdown
 ## Dependencies
@@ -761,10 +766,10 @@ The epic body is **load-bearing shared state** — its `## Dependencies` topolog
 `write-code` reads to decide what's pickable. A second `plan-epic` run, or a `review-plan`
 child-flip, or a re-plan loop, can edit the same body concurrently; a blind whole-body
 `PATCH` would silently clobber that edit (the lost-update this step exists to prevent — issue
-<related work item>, same last-write-wins family as the issue-claim race
-[`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §7 (issue <related work item>) and the
+documented repository precedent, same last-write-wins family as the issue-claim race
+[`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §7 (issue documented repository precedent) and the
 SHA-bound verdict contract, the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA
-(issue <related work item>)). GitHub's issue `PATCH` honors **no** `If-Match`/`If-Unmodified-Since` — there is no
+(issue documented repository precedent)). GitHub's issue `PATCH` honors **no** `If-Match`/`If-Unmodified-Since` — there is no
 native compare-and-swap — so the write is made safe by **two layers**, in order:
 
 **Layer 1 — surgical section replacement (collision avoidance).** Don't reassemble the body
@@ -773,7 +778,7 @@ immediately before the write, replace **only the section you changed** (the `## 
 block, and — when re-planning — the `## Plan (plan-epic)` block), and leave every other byte of
 the live body exactly as you just read it. The deterministic splice itself — the heading-count
 guards, the first-time-append vs re-plan-in-place decision, and the byte-preserving section
-replacement — is the `pipeline-cli epic-splice apply` verb (<related work item>, extracted from <related work item>); the
+replacement — is the `pipeline-cli epic-splice apply` verb (documented repository precedent, extracted from documented repository precedent); the
 block below calls it rather than hand-composing the transform. A concurrent edit to a *different*
 part of the body (the brief, a sibling's handoff note, a label-driven addition) then cannot
 collide with your write at all — the verb preserved it verbatim because it never reconstructed it.
@@ -802,11 +807,11 @@ loudly** if `deps.md` was not regenerated since the base it splices onto was rea
 # NO `rm -rf` here (that is the OPEN step's job only): clearing it would delete exactly the
 # snapshot this step reads back, which is the whole failure §SP rule 3 exists to prevent.
 [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || {
-  echo "plan-epic: §SP — CLAUDE_CODE_SESSION_ID unset; cannot re-derive the Step 1 scratch namespace (<related work item>)." >&2; exit 1; }
+  echo "plan-epic: §SP — CLAUDE_CODE_SESSION_ID unset; cannot re-derive the Step 1 scratch namespace (documented repository precedent)." >&2; exit 1; }
 RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/$CLAUDE_CODE_SESSION_ID/plan-epic-<EPIC>"
 # Fail closed if Step 1's state isn't there: the freshness guard below compares file mtimes, and
 # `[ existing -nt missing ]` is TRUE in bash — so a missing base would let a STALE block splice
-# through silently. Assert presence first; never let the guard decide on absent files (<related work item>).
+# through silently. Assert presence first; never let the guard decide on absent files (documented repository precedent).
 for f in current.md updated-at.txt; do
   [ -s "$RUN_SCRATCH/$f" ] || {
     echo "plan-epic: §SP — $RUN_SCRATCH/$f is missing/empty; Step 1's snapshot did not survive." >&2
@@ -862,7 +867,7 @@ for attempt in 1 2 3; do
   #      AFTER it — so deps.md must be newer than current.md (`-nt` = "newer than"). If it isn't, the
   #      re-derive precondition is unmet (you re-invoked without regenerating the block off the fresh
   #      base): a stale block that references the wrong child set. Abort loudly, don't write — this is
-  #      what stops the `continue`-era footgun of re-splicing the originally-derived block (issue <related work item>).
+  #      what stops the `continue`-era footgun of re-splicing the originally-derived block (issue documented repository precedent).
   #      `-nt` alone CANNOT carry this check: `[ existing -nt missing ]` is TRUE in bash, so if the
   #      derived block is absent the negation is false and the guard PASSES SILENTLY — a stale/no
   #      block splices through. Assert the file exists and is non-empty FIRST, then compare mtimes.
@@ -877,7 +882,7 @@ for attempt in 1 2 3; do
   fi
 
   # 3. splice/append the changed section(s) via the shared verb — `pipeline-cli epic-splice apply`
-  #    owns the deterministic transform (<related work item>, extracted from <related work item>): the exact-`## Dependencies`
+  #    owns the deterministic transform (documented repository precedent, extracted from documented repository precedent): the exact-`## Dependencies`
   #    heading-count guards (0 + first-time → APPEND to EOF; exactly 1 → SPLICE in place; 0 on a
   #    re-plan or >1 ever → corrupt, exit 1) and, on a re-plan, the in-place `## Plan (plan-epic)`
   #    splice with its own exactly-one-heading guard. Everything OUTSIDE the replaced section(s) is
@@ -980,19 +985,19 @@ exist and are linked, and every story maps to a child (the coverage invariant).
 
 An epic often **graduates from a resolved investigation**: the investigation's diagnosis is
 folded into an epic whose brief declares its provenance (e.g. `Emitted from resolved
-investigation <related work item>`). Once you've planned that epic, its work is carried forward by the epic +
+investigation documented repository precedent`). Once you've planned that epic, its work is carried forward by the epic +
 its children — so the **source investigation must be closed** as the durable "graduated into
-#EPIC" record, not left open as `status:triaged` looking pickable. Graduation had no
+#EPIC" record, not left open as `$PIPELINE_STATUS_CLASSIFIED` looking pickable. Graduation had no
 close-on-source forcing function, so graduated investigations lingered open and inflated the
-backlog until a manual dedup sweep hand-closed them (<related work item>). plan-epic is the deterministic step
+backlog until a manual dedup sweep hand-closed them (documented repository precedent). plan-epic is the deterministic step
 that always touches a graduated epic, so it closes the source here rather than trusting a human to
 remember — the same enforce-at-the-path discipline the wayfinder emission close applies to maps.
 
 Scan the **brief** (the top section you read in Step 1) for the graduation-provenance marker and
-close each source it names — but only a genuine `type:investigation` source, idempotently:
+close each source it names — but only a genuine `$PIPELINE_WORK_ITEM_TYPE` source, idempotently:
 
 ```bash
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (<related work item>)}/plan-epic-<EPIC>"   # §SP re-derive (see the open step above)
+RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/plan-epic-<EPIC>"   # §SP re-derive (see the open step above)
 [ -s "$RUN_SCRATCH/current.md" ] || { echo "plan-epic: §SP — Step 1's current.md did not survive; re-run Step 1 in THIS session." >&2; exit 1; }
 # Extract every source the brief graduated from — tolerant of phrasing ("Emitted from resolved
 # investigation #N", "from resolved investigation #N"). The `resolved investigation` anchor is what
@@ -1000,20 +1005,20 @@ RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session 
 SOURCES=$(grep -oiE 'resolved investigation #[0-9]+' "$RUN_SCRATCH/current.md" \
   | grep -oE '[0-9]+' | sort -u)
 for SRC in $SOURCES; do
-  # Guard, fail-safe: close ONLY an open type:investigation — never a referenced epic/decision/bug,
+  # Guard, fail-safe: close ONLY an open $PIPELINE_WORK_ITEM_TYPE — never a referenced epic/decision/bug,
   # and never re-close a closed source (idempotent, so a re-plan run is a clean no-op). This is what
   # keeps legitimately-open downstream artifacts (the epic itself, sibling epics) untouched.
   read -r STATE TYPES < <(gh api repos/$REPO/issues/$SRC \
     --jq '[.state, ([.labels[].name] | map(select(startswith("type:"))) | join(","))] | @tsv')
   case "$STATE:$TYPES" in
-    open:*type:investigation*) ;;
+    open:*$PIPELINE_WORK_ITEM_TYPE) ;;
     *) echo "plan-epic: source #$SRC is $STATE ($TYPES) — not an open investigation, skipping close."; continue ;;
   esac
   # Audit trail (AC): the `tracker graduate` verb owns the graduation-close envelope (the applicable safety invariant,
-  # <related work item>) — it posts the source → artifact provenance record so a reader can trace the graduation,
+  # documented repository precedent) — it posts the source → artifact provenance record so a reader can trace the graduation,
   # then closes the source as completed (the work graduated, it wasn't abandoned — distinct from
   # triage's not_planned). Don't hand-roll the comment + `state_reason=completed` PATCH; that inline
-  # re-derivation is what the adoption lint (<related work item>) flags.
+  # re-derivation is what the adoption lint (documented repository precedent) flags.
   pipeline-cli tracker graduate "$SRC" \
     --artifact "epic #<EPIC> (planned by plan-epic)" \
     --note "closing this investigation as the durable \`graduated into #<EPIC>\` record. Its diagnosis is carried forward by the epic and its planned children." >/dev/null
@@ -1083,7 +1088,7 @@ top, as always. The re-plan write goes through **the same guarded read-modify-wr
 Step 5** — surgical section splice + optimistic `updated_at` recheck, never a blind
 whole-body `PATCH`. Re-plan is exactly the concurrency hot-spot the guard exists for: a
 re-plan loop racing a fresh `plan-epic` run or a `review-plan` child-flip is the
-lost-update case in issue <related work item>. Write the fresh `## Plan (plan-epic)` block to
+lost-update case in issue documented repository precedent. Write the fresh `## Plan (plan-epic)` block to
 `$RUN_SCRATCH/plan.md`, the fresh `## Dependencies` block to
 `$RUN_SCRATCH/deps.md`, and run the Step 5 loop with `REPLAN=1` so it splices
 **both** sections into the freshly-read live body in place (the live body already has exactly one
@@ -1132,7 +1137,7 @@ children and the open backlog so a re-dispatch or overlap mints no duplicate) an
 sub-issues (Step 4), pin the full body with its `## Dependencies` topology (Step 5), and close the
 graduated source investigation when the epic declares one (Step 6). Re-runs reconcile.
 
-Acquire the `status:planning` epic-lock before you mutate (see [§Acquire the
+Acquire the `$PIPELINE_STATUS_PLANNING` epic-lock before you mutate (see [§Acquire the
 epic-lock](#acquire-the-epic-lock-before-you-mutate--release-it-on-every-exit)) and **release
 it when you finish — on success, park, or failure.** A lock left held wedges the epic against
 every later `plan-epic`/`review-plan` run until a human clears it.
@@ -1149,7 +1154,7 @@ pipeline. The shared label semantics and the body/comment/dependency/story forma
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md); the decision to make
 plan-epic's output PRD-grade, story-driven, coverage-enforced, and autonomous (with the
 personal PRD/orchestrator harness deliberately kept out of the repo) is the applicable safety invariant. Your input is a
-`type:epic` + `status:triaged` issue from `triage`; your output — the epic body's PRD-grade
+`$PIPELINE_TYPE_EPIC` + `$PIPELINE_STATUS_CLASSIFIED` issue from `triage`; your output — the epic body's PRD-grade
 plan + `## Dependencies`, and the linked sub-issues with their story traces and acceptance
 criteria — is what `write-code` reads to pick, sequence, and execute the work, once the
-`review-plan` gate has flipped each child `status:planned → status:triaged` (the applicable safety invariant).
+`review-plan` gate has flipped each child `$PIPELINE_STATUS → $PIPELINE_STATUS_CLASSIFIED` (the applicable safety invariant).

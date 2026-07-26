@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Portability safety net: assert the foreign-install / graceful-absence guarantee that
 # the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository (repo-as-config portability) and the rule that repository-specific release-cycle behavior no-ops when the repository has no cycle document §2 (agents deploy / humans release)
-# promise — with NO product-development-cycle.md at the repo root, every cycle-aware skill
+# promise — with NO $PIPELINE_DEVELOPMENT_CYCLE_POLICY at the repo root, every cycle-aware skill
 # no-ops cleanly:
 #
 #   plan-epic   stamps no flag marker  (children carry `none`/omit the Containment line)
@@ -11,13 +11,13 @@
 #
 # Two layers, both runnable in CI/locally (see .github/workflows/ci.yml):
 #   1. STATIC wiring — each of the four skills cites THE single canonical absence-probe
-#      (the well-known repo path `product-development-cycle.md`, formats §1) and pairs it
+#      (the well-known repo path `$PIPELINE_DEVELOPMENT_CYCLE_POLICY`, formats §1) and pairs it
 #      with an absent⇒no-op branch. No skill hardcodes a flag or assumes the doc exists.
 #   2. HERMETIC runtime — run the canonical working-tree probe against a temp repo root
 #      with no cycle doc, assert it resolves `absent` and the no-op default holds. This is
-#      the executable scenario walkthrough of the doc-absent branch (issue <related work item>, epic <related work item>).
+#      the executable scenario walkthrough of the doc-absent branch (issue documented repository precedent, epic documented repository precedent).
 #
-# This guards the COMPOSITION of <related work item> (the hook) + <related work item>–<related work item> (the four skill changes): if a
+# This guards the COMPOSITION of documented repository precedent (the hook) + documented repository precedent–documented repository precedent (the four skill changes): if a
 # future edit drops the probe or flips an absent branch to a hardcoded flag, this fails the
 # build instead of silently breaking portability.
 set -euo pipefail
@@ -27,7 +27,7 @@ set -euo pipefail
 skills_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # The one well-known cycle-doc path every consumer probes (formats §1, single source).
-CYCLE_DOC_PATH="product-development-cycle.md"
+CYCLE_DOC_PATH="$PIPELINE_DEVELOPMENT_CYCLE_POLICY"
 # The canonical probe string each skill must cite — a content read against the well-known
 # path. Anchored on the literal path so a renamed/forked probe is caught.
 PROBE_NEEDLE="contents/${CYCLE_DOC_PATH}"
@@ -90,13 +90,13 @@ done
 
 # Layer 2: hermetic runtime walkthrough.
 # Execute the canonical working-tree form of the probe (formats §1: a skill on a local tree
-# may substitute `test -f product-development-cycle.md` for the gh api read — same probe,
+# may substitute `test -f $PIPELINE_DEVELOPMENT_CYCLE_POLICY` for the gh api read — same probe,
 # same well-known path, same absent⇒no-op rule) against a synthetic repo root that has NO
 # cycle doc. This is the doc-absent scenario actually run, not just asserted in prose.
 tmp_root="$(mktemp -d)"
 trap 'rm -rf "$tmp_root"' EXIT
 
-# A foreign install: a repo root with the usual files but no product-development-cycle.md.
+# A foreign install: a repo root with the usual files but no $PIPELINE_DEVELOPMENT_CYCLE_POLICY.
 touch "$tmp_root/README.md" "$tmp_root/CLAUDE.md"
 
 probe_cycle_doc() { # the canonical probe, working-tree form — echoes present|absent

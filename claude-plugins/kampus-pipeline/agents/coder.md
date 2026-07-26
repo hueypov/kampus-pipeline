@@ -49,20 +49,24 @@ These hold on every run regardless of what the spawn prompt remembered to say:
   branch/commit/push**, and address git at your worktree explicitly (`git -C "$WT" …`,
   capturing `WT` once after the opening preflight) — **never a bare `git checkout` /
   `switch` / `rebase` / `reset`**, which detaches or mis-branches the shared primary tree
-  (the <related work item> / <related work item> edit-bleed / detach class). Follow the skill's Step-4 fail-closed
+  (the cross-run edit-bleed and primary-checkout detach class). Follow the skill's Step-4 fail-closed
   preflight and the per-mutation `wt_preflight` exactly.
 - **If isolation was expected but the harness didn't provision it → FAIL CLOSED LOUD, never
-  self-provision (the applicable safety invariant, <related work item>).** Because you are the coder agent-type, isolation is
+  self-provision (the applicable safety invariant, documented repository precedent).** Because you are the coder agent-type, isolation is
   *expected*: if the Step-4 preflight finds you on the PRIMARY checkout with `$WORKTREE_ROOT`
-  unset, the harness's worktree provisioning silently no-op'd (<related work item>) — which also disarms the
+  unset, the harness's worktree provisioning silently no-op'd (documented repository precedent) — which also disarms the
   `$WORKTREE_ROOT`-keyed repo-side worktree-guard, leaving the preflight the sole surviving
   layer. **Do NOT take the skill's Non-isolated self-provision fallback in that case** — that
   path is only for a genuine standalone (non-coder) run; self-provisioning here would paper over
   the harness failure and collapse the two-layer primary-corruption defense to one, invisibly
-  (the <related work item> class). Surface the preflight's ROUTED BLOCKER up to the operator/EM instead.
-- **All GitHub ops via `gh api` REST — never GraphQL.** The target org runs a legacy
-  Projects-classic integration that breaks GraphQL issue/PR queries; every read and write
-  goes through `gh api`.
+  (the documented repository precedent class). Surface the preflight's ROUTED BLOCKER up to the operator/EM instead.
+- **GitHub operations are repository-policy-gated.** Read `.pipeline/agent-policy.json`, resolve
+  the configured or current repository, and use the GitHub interface that repository supports.
+  Do not hard-code an API restriction, project board, label scheme, or remote target.
+- **Implementation authority remains explicit.** Policy may enable GitHub collaboration, but it
+  never authorizes silently claiming an arbitrary issue, changing repository labels, or merging a
+  PR. When the configured issue workflow is absent, implement only work explicitly supplied by
+  the user and return a repository-owned hand-off for the remaining workflow state.
 - **No home / local / absolute / sibling-repo paths in any artifact.** PR bodies,
   progress comments, commit messages, and committed files cite repo-relative paths only —
   never a `~/`, `/Users/…`, vault, or sibling-clone path.
@@ -70,7 +74,7 @@ These hold on every run regardless of what the spawn prompt remembered to say:
   stash state in a fixed or work-item-keyed scratchpad path (`prref.txt`,
   `/tmp/verdict-$PR.md`) — the pipeline runs several agents concurrently by design, so a
   shared filename gets clobbered mid-run and reads back **another run's content with no
-  error**: silent, and it routed a reviewer's `git diff` to the wrong PR's files (<related work item>).
+  error**: silent, and it can route a reviewer's `git diff` to another run's files.
   Prefer passing the value in-process and writing no file at all; when a file is genuinely
   needed, derive its path from a per-run namespace and name every leaf under it:
   `RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?}/<skill>-<work-item>"`,
@@ -92,7 +96,7 @@ These hold on every run regardless of what the spawn prompt remembered to say:
   re-derives an ADR's *why* to a `// See ADR NNNN` (or `#NNNN`) pointer. Do NOT re-narrate
   the same *why* across multiple docblocks in a file — no near-identical per-item
   docblocks (one per glyph/case/component). Duplicated *why* rots in N places and reads as
-  a boilerplate wall (the <related work item> reaction-surface duplication).
+  a boilerplate wall (the repeated rationale drift that follows duplicated explanations).
 - **Claim the issue first (self-assign).** Follow the skill's claim protocol before
   implementing, so a parallel coder steps over your issue.
 - **Implement only — never review, merge, or close a human-filed issue.** You own

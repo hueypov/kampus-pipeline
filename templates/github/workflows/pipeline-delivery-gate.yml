@@ -1,0 +1,117 @@
+name: pipeline-delivery-gate
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, closed]
+  issue_comment:
+    types: [created, edited]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions:
+  contents: read
+  checks: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  verify-current-head:
+    if: >-
+      (github.event_name != 'pull_request' ||
+      (github.event.action != 'closed' && !github.event.pull_request.draft)) &&
+      (github.event_name != 'issue_comment' || github.event.issue.pull_request)
+    name: Verify current-head delivery evidence
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.6.0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Install toolkit dependencies
+        run: pnpm --dir .pipeline/toolkit install --frozen-lockfile
+      - name: Resolve current head and route required gates
+        id: route
+        shell: bash
+        run: |
+          set -euo pipefail
+          head_json="$(./.pipeline/toolkit/bin/pipeline cli review-head resolve --pr "$PR_NUMBER")"
+          head_sha="$(node -e 'const value = JSON.parse(process.argv[1]); process.stdout.write(value.sha)' "$head_json")"
+          printf 'head_sha=%s\n' "$head_sha" >> "$GITHUB_OUTPUT"
+
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" --jq '.[].filename' > "$RUNNER_TEMP/changed-files"
+          node - "$RUNNER_TEMP/changed-files" "$RUNNER_TEMP/gates" "$RUNNER_TEMP/required-checks" <<'NODE'
+          const fs = require("node:fs");
+          const [changedFile, gatesFile, checksFile] = process.argv.slice(2);
+          const changed = fs.readFileSync(changedFile, "utf8").split("\n").filter(Boolean);
+          const policy = JSON.parse(fs.readFileSync(".pipeline/agent-policy.json", "utf8"));
+          const review = policy.github?.review ?? {};
+          const uiPaths = review.uiPaths ?? [];
+          const requiredChecks = review.requiredChecks ?? [];
+          if (!Array.isArray(uiPaths) || !uiPaths.every((path) => typeof path === "string")) throw new Error("github.review.uiPaths must be a string array");
+          if (!Array.isArray(requiredChecks) || !requiredChecks.every((name) => typeof name === "string" && name.length > 0)) throw new Error("github.review.requiredChecks must be a non-empty-string array");
+          const gates = new Set(["code"]);
+          if (changed.some((path) => path.endsWith(".md") || path.startsWith(".decisions/") || path.startsWith(".patterns/") || path.startsWith(".glossary/"))) gates.add("doc");
+          if (changed.some((path) => path.endsWith("SKILL.md") || /(^|\/)skills\//.test(path))) gates.add("skill");
+          if (uiPaths.some((root) => changed.some((path) => path === root || path.startsWith(`${root.replace(/\/$/, "")}/`)))) gates.add("design");
+          fs.writeFileSync(gatesFile, `${[...gates].join("\n")}\n`);
+          fs.writeFileSync(checksFile, `${requiredChecks.join("\n")}\n`);
+          NODE
+      - name: Verify SHA-bound review verdicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r gate; do
+            [ -n "$gate" ] || continue
+            ./.pipeline/toolkit/bin/pipeline cli verdict read --pr "$PR_NUMBER" --gate "$gate"
+          done < "$RUNNER_TEMP/gates"
+      - name: Verify configured checks ran successfully on the current head
+        shell: bash
+        env:
+          HEAD_SHA: ${{ steps.route.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          [ -s "$RUNNER_TEMP/required-checks" ] || exit 0
+          gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100" --jq '.check_runs[] | [.name, .status, (.conclusion // "")] | @tsv' > "$RUNNER_TEMP/current-head-checks"
+          node - "$RUNNER_TEMP/required-checks" "$RUNNER_TEMP/current-head-checks" <<'NODE'
+          const fs = require("node:fs");
+          const [requiredFile, checksFile] = process.argv.slice(2);
+          const required = fs.readFileSync(requiredFile, "utf8").split("\n").filter(Boolean);
+          const checks = new Map(fs.readFileSync(checksFile, "utf8").split("\n").filter(Boolean).map((line) => line.split("\t")).map(([name, status, conclusion]) => [name, {status, conclusion}]));
+          const failures = required.flatMap((name) => {
+            const check = checks.get(name);
+            if (!check) return [`missing required check: ${name}`];
+            if (check.status !== "completed") return [`required check is not complete: ${name} (${check.status})`];
+            if (!["success", "neutral", "skipped"].includes(check.conclusion)) return [`required check did not pass: ${name} (${check.conclusion || "no conclusion"})`];
+            return [];
+          });
+          if (failures.length) throw new Error(failures.join("\n"));
+          NODE
+
+  reconcile-merged-pr:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    name: Reconcile landed merge
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Confirm GitHub recorded a landed merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '
+            if .merged == true and (.merged_at | type == "string") and (.merge_commit_sha | type == "string" and length > 0)
+            then "merged: \(.merge_commit_sha) at \(.merged_at)"
+            else error("PR closed without a reconcilable landed merge")
+            end
+          '

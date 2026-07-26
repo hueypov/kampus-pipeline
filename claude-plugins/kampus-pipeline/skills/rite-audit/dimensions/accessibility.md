@@ -4,9 +4,9 @@ Walk the rite's loop surfaces as a keyboard-and-screen-reader user would and ass
 **operable and perceivable** — no serious/critical WCAG 2.1 A/AA violations, every interactive
 element reachable and operable by keyboard with a visible focus ring, and text/UI that clears the
 AA contrast floor. Each (check, surface) pair emits one `Finding`; an inaccessible surface is an
-unmistakable FAIL, never a silent pass (story 11).
+unmistakable FAIL, never a silent pass (the failure-visibility invariant).
 
-Read [`../DIMENSIONS.md`](../DIMENSIONS.md) first — the `Finding`/`DimensionResult` shapes, the
+Read [`../DIMENSIONS.md`](../DIMENSIONS.md) first — the `Finding` / `DimensionResult` shapes, the
 status semantics, the roll-up rule, and the shared primitives (run context, route map,
 Playwright-MCP driver) are defined there and consumed here, not re-derived.
 
@@ -14,10 +14,10 @@ Playwright-MCP driver) are defined there and consumed here, not re-derived.
 
 - **`id`** — `accessibility` (this file's basename == id == the *Active dimensions* row key).
 - **`surfaces`** — uses the [`SKILL.md`](../SKILL.md) route-map keys. Two tiers:
-  - **Full rubric** (all five checks) on the **core 6 loop surfaces**: `/` (landing), `/auth`,
-    `/sozluk` + `/sozluk/:slug`, `/pano` + `/pano/yeni`, `/profile` (as the self-registered
-    çaylak), `/divan` (as the `testMod`).
-  - **axe-scan-only** (A1 + A5, the two static-scan checks) on `/u/:username` and `/search` —
+  - **Full rubric** (all five checks) on the **core 6 loop surfaces**: `$RITE_LANDING_ROUTE` (landing), `$RITE_REGISTRATION_ROUTE`,
+    `$RITE_REFERENCE_CONTENT_INDEX_ROUTE` + `$RITE_REFERENCE_CONTENT_ROUTE`, `$RITE_FEED_ROUTE` + `$RITE_SUBMISSION_ROUTE`, `$RITE_PROFILE_ROUTE` (as the self-registered
+    candidate contributor), `$RITE_REVIEW_ROUTE` (as the `reviewerFixture`).
+  - **axe-scan-only** (A1 + A5, the two static-scan checks) on `$RITE_PUBLIC_PROFILE_ROUTE` and `$RITE_SEARCH_ROUTE` —
     cross-user read surfaces worth a contrast/violation sweep but outside the keyboard-walk budget.
 - **`probe`** — for each surface, in the appropriate identity context: navigate, settle, inject +
   run axe (A1, A5), then on the full-rubric surfaces Tab-walk every interactive element (A2), read
@@ -27,33 +27,33 @@ Playwright-MCP driver) are defined there and consumed here, not re-derived.
 - **`rubric`** — the named checks **A1, A2, A3, A4, A5** below. A4 (reduced-motion) drives the
   `emulateMedia` seam ([`SKILL.md`](../SKILL.md) *Playwright MCP wiring*) to force
   `prefers-reduced-motion: reduce` on the core-6 full-rubric surfaces — a real drive-test now that
-  <related work item> landed the media-emulation seam.
+  the repository media-emulation record landed the media-emulation seam.
 
 ### Finding granularity — one Finding per (check, surface)
 
 The `Finding` key is `dimension` + `check` + `surface` (DIMENSIONS.md), so this dimension emits
 **one `Finding` per (check, surface) pair** — a failure names the exact surface it was found on
-(`surface: /pano/yeni`), never a single dimension-wide verdict that hides *where* the rite is
+(`surface: $RITE_SUBMISSION_ROUTE`), never a single dimension-wide verdict that hides *where* the rite is
 inaccessible. With five checks over the core 6 surfaces plus the two axe-scan-only surfaces
 (A1 + A5 each), that is `5×6 + 2×2 = 34` findings on a full run. The `check` names (`axe-scan`,
 `keyboard-nav`, `focus-visible`, `reduced-motion`, `color-contrast`) are stable across runs so
-<related work item> diffs cleanly.
+the repository verdict-report record diffs cleanly.
 
 ## Identity contexts (consumed from the route map / SKILL.md identity model)
 
 One browser context per identity (SKILL.md *one context per identity*), so a stale session never
 leaks authority across surfaces:
 
-- **public** (signed-out) — `/`, `/auth`, the public `/sozluk` · `/sozluk/:slug`, `/pano`,
-  `/u/:username`, `/search`.
-- **çaylak** (the fresh self-registered author the functional rite creates) — `/pano/yeni`,
-  `/profile`, and the authenticated write surfaces.
-- **testMod** (`testMod.email` / `testMod.password` from the run context) — `/divan`, the only
-  surface that resolves for an authorized (mod/yazar) viewer.
+- **public** (signed-out) — `$RITE_LANDING_ROUTE`, `$RITE_REGISTRATION_ROUTE`, the public `$RITE_REFERENCE_CONTENT_INDEX_ROUTE` · `$RITE_REFERENCE_CONTENT_ROUTE`, `$RITE_FEED_ROUTE`,
+  `$RITE_PUBLIC_PROFILE_ROUTE`, `$RITE_SEARCH_ROUTE`.
+- **candidate contributor** (the fresh self-registered author the functional rite creates) — `$RITE_SUBMISSION_ROUTE`,
+  `$RITE_PROFILE_ROUTE`, and the authenticated write surfaces.
+- **reviewerFixture** (`reviewerFixture.email` / `reviewerFixture.password` from the run context) — `$RITE_REVIEW_ROUTE`, the only
+  surface that resolves for an authorized (mod/established contributor) viewer.
 
-Run the `functional-rite` dimension first when present so the çaylak and its sandboxed artifacts
-exist; if running standalone, self-register a fresh çaylak through `/auth` exactly as that
-dimension's T1 does before walking the çaylak surfaces.
+Run the `functional-rite` dimension first when present so the candidate contributor and its sandboxed artifacts
+exist; if running standalone, self-register a fresh candidate contributor through `$RITE_REGISTRATION_ROUTE` exactly as that
+dimension's T1 does before walking the candidate contributor surfaces.
 
 ## axe-core delivery — vendored + pinned, never a CDN (Q2 ruling)
 
@@ -62,7 +62,7 @@ The static-scan checks (A1, A5) run **axe-core 4.10.2**, vendored at
 [`vendor/README.md`](./vendor/README.md)). The probe **inlines the vendored build into the
 `browser_evaluate` body** — it does not fetch from a CDN — so the scan is **CSP-immune**
 (no third-party script load to be blocked), **deterministic** (the same rule corpus every run, so
-<related work item>'s diff is stable), and **network-free** (never flakes on a CDN outage or a sandboxed-network
+the repository verdict-report record's diff is stable), and **network-free** (never flakes on a CDN outage or a sandboxed-network
 stage). Concretely: read the contents of `vendor/axe.min.js` and paste them at the marked point in
 the **axe load + run** snippet below, immediately before the `axe.run(...)` call, so the single
 `browser_evaluate` call both defines `window.axe` and runs it.
@@ -156,8 +156,8 @@ the scan **could not run** → record **BLOCKED** for that (check, surface), nev
 
 Run **after** forcing `prefers-reduced-motion: reduce` via `browser_emulate_media`. It confirms
 the media feature is actually forced (`matchMedia` reports `reduce`), then sweeps every rendered
-element for a non-trivial CSS `animation`/`transition` that the app failed to suppress under
-`reduce` — an app that respects the preference collapses these to `none`/`0s` (a
+element for a non-trivial CSS `animation` / `transition` that the app failed to suppress under
+`reduce` — an app that respects the preference collapses these to `none` / `0s` (a
 `@media (prefers-reduced-motion: reduce)` rule, or a motion-off token). A non-empty
 `unsuppressed` array is the FAIL evidence: the element + the animation/transition still running.
 
@@ -219,8 +219,8 @@ run** → record **BLOCKED** for that (check, surface), never PASS.
 
 - **check name** — `focus-visible`. **Runs on** the core 6 full-rubric surfaces only.
 - **drive** — At each Tab stop run the *focus probe* snippet; additionally read the focus probe
-  **after each route change** and **after opening any modal/sheet** (e.g. the `VouchSheet` on
-  `/divan`, opened via `vouch-button`). `browser_take_screenshot` at representative focus stops and
+  **after each route change** and **after opening any modal/sheet** (e.g. the `EndorseSheet` on
+  `$RITE_REVIEW_ROUTE`, opened via `endorse-button`). `browser_take_screenshot` at representative focus stops and
   at each transition as evidence.
 - **observe** — `visibleFocusRing` per stop (a non-`none` outline/ring/box-shadow via
   `getComputedStyle`); where focus lands after a route change and after a modal/sheet opens.
@@ -228,7 +228,7 @@ run** → record **BLOCKED** for that (check, surface), never PASS.
   **and** focus moves sensibly on route change (not lost to `<body>`) **and** moves **into** an
   opened modal/sheet (and is restored on close). **FAIL** if any focused element shows no visible
   ring, or focus is lost/stranded on a transition, or never enters an opened modal (evidence =
-  the screenshot ref + the focus-probe `boxShadow`/`outline` readout). **BLOCKED** if the surface
+  the screenshot ref + the focus-probe `boxShadow` / `outline` readout). **BLOCKED** if the surface
   would not load. `surface:` the route walked.
 
 ### A4 — reduced-motion
@@ -240,9 +240,9 @@ run** → record **BLOCKED** for that (check, surface), never PASS.
   state never leaks into the next surface's checks.
 - **observe** — `forced` (did the seam take effect — `matchMedia('(prefers-reduced-motion:
   reduce)')` reports `reduce`) and the `unsuppressed` array (elements still running a non-trivial
-  CSS `animation`/`transition` under `reduce`).
+  CSS `animation` / `transition` under `reduce`).
 - **assert / record** — **PASS** iff the feature forced ON (`forced === true`) **and** the app
-  suppressed motion (`unsuppressed` is empty — every animation/transition collapsed to `none`/`0s`
+  suppressed motion (`unsuppressed` is empty — every animation/transition collapsed to `none` / `0s`
   under `reduce`). **FAIL** if any element keeps animating under `reduce` (evidence = the
   `unsuppressed` entries: element testid + the animation/transition still running). **BLOCKED** if
   the seam did not take effect (`forced === false` — media emulation unavailable) or the surface
@@ -264,4 +264,4 @@ run** → record **BLOCKED** for that (check, surface), never PASS.
 Per [`../DIMENSIONS.md`](../DIMENSIONS.md): `accessibility` is **PASS iff every emitted `Finding`
 is PASS**; any FAIL **or** BLOCKED ⇒ the dimension FAILs. Emit all `Finding`s (one per
 (check, surface), never drop one), with axe evidence and focus screenshots, and hand the bundle to
-the harness for the <related work item> verdict report.
+the harness for the the repository verdict-report record verdict report.

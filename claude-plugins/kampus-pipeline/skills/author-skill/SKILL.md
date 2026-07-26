@@ -1,11 +1,18 @@
 ---
 name: author-skill
-description: "The authoring-side guide for writing a new kampus skill in the house idiom — the complement to the review-skill gate. Read it before you write a `skills/**/SKILL.md`. It covers the SKILL.md shape (frontmatter name/description contract, prose-first body), the house rules imported from the writing-craft manifest (no Python, no `sources/` tree, no second validator — review-skill already gates), how to author toward review-skill's four rigor checks so the gate passes on the first pass, the gate-skill house-style exemption, and the §CP destination re-check. Trigger on \"author a new skill\", \"write a kampus skill\", \"how do I add a skill\", \"what shape should this SKILL.md be\", \"run author-skill\", or whenever you are about to create or substantially rewrite a `skills/**` skill and need the house conventions. This is a reference guide, not a pipeline stage: it never picks issues, opens PRs, or merges — write-code does the building, review-skill does the gating, this tells you how to write the artifact in between."
+description: "The authoring-side guide for writing a new repository skill — the complement to the review-skill gate. Read it before you write a `skills/**/SKILL.md`. It covers the SKILL.md shape (frontmatter name/description contract, prose-first body), the house rules adopted by the repository (tooling follows host conventions, no unnecessary `sources/` tree, no second validator when review-skill already gates), how to author toward review-skill's four rigor checks so the gate passes on the first pass, the gate-skill house-style exemption, and the protected-path destination re-check. Trigger on \"author a new skill\", \"write a skill\", \"how do I add a skill\", \"what shape should this SKILL.md be\", \"run author-skill\", or whenever you are about to create or substantially rewrite a `skills/**` skill and need the repository conventions. This is a reference guide, not a pipeline stage: it never picks issues, opens PRs, or merges — write-code does the building, review-skill does the gating, this tells you how to write the artifact in between."
 ---
 
 # author-skill
 
-You are about to write a **kampus skill** — a `SKILL.md` under `skills/**` that an agent
+## Repository-owned policy boundary
+
+This guide is part of the default generic payload and `pipeline init` links it into
+`.claude/skills`. It is local guidance, not authority to create issues, branches, pull
+requests, labels, or releases. When the resulting skill change enters a repository workflow,
+follow that repository's contributor guidance and `.pipeline/agent-policy.json`.
+
+You are about to write a **repository skill** — a `SKILL.md` under `skills/**` that an agent
 loads and follows as a procedure. This guide is the authoring-side complement to
 [`review-skill`](../review-skill/SKILL.md): review-skill *gates* a skill PR against its
 issue's acceptance criteria plus four rigor checks; this tells you how to write the skill so
@@ -15,7 +22,7 @@ substantially rewrite a `SKILL.md`.
 This is a **guide, not a pipeline stage**. It picks no issues, opens no PRs, merges nothing —
 `write-code` builds, `review-skill` gates, and this is the shape you write in between.
 
-## What a kampus skill is
+## What a repository skill is
 
 A skill is a single `skills/<name>/SKILL.md` file: **YAML frontmatter** (`name` +
 `description`) followed by a **prose body** the agent follows as instructions. That is the
@@ -23,7 +30,7 @@ whole artifact. There is no manifest to register it in, no code scaffold, no bui
 the harness discovers skills by scanning `skills/*/SKILL.md` and routes on the frontmatter
 `description`.
 
-A skill is neither product code nor prose (the skill-review rule that gives skills their own behavioral gate): it
+A skill is neither product code nor prose: it
 is a **behavioral artifact**, the executable instruction an agent runs. Write it as
 instructions to that future agent — imperative, specific, and self-contained — not as an
 essay describing what the skill would do.
@@ -32,16 +39,15 @@ essay describing what the skill would do.
 
 The `skill-authoring` idea was imported from
 [joshuadavidthomas/agent-skills](https://github.com/joshuadavidthomas/agent-skills) and
-adapted to the kampus idiom (map <related work item>, manifest <related work item>). The adaptation strips the upstream
-tooling, so a kampus skill carries **none** of these:
+adapted to the repository's own conventions. The adaptation avoids unnecessary tooling, so a
+repository skill carries **none** of these unless the host repository explicitly requires them:
 
-- **No Python.** Mechanical tooling in this repo is a Node/Effect CLI under `packages/`
-  (the `pipeline-cli` idiom), never a `.py` — see the CLAUDE.md "Node over Python" rule. A
-  skill that needs a deterministic check calls an existing `pipeline-cli` subcommand or a
-  committed `skills/**/*.sh`; it does not ship a Python script.
+- **No imposed implementation language.** A skill that needs deterministic support uses the
+  host repository's existing tooling and validation conventions. It does not introduce a new
+  runtime, package manager, or scripting language merely because another repository used one.
 - **No `sources/` tree.** The upstream skill vendored a reference corpus under `sources/`.
-  Kampus skills don't — a skill is one `SKILL.md`. If you need supporting material, link out
-  to the authoritative in-repo doc (an ADR, a `.patterns/` file) rather than vendoring a copy.
+  Repository skills normally do not — a skill is one `SKILL.md`. If you need supporting material,
+  link out to the authoritative repository document rather than vendoring a stale copy.
 - **No second validator.** Do not re-implement what `review-skill` already gates. The gate
   reads your diff and checks behavioral correctness, trigger quality, cross-skill shadowing,
   and gate-invariant preservation (below). Authoring a parallel skill-linting validator
@@ -103,26 +109,23 @@ match its existing register — do not "deslop" its invariant prose, do not comp
 fail-closed rationale to a one-liner, do not trim an incident pointer that anchors a guard.
 The rigor check #4 above is the enforcement; this exemption is why the prose looks heavy.
 
-## Destination and §CP — re-check before you open the PR
+## Destination and protected paths — re-check before you open the PR
 
-Where a skill lives decides whether its PR is control-plane (§CP, human-merge) or
-auto-shippable. **Re-check the final path** against the live control-plane regex before
-opening the PR:
+Where a skill lives may decide whether its PR is protected or auto-shippable. **Re-check the
+final path** against the repository's live protected-path policy before opening the PR:
 
 ```bash
-pipeline-cli control-plane-paths
+# Run the repository's documented protected-path or ownership check, when one exists.
 ```
 
-A skill flips to §CP (human-merge, never auto-shipped) when its path falls under a gate skill
-directory, is any `skills/**/*.sh`, or touches `.claude/**`, `.github/**`, `biome.jsonc`,
-`packages/ci-required/`, `packages/pipeline-cli/`, or `gh-issue-intake-formats.md`. A new,
-non-gate `SKILL.md` with no `.sh` sibling is **not** control-plane — it auto-ships on a green
-review-skill PASS. Confirm your destination against the live regex; don't assume from this
-list, which can drift.
+The repository's policy may protect gate skills, executable helpers, automation configuration,
+CI workflows, or other high-impact paths. A new non-gate `SKILL.md` may be eligible for normal
+delivery, but do not assume that outcome from this guide: confirm the destination against the
+live repository policy, which is the authoritative source.
 
 ## When you're done
 
-Confirm `validate-skills.sh` passes locally. If your skill is a **pipeline stage** (a named
+Run the repository's available skill validation locally. If your skill is a **pipeline stage** (a named
 step in the report → triage → … → ship-it flow), add a one-line row to the skills table in
 the plugin [`README.md`](../../README.md); an **ambient** skill (a guide or standalone tool,
 like this one) is discovered by the harness's `skills/*/SKILL.md` scan and needs no README

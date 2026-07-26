@@ -1,0 +1,466 @@
+{
+	"schemaVersion": 2,
+	"portableCore": {
+		"skills": [
+			"adr",
+			"architecture-audit",
+			"author-skill",
+			"canon",
+			"deslop-comments",
+			"diataxis",
+			"doctor",
+			"glossary",
+			"heal-ci",
+			"plan-epic",
+			"report",
+			"review-code",
+			"review-design",
+			"review-doc",
+			"review-plan",
+			"review-skill",
+			"review-trivial",
+			"ship-it",
+			"triage",
+			"wayfinder",
+			"what-shipped",
+			"write-code",
+			"writing-clearly-and-concisely"
+		],
+		"supportFiles": [
+			"gh-issue-intake-formats.md"
+		],
+		"agents": [
+			"adr",
+			"canon",
+			"coder",
+			"planner",
+			"reporter",
+			"reviewer",
+			"shipper",
+			"triager"
+		]
+	},
+	"archiveRequiresAdapter": {
+		"skills": [
+			"campaign",
+			"release",
+			"rite-audit"
+		],
+		"activation": "Run `pipeline enable <workflow>` to link an optional skill. A repository-owned adapter and explicit authority policy are still required before external operations."
+	},
+	"entries": [
+		{
+			"name": "adr",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/adr",
+			"prerequisites": [
+				"glossary",
+				"report"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "architecture-audit",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/architecture-audit",
+			"prerequisites": [
+				"report"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "author-skill",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/author-skill",
+			"prerequisites": [
+				"review-skill"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "canon",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/canon",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "deslop-comments",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/deslop-comments",
+			"prerequisites": [
+				"adr",
+				"report"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "diataxis",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/diataxis",
+			"prerequisites": [
+				"deslop-comments"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "doctor",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/doctor",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "glossary",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/glossary",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "heal-ci",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/heal-ci",
+			"prerequisites": [
+				"report",
+				"review-code",
+				"review-doc",
+				"ship-it",
+				"write-code"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "plan-epic",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/plan-epic",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "report",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/report",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "review-code",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/review-code",
+			"prerequisites": [
+				"adr",
+				"deslop-comments",
+				"report",
+				"review-plan"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "review-design",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/review-design",
+			"prerequisites": [
+				"review-code",
+				"review-doc",
+				"review-skill"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "review-doc",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/review-doc",
+			"prerequisites": [
+				"adr",
+				"diataxis",
+				"report",
+				"review-code",
+				"writing-clearly-and-concisely"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "review-plan",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/review-plan",
+			"prerequisites": [
+				"report",
+				"review-code"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "review-skill",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/review-skill",
+			"prerequisites": [
+				"report",
+				"review-code",
+				"review-doc"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "review-trivial",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/review-trivial",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "ship-it",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/ship-it",
+			"prerequisites": [
+				"heal-ci"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "triage",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/triage",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "wayfinder",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/wayfinder",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "what-shipped",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/what-shipped",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "write-code",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/write-code",
+			"prerequisites": [
+				"adr",
+				"deslop-comments",
+				"diataxis",
+				"report",
+				"writing-clearly-and-concisely"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "writing-clearly-and-concisely",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/writing-clearly-and-concisely",
+			"prerequisites": [
+				"deslop-comments"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "gh-issue-intake-formats.md",
+			"artifactType": "support-file",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/gh-issue-intake-formats.md",
+			"prerequisites": [],
+			"authorityBoundary": "Reference material only; no mutation authority."
+		},
+		{
+			"name": "adr",
+			"artifactType": "agent",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/agents/adr.md",
+			"prerequisites": [
+				"adr"
+			],
+			"authorityBoundary": "Delegates to linked skills and repository policy."
+		},
+		{
+			"name": "canon",
+			"artifactType": "agent",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/agents/canon.md",
+			"prerequisites": [
+				"canon"
+			],
+			"authorityBoundary": "Delegates to linked skills and repository policy."
+		},
+		{
+			"name": "coder",
+			"artifactType": "agent",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/agents/coder.md",
+			"prerequisites": [
+				"write-code"
+			],
+			"authorityBoundary": "Delegates to linked skills and repository policy."
+		},
+		{
+			"name": "planner",
+			"artifactType": "agent",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/agents/planner.md",
+			"prerequisites": [
+				"plan-epic"
+			],
+			"authorityBoundary": "Delegates to linked skills and repository policy."
+		},
+		{
+			"name": "reporter",
+			"artifactType": "agent",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/agents/reporter.md",
+			"prerequisites": [
+				"report"
+			],
+			"authorityBoundary": "Delegates to linked skills and repository policy."
+		},
+		{
+			"name": "reviewer",
+			"artifactType": "agent",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/agents/reviewer.md",
+			"prerequisites": [
+				"review-code",
+				"review-design",
+				"review-doc",
+				"review-plan",
+				"review-skill"
+			],
+			"authorityBoundary": "Delegates to linked skills and repository policy."
+		},
+		{
+			"name": "shipper",
+			"artifactType": "agent",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/agents/shipper.md",
+			"prerequisites": [
+				"ship-it"
+			],
+			"authorityBoundary": "Delegates to linked skills and repository policy."
+		},
+		{
+			"name": "triager",
+			"artifactType": "agent",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/agents/triager.md",
+			"prerequisites": [
+				"triage"
+			],
+			"authorityBoundary": "Delegates to linked skills and repository policy."
+		},
+		{
+			"name": "pipeline-toolkit",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".github/workflows/pipeline-toolkit.yml",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned checks and paths remain explicit."
+		},
+		{
+			"name": "pipeline-doc-safety",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".github/workflows/pipeline-doc-safety.yml",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned checks and paths remain explicit."
+		},
+		{
+			"name": "pipeline-delivery-gate",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".github/workflows/pipeline-delivery-gate.yml",
+			"prerequisites": [],
+			"authorityBoundary": "Repository-owned checks and paths remain explicit."
+		},
+		{
+			"name": "main-sync",
+			"artifactType": "cli-command",
+			"deliveryClass": "core-installed",
+			"entryPoint": "pipeline cli main-sync",
+			"prerequisites": [
+				".pipeline/agent-policy.json"
+			],
+			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
+		},
+		{
+			"name": "trivial-diff classify",
+			"artifactType": "cli-command",
+			"deliveryClass": "core-installed",
+			"entryPoint": "pipeline cli trivial-diff classify",
+			"prerequisites": [
+				".pipeline/agent-policy.json"
+			],
+			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
+		},
+		{
+			"name": "worktree-sweep",
+			"artifactType": "cli-command",
+			"deliveryClass": "core-installed",
+			"entryPoint": "pipeline cli worktree-sweep",
+			"prerequisites": [
+				".pipeline/agent-policy.json"
+			],
+			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
+		},
+		{
+			"name": "campaign",
+			"artifactType": "skill",
+			"deliveryClass": "optional-with-adapter",
+			"entryPoint": ".claude/skills/campaign",
+			"prerequisites": [
+				".pipeline/optional-workflow-policy.json",
+				"repository-owned adapter"
+			],
+			"authorityBoundary": "Enabled means linked only; provider and external authority remain repository-owned."
+		},
+		{
+			"name": "release",
+			"artifactType": "skill",
+			"deliveryClass": "optional-with-adapter",
+			"entryPoint": ".claude/skills/release",
+			"prerequisites": [
+				".pipeline/optional-workflow-policy.json",
+				"repository-owned adapter"
+			],
+			"authorityBoundary": "Enabled means linked only; provider and external authority remain repository-owned."
+		},
+		{
+			"name": "rite-audit",
+			"artifactType": "skill",
+			"deliveryClass": "optional-with-adapter",
+			"entryPoint": ".claude/skills/rite-audit",
+			"prerequisites": [
+				".pipeline/optional-workflow-policy.json",
+				"repository-owned adapter"
+			],
+			"authorityBoundary": "Enabled means linked only; provider and external authority remain repository-owned."
+		}
+	]
+}

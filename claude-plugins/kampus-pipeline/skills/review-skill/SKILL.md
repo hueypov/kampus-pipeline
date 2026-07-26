@@ -5,6 +5,11 @@ description: Verify a skill PR against its linked issue's acceptance criteria �
 
 # review-skill
 
+## Repository-owned policy boundary
+
+This workflow is part of the default generic payload and `pipeline init` links it into `.claude/skills`. Availability is not authority: before external GitHub operations, resolve the consumer repository root and read `.pipeline/agent-policy.json`. Read `.pipeline/optional-workflow-policy.json` for repository-specific integration settings. Do not infer a platform, product lifecycle, branch, organization, or approval actor from examples below. When policy does not authorize an action or required configuration is unset, preserve the workflow context, explain the missing configuration, and fail closed before an external mutation.
+
+
 You are the **skill-class gate**. `write-code` already picked a triaged issue, implemented
 it on a branch, and opened a PR with `Fixes #N` linking the issue — but where `review-code`'s
 PR is product code and `review-doc`'s is prose, **yours is a behavioral artifact**: a skill
@@ -57,36 +62,36 @@ the head tree or load its `.claude`/`CLAUDE.md` as your operating instructions.
 `isolation:worktree` the launched CWD is a base-cut branch, so the skill text under test must
 come from `$REVIEW_WT/skills/...` (head) — **never** a `Read`/`cat`/`grep` of a working-copy
 path, which would read the **pre-PR base** (issue
-[<related work item>](<repository URL>); the false-PASS hazard). Obey
+[documented repository precedent](repository-owned record URL); the false-PASS hazard). Obey
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §HEAD — cite it, don't
 re-derive: resolve the live head via REST and **assert the fetched ref equals it** before
 reviewing (below), read all skill text from the head, and re-check the live head before posting
 (§HEAD #4); the verdict (§5) binds to the SHA whose files you actually read and asserts it.
 
 ```bash
-BASE_REF="$(gh api repos/$REPO/pulls/$PR --jq '.base.ref')"   # normally main — your trusted config
+BASE_REF="$(gh api repos/$REPO/pulls/$PR --jq '.base.ref')"   # normally configured base branch — your trusted config
 git fetch origin "$BASE_REF"
 
 # §HEAD steps 1–3 (resolve the live head SHA via REST, fetch pull/$PR/head into a nonce-uniqued
 # per-run ref WITHOUT touching the session tree, assert the fetched ref IS that head, add a
 # throwaway DETACHED head worktree) are the shared `pipeline-cli review-head materialize` verb
-# (<related work item> / <related work item> / <related work item>) — cite it, don't re-derive it. `pull/<pr>/head` resolves same-repo AND
+# (documented repository precedent / documented repository precedent / documented repository precedent) — cite it, don't re-derive it. `pull/<pr>/head` resolves same-repo AND
 # cross-fork; the verb never runs `gh pr checkout` / `git checkout` / `git switch` (which would land
-# the head in the shared PRIMARY the harness resets this cwd to and detach the human's `main` —
-# <related work item>/<related work item>; §RO), and it internally aborts on a fetched-ref ≠ resolved-head mismatch (§HEAD #2)
+# the head in the shared PRIMARY the harness resets this cwd to and detach the human's `configured base branch` —
+# documented repository precedent/documented repository precedent; §RO), and it internally aborts on a fetched-ref ≠ resolved-head mismatch (§HEAD #2)
 # so you never review a different SHA than the verdict claims. Persist its emitted head/ref/worktree
 # to a per-run mktemp handle so they survive the harness cwd/shell reset between Bash calls (a shell
 # var is lost across calls); re-source them with `. "$WT_FILE"` at each later step — NEVER re-derive
 # from a shared leaf name (a `git worktree list` re-derivation matches a SIBLING reviewer's tree and
-# reads the wrong head's skill text — the <related work item> collision). This is the §SP per-run scratchpad
+# reads the wrong head's skill text — the documented repository precedent collision). This is the §SP per-run scratchpad
 # namespace (gh-issue-intake-formats.md): a PR number is not unique, and a clobbered file reads
-# back cleanly with the other run's content (<related work item>). WT_FILE is a CROSS-CALL carrier — a later
+# back cleanly with the other run's content (documented repository precedent). WT_FILE is a CROSS-CALL carrier — a later
 # step re-sources it — so §SP rules 2+3 apply, NOT the rule-4 single-file `mktemp` carve-out
 # (that one is for allocate-and-consume inside one call, like VERDICT_FILE below): the path is
 # derived deterministically from the session id, so each later step recomputes this same line
 # rather than inheriting a lost `$WT_FILE` variable.
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (<related work item>)}/review-skill-$PR"
-mkdir -p "$RUN_SCRATCH" || { echo "review-skill: §SP could not create a per-run scratch dir (<related work item>)." >&2; exit 1; }
+RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/review-skill-$PR"
+mkdir -p "$RUN_SCRATCH" || { echo "review-skill: §SP could not create a per-run scratch dir (documented repository precedent)." >&2; exit 1; }
 WT_FILE="$RUN_SCRATCH/wt.env"
 pipeline-cli review-head materialize --pr "$PR" --worktree \
   | jq -r '"REVIEW_WT=\(.worktreeDir)\nPR_REF=\(.prRef)\nHEAD_SHA=\(.headSha)"' > "$WT_FILE"
@@ -121,7 +126,7 @@ base.
 **You do not merge. Not on a pass, not ever, not on your own authority.** Your output is a
 *verdict* — a merge-ready signal (non-blocking) or advice (blocking) plus a fail comment
 listing what's missing. Merging is the deliberate act of **`ship-it`** (the one stage granted
-merge authority) — for the blocking set (§CP) too, only gated on a `<configured-control-plane-team>` approval
+merge authority) — for the blocking set (§CP) too, only gated on a `configured approval authority` approval
 at head that `ship-it` then enqueues on (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues). You signal merge-ready; `ship-it` is
 the consumer that asserts your PASS, confirms CI is green, and squash-merges. Conflating
 "verified" with "merged" is the self-grading collapse this stage exists to prevent — the same
@@ -157,7 +162,7 @@ REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOw
 
 **You never mutate the git working tree of the checkout you run in** — the single canonical
 rule lives in [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §RO; cite it,
-don't restate the prohibition (the five verbatim copies were the <related work item>-class drift §RO closes).
+don't restate the prohibition (the five verbatim copies were the documented repository precedent-class drift §RO closes).
 The Step-2-style fetch-into-a-ref + throwaway-worktree mechanism above already enforces it *by
 construction* (the head reaches a per-run ref; your session tree is never switched, reset, or
 checked out — the applicable safety invariant).
@@ -190,35 +195,35 @@ satisfied by what the diff actually shows, not by the author asserting it.
 Pull the file list first; the classification gates everything after it. Use the **single
 canonical control-plane / blocking-set definition** in
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §CP — do **not** re-hard-code
-the path list here (that fourth copy is exactly the <related work item> drift class §CP closes). And — like
-`ship-it` Step 0 and `review-code` Step 2 — **resolve §CP from `origin/main` at run time, not
+the path list here (that fourth copy is exactly the documented repository precedent drift class §CP closes). And — like
+`ship-it` Step 0 and `review-code` Step 2 — **resolve §CP from `$PIPELINE_BASE_REF` at run time, not
 from the copy embedded in this skill body** (this advisory flag is informational, but the
-embedded copy travels in the *injected snapshot*, which can lag `origin/main` even when the
+embedded copy travels in the *injected snapshot*, which can lag `$PIPELINE_BASE_REF` even when the
 on-disk file is current, so a pre-amendment snapshot once mis-flagged a now-control-plane PR;
-<related work item>). The bash below reads §CP freshly from `origin/main` and **fails closed** (treats every
+documented repository precedent). The bash below reads §CP freshly from `$PIPELINE_BASE_REF` and **fails closed** (treats every
 path as control-plane → advisory not-auto-mergeable) if that read can't be made.
 
 ```bash
 PR=<pr number>
 # the canonical §CP probe — one definition all four gates cite. §CP travels in the INJECTED skill
-# snapshot, which can lag origin/main even when the on-disk file is current — a pre-amendment snapshot
-# once mis-flagged a now-control-plane PR as auto-mergeable (<related work item>).
-# §CP boundary is single-sourced in pipeline-cli (control-plane-paths/control-plane-re.ts, <related work item>);
-# run `pipeline-cli control-plane-paths` to print it. It is re-resolved from origin/main right below
-# (the <related work item> anti-self-authorization read), so this is only a fail-closed sentinel, never the live source.
-CONTROL_PLANE_RE='.'   # fail-closed default: every path is control-plane until origin/main resolves
-# Re-resolve §CP from origin/main at run time so a stale snapshot can't mis-flag a now-control-plane
-# PR as auto-mergeable (<related work item>). the skill-review rule that gives skills their own behavioral gate §6 names gh-issue-intake-formats.md the single source; read it
-# freshly via REST raw (never GraphQL). origin/main's line wins over the snapshot; fail closed on read failure.
-CP_LIVE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=main" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep '^CONTROL_PLANE_RE=' | head -n1 || true)"
+# snapshot, which can lag $PIPELINE_BASE_REF even when the on-disk file is current — a pre-amendment snapshot
+# once mis-flagged a now-control-plane PR as auto-mergeable (documented repository precedent).
+# §CP boundary is single-sourced in pipeline-cli (control-plane-paths/control-plane-re.ts, documented repository precedent);
+# run `pipeline-cli control-plane-paths` to print it. It is re-resolved from $PIPELINE_BASE_REF right below
+# (the documented repository precedent anti-self-authorization read), so this is only a fail-closed sentinel, never the live source.
+CONTROL_PLANE_RE='.'   # fail-closed default: every path is control-plane until $PIPELINE_BASE_REF resolves
+# Re-resolve §CP from $PIPELINE_BASE_REF at run time so a stale snapshot can't mis-flag a now-control-plane
+# PR as auto-mergeable (documented repository precedent). the skill-review rule that gives skills their own behavioral gate §6 names gh-issue-intake-formats.md the single source; read it
+# freshly via REST raw (never GraphQL). $PIPELINE_BASE_REF's line wins over the snapshot; fail closed on read failure.
+CP_LIVE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep '^CONTROL_PLANE_RE=' | head -n1 || true)"
 if [ -n "$CP_LIVE" ]; then
-  CONTROL_PLANE_RE="$(printf '%s' "$CP_LIVE" | sed "s/^CONTROL_PLANE_RE='//; s/'$//")"   # the advisory flag tracks origin/main, not the snapshot's age (AC1/AC2)
+  CONTROL_PLANE_RE="$(printf '%s' "$CP_LIVE" | sed "s/^CONTROL_PLANE_RE='//; s/'$//")"   # the advisory flag tracks $PIPELINE_BASE_REF, not the snapshot's age (AC1/AC2)
 else
-  CONTROL_PLANE_RE='.'   # FAIL CLOSED: can't read origin/main's boundary ⇒ flag EVERY path control-plane (advisory not-auto-mergeable), never trust the possibly-stale snapshot
+  CONTROL_PLANE_RE='.'   # FAIL CLOSED: can't read $PIPELINE_BASE_REF's boundary ⇒ flag EVERY path control-plane (advisory not-auto-mergeable), never trust the possibly-stale snapshot
 fi
 # --paginate streams filenames (the API caps per_page at 100, NOT 300); grep aggregates the §CP
 # matches ACROSS pages — a jq `[ … ]` aggregate would emit one array PER PAGE. `|| true`: no match
-# is grep exit 1, an empty (non-control-plane) result, not a failure (<related work item>).
+# is grep exit 1, an empty (non-control-plane) result, not a failure (documented repository precedent).
 CONTROL_PLANE_TOUCHED="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
   --jq '.[].filename' | grep -E "$CONTROL_PLANE_RE" || true)"
 # non-empty → blocking: advisory only; a control-plane approval @head → ship-it enqueues (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues; §CP set the related safeguards)
@@ -228,7 +233,7 @@ CONTROL_PLANE_TOUCHED="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page
   `claude-plugins/kampus-pipeline/skills/ship-it/**`, `claude-plugins/kampus-pipeline/skills/review-code/**`, `claude-plugins/kampus-pipeline/skills/review-doc/**`, `claude-plugins/kampus-pipeline/skills/review-skill/**`,
   `claude-plugins/kampus-pipeline/skills/review-plan/**`, `claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md`) → the PR is in the **blocking
   set** (§CP). You review it and post your findings, but **advisory only** — your verdict does
-  not authorize a merge; a `<configured-control-plane-team>` approval at head does, and `ship-it` then
+  not authorize a merge; a `configured approval authority` approval at head does, and `ship-it` then
   enqueues it (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues approve-then-enqueue; the rule that only the shipping stage has merge authority single merge authority). Say so explicitly
   in the verdict (Step 5, advisory path). **This is the common case for a skill PR that edits a gate** —
   every gate skill is gate-critical, so a PR to `review-code`/`review-doc`/`review-skill`/
@@ -240,11 +245,11 @@ CONTROL_PLANE_TOUCHED="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page
 Your class is `claude-plugins/kampus-pipeline/skills/**` **and** the pipeline agent
 definitions `claude-plugins/kampus-pipeline/agents/**` — agent defs are behavioral artifacts
 like skills, so they route here for the verdict (the skill-review rule that includes plugin manifests and declared skill surfaces,
-<related work item>; an agents-only PR is §CP-blocking for merge via `CONTROL_PLANE_RE`, advisory-verdict
+documented repository precedent; an agents-only PR is §CP-blocking for merge via `CONTROL_PLANE_RE`, advisory-verdict
 here). If the diff has **no `skills/**` or `agents/**` file at all**, this is the wrong gate —
 that PR belongs to `review-code` (code) or `review-doc` (docs). Report `not a skill PR — route to
 review-code / review-doc` (a plain note, **not** a `review-skill:` marker — there's no skill to
-verdict) and stop. If the diff is **mixed skill + code/docs** (a `skills/**` or `agents/**` change *and* `apps/web`/
+verdict) and stop. If the diff is **mixed skill + code/docs** (a `skills/**` or `agents/**` change *and* `$PIPELINE_APPLICATION_PATH`/
 `packages` code or a `.decisions`/`.patterns` doc, none of it gate-critical), it needs the
 matching gate per class: you verify the skill class here and emit the `review-skill` marker;
 `review-code`/`review-doc` verify their classes and emit theirs. `ship-it` requires the latest
@@ -255,7 +260,7 @@ verdict — resolve them all in one pass (the routing-completeness rule).** It i
 emit `review-skill` and merely *note* that the other gate(s) "must also pass": a note left to a
 later pass is exactly the gap that costs a mixed PR an extra review→ship round-trip — one
 namespace's PASS lands, `ship-it` fail-closes on the still-missing other namespace, and the PR
-bounces back for a second review pass (<related work item> / the PR <related work item> incident). Routing by artifact class
+bounces back for a second review pass (documented repository precedent / the PR documented repository precedent incident). Routing by artifact class
 means "run the matching gate for **every** non-blocking class the diff spans," not "pick one and
 stop." So after you verify the skills and emit `review-skill`, **ensure `review-code` (code) and
 `review-doc` (docs) are also run against this same head before the review is reported complete**
@@ -263,7 +268,7 @@ stop." So after you verify the skills and emit `review-skill`, **ensure `review-
 so the PR reaches `ship-it` with a current-head PASS standing in each present namespace.
 **Emit each namespace's verdict as its OWN separate PR comment — one comment per namespace, marker
 on that comment's literal first line — never two markers stacked in one comment** (the second
-would be un-anchored, resolve empty, and fail-close a substantively-PASS PR — the PR <related work item> stall;
+would be un-anchored, resolve empty, and fail-close a substantively-PASS PR — the PR documented repository precedent stall;
 the forbidden "stacked" emit form in `../gh-issue-intake-formats.md` §5).
 `ship-it`'s per-present-class requirement (its Step 2) is unchanged — it remains the
 **fail-closed late catch** for a genuinely-missing namespace, not the *first* place the second
@@ -324,26 +329,26 @@ review worktree** (`$REVIEW_WT/skills/...`) the config-pin step set up — never
 head out into your session tree. Because the harness resets the shell between Bash calls,
 re-source the run-unique handle at the start of any later step that references `$REVIEW_WT`,
 never re-deriving it from the shared `review-skill-head-${PR}` leaf — under a parallel fan-out
-that leaf name also matches a sibling's worktree (<related work item>). `$WT_FILE` is itself a lost shell
+that leaf name also matches a sibling's worktree (documented repository precedent). `$WT_FILE` is itself a lost shell
 variable by then, so recompute its path from the same §SP recipe first — that is exactly why
 the namespace is session-derived rather than `mktemp`-allocated:
 
 ```bash
-WT_FILE="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (<related work item>)}/review-skill-$PR/wt.env"
+WT_FILE="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/review-skill-$PR/wt.env"
 [ -s "$WT_FILE" ] || { echo "review-skill: §SP — $WT_FILE missing; re-run the head-materialization step in THIS session." >&2; exit 1; }
 . "$WT_FILE"
 ```
 
-### Fetch the base fresh before any "is-it-shipped on main" check
+### Fetch the base fresh before any "is-it-shipped on configured base branch" check
 
 Some criteria are **ground-truth** checks against the merge target, not the PR head: "the ADR
-this skill implements is shipped on `main`", "the sibling skill it references exists", "the
+this skill implements is shipped on `configured base branch`", "the sibling skill it references exists", "the
 contract section it cites is present." Verify those against a **freshly fetched**
 `origin/$BASE_REF` (the Step "Config-pin" block already fetched it) — never the working tree
-or a local `main`, which may be stale:
+or a local `configured base branch`, which may be stale:
 
 ```bash
-git cat-file -e "origin/$BASE_REF:the skill-review rule that gives skills their own behavioral gate"   # does the ADR exist on fresh main?
+git cat-file -e "origin/$BASE_REF:the skill-review rule that gives skills their own behavioral gate"   # does the ADR exist on fresh configured base branch?
 git show "origin/$BASE_REF:skills/gh-issue-intake-formats.md"             # read shipped contract content
 ```
 
@@ -359,13 +364,13 @@ rm -rf "$REVIEW_WT" && git worktree prune && git update-ref -d "$PR_REF"
 ```
 
 Run this even when the review is exiting `FAIL` or aborting mid-run, so no `review-skill-head-*`
-tree leaks onto the shared primary (<related work item>); the `rm -rf` of the review's own detached, already-
+tree leaks onto the shared primary (documented repository precedent); the `rm -rf` of the review's own detached, already-
 pushed throwaway is safe (no branch/unpushed work). To catch a mid-block error, register it as a
 trap right after `git worktree add`:
 `trap 'rm -rf "$REVIEW_WT"; git worktree prune; git update-ref -d "$PR_REF"' EXIT`. The standing
 net for a session-end abort between Bash calls (no in-shell trap reaches it) is `pipeline-cli
-worktree-sweep --execute` (<related work item>): it reclaims a leaked `review-skill-head-*` tree only when
-clean + idle + unlocked, **without** `--force` (dirty / active / locked is KEPT — the <related work item>
+worktree-sweep --execute` (documented repository precedent): it reclaims a leaked `review-skill-head-*` tree only when
+clean + idle + unlocked, **without** `--force` (dirty / active / locked is KEPT — the documented repository precedent
 liveness guard).
 
 ---
@@ -476,7 +481,7 @@ gate-invariant-preservation, is preserved in full, not replaced.**
 
 **This is one logic with four call sites — `review-code` is its citable home.** The fan-out
 mechanism, the binary in/out-of-scope route decision, and the append surface are defined once
-in [`review-code`'s shared reference](../review-code/SKILL.md#specialist-fan-out--route-dont-grade-the specialist-fan-out rule that routes expert concerns without duplicating the main review--the-shared-reference)
+in [`review-code`'s shared reference](../review-code/SKILL.md#specialist-fan-out--route-dont-grade-the specialist-fan-out rule that routes expert concerns without duplicating the configured base branch review--the-shared-reference)
 (the applicable safety invariant
 §1–§2) and the append shape + provenance tag + four fences in
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §2. **Cite them; do not
@@ -503,7 +508,7 @@ verdict.
   same trace test the reference and `plan-epic` use) → **append a new acceptance criterion**
   to the linked issue via the **§2 reviewer-append surface**, provenance-tagged
   `<!-- ac:review-skill pr:#<PR> round:K -->`. Perform the append by the reference's
-  [four-fences-enforced procedure](../review-code/SKILL.md#performing-the-append--the-four-fences-enforced-at-this-site-the specialist-fan-out rule that routes expert concerns without duplicating the main review)
+  [four-fences-enforced procedure](../review-code/SKILL.md#performing-the-append--the-four-fences-enforced-at-this-site-the specialist-fan-out rule that routes expert concerns without duplicating the configured base branch review)
   — fail-closed ACL self-check, round-K freeze, append-only body reconstruction — so every fence
   is enforced at the site, not merely cited. It lands as a fresh `[ ]` row the next
   `write-code` repair round drains and the next review verifies; it shows in *this* verdict's
@@ -533,10 +538,10 @@ backticks survive the shell, then post it. Allocate it with `mktemp`, never a fi
 `${PR}`-keyed path — the per-run scratchpad namespace, §SP of
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md). The PR number alone isn't
 unique (two reviews of the same PR running concurrently collide), and a clobbered temp reads
-back **successfully with the other run's content**, so there is no error to catch (<related work item>).
+back **successfully with the other run's content**, so there is no error to catch (documented repository precedent).
 The SHA goes into the marker's first line
 (`review-skill: PASS @ <sha> — merge-ready`) and is **load-bearing**: `ship-it` refuses any
-verdict not bound to the PR's current head (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA, issue <related work item>).
+verdict not bound to the PR's current head (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA, issue documented repository precedent).
 
 ```bash
 HEAD_SHA="$(gh api repos/$REPO/pulls/$PR --jq .head.sha)"   # the head you reviewed
@@ -547,17 +552,17 @@ contract controls, so the comment is the single carrier. The post is an **upsert
 append: exactly **one** `review-skill` verdict comment per PR (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA rule 2), a re-review of
 a new head overwriting the same record. That upsert plus its emission guards are the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA
 glue **all four gates share**, so — exactly as `review-doc` — post through the deterministic,
-unit-tested tool (`pipeline-cli verdict post`, <related work item>), never a hand-rolled `jq`. **The tool is
+unit-tested tool (`pipeline-cli verdict post`, documented repository precedent), never a hand-rolled `jq`. **The tool is
 the marker-emit choke point:** it refuses fail-closed unless every SHA field (the first-line
 `@ <sha>` and the §CP advisory `Reviewed-head:` anchor) is a clean full 40-hex head SHA — closing
-the mktemp-path leak (<related work item>), the empty-`@-` case (<related work item>), and any cross-namespace body. Resolve
-the tool once — in-repo first, published fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic <related work item>):
+the mktemp-path leak (documented repository precedent), the empty-`@-` case (documented repository precedent), and any cross-namespace body. Resolve
+the tool once — in-repo first, published fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic documented repository precedent):
 
 **MANDATE (hard invariant, not a suggestion):** `$VERDICT post` is the **only** permitted way to
 emit this verdict marker. A bare `gh api …/comments` / `gh pr comment` hand-post of the marker that
-skips the guard is **FORBIDDEN** (it is the emit-side hole <related work item> / <related work item> / <related work item> rode: hand-posting
+skips the guard is **FORBIDDEN** (it is the emit-side hole documented repository precedent / documented repository precedent / documented repository precedent rode: hand-posting
 off the verdict lib means `emissionDefect` never runs). If a raw post is ever genuinely unavoidable,
-the body **MUST** first pass `pipeline-cli leak-guard scan-comment` (the <related work item> pre-post net) before
+the body **MUST** first pass `pipeline-cli leak-guard scan-comment` (the documented repository precedent pre-post net) before
 the post. This is the single-source rule in
 [gh-issue-intake-formats.md](../gh-issue-intake-formats.md#the-guarded-emit-path-is-mandatory--never-hand-post-a-verdict-marker-off-the-guard) — the *why* lives there, not re-derived here.
 
@@ -580,7 +585,7 @@ VERDICT_FILE="$(mktemp /tmp/review-skill-verdict.XXXXXX)"
 # write your composed PASS verdict into "$VERDICT_FILE" (first line: review-skill: PASS @ <HEAD_SHA> — merge-ready)
 # Upsert through the guarded tool: it PATCHes your newest own review-skill marker (namespace-
 # anchored, so a blocking↔non-blocking flip upserts a prior advisory too) else POSTs, and it
-# fail-closes on a malformed/cross-namespace body — the mktemp-path `@ <sha>` leak (<related work item>) never lands.
+# fail-closes on a malformed/cross-namespace body — the mktemp-path `@ <sha>` leak (documented repository precedent) never lands.
 $VERDICT post --pr "$PR" --gate skill --body-file "$VERDICT_FILE"
 ```
 
@@ -590,7 +595,7 @@ emphasis, **with the `@ <HEAD_SHA>` you resolved above** — per the matcher con
 optional leading `**`, but emit bare; the `@ <sha>` is required, the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA). **Token order is
 fixed** (§5): `@ <HEAD_SHA>` comes **immediately after** `PASS`, **before** `— merge-ready` —
 never `review-skill: PASS — merge-ready @ <sha>`; `ship-it`'s capture is anchored to that
-order, so a trailing `@ <sha>` captures `sha=null` and refuses a correct PASS as `unverified` (<related work item>):
+order, so a trailing `@ <sha>` captures `sha=null` and refuses a correct PASS as `unverified` (documented repository precedent):
 
 ```markdown
 review-skill: PASS @ <HEAD_SHA> — merge-ready
@@ -618,7 +623,7 @@ authorized merge step; merging will auto-close #<ISSUE> via `Fixes #<ISSUE>`.
 
 The body carries the canonical `Reviewed-head: @ <HEAD_SHA>` line here too, so **every** verdict body
 this gate emits — non-blocking PASS, advisory, FAIL — binds the reviewed head in one uniform form
-(<related work item>). The non-blocking PASS is still bound primarily by its first-line `@ <sha>`; the body line is
+(documented repository precedent). The non-blocking PASS is still bound primarily by its first-line `@ <sha>`; the body line is
 the same canonical token the read-back guard (§6.6) validates, so a clean non-blocking PASS never
 false-fails the unconditional `verdict_post_verify … || exit 1`.
 
@@ -628,7 +633,7 @@ Every check passed but Step 0 classified the PR **blocking** (it touches a gate-
 or any §CP path — the common case for a skill PR that edits a gate). Post the **same
 evidence**, but the first line is the **canonical advisory line** (§6.6) — **not** a
 merge-ready go-ahead. `ship-it` does not auto-merge this PR on machine gates alone — it enqueues
-only once a `<configured-control-plane-team>` approval is present at head (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues). The advisory
+only once a `configured approval authority` approval is present at head (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues). The advisory
 line carries **no first-line `@ <sha>`** by design (it authorizes nothing, so there is nothing to
 bind), keeping your verdict out of `ship-it`'s PASS namespace.
 
@@ -641,7 +646,7 @@ bind), keeping your verdict out of `ship-it`'s PASS namespace.
 > the verdict **body** below. A delegated control-plane merge actor must **not** try to bind your
 > first-line marker (it would read as `unverified`); it confirms by reading the body's canonical
 > `Reviewed-head: @ <sha>` line against the PR's current head + the per-AC PASS; then, once a
-> `<configured-control-plane-team>` approval is present at that head, `ship-it` applies its just-in-time
+> `configured approval authority` approval is present at that head, `ship-it` applies its just-in-time
 > guards and **enqueues** it (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues approve-then-enqueue; the rule that only the shipping stage has merge authority single merge authority) — not
 > a human hand-merge.
 
@@ -649,7 +654,7 @@ bind), keeping your verdict out of `ship-it`'s PASS namespace.
 > `ship-it`'s the control-plane rule that requires non-author approval of the current head before the pipeline enqueues approval-aware enqueue reads the reviewed head from **exactly** the
 > `Reviewed-head: @ <HEAD_SHA>` line below (the anchored matcher in
 > [gh-issue-intake-formats.md](../gh-issue-intake-formats.md) §6.6), gated on the control-plane
-> approval — that is what makes a §CP skill PR's enqueue **deterministic** (<related work item>/<related work item>; free-prose
+> approval — that is what makes a §CP skill PR's enqueue **deterministic** (documented repository precedent/documented repository precedent; free-prose
 > "reviewed head" phrasings resolved nondeterministically and are retired). Write it as its own line
 > with the exact `Reviewed-head:` prefix and the head SHA you reviewed — do **not** paraphrase it,
 > and do **not** promote it to a first-line `PASS @ <sha>` marker (that would drop the §CP verdict
@@ -660,7 +665,7 @@ review-skill: advisory — blocking-set PR (manual merge)
 
 PR #<PR> touches the control plane (a gate-critical skill or a `.claude`/`.github` path — §CP) —
 the agent control plane / pipeline gates (the control-plane rule that requires human approval for changes to automation, CI, or merge safeguards/the related safeguards). My verdict is **advisory only**:
-it does **not** authorize a merge. Under the §CP hard gate (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues), a `<configured-control-plane-team>`
+it does **not** authorize a merge. Under the §CP hard gate (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues), a `configured approval authority`
 member approves this at its current head and `ship-it` then enqueues it (the rule that only the shipping stage has merge authority single merge
 authority) — there is no human hand-merge in the §CP path.
 
@@ -692,7 +697,7 @@ canonical `Reviewed-head: @ <HEAD_SHA>` line (the rule that records a control-pl
 VERDICT_FILE="$(mktemp /tmp/review-skill-verdict.XXXXXX)"
 # write your composed advisory verdict into "$VERDICT_FILE" (first line: review-skill: advisory — blocking-set PR (manual merge))
 # The guarded tool also validates the §CP advisory's `Reviewed-head: @ <sha>` anchor line is a clean
-# full 40-hex head SHA — the exact field the <related work item> mktemp path leaked into (<related work item>).
+# full 40-hex head SHA — the exact field the documented repository precedent mktemp path leaked into (documented repository precedent).
 $VERDICT post --pr "$PR" --gate skill --body-file "$VERDICT_FILE"
 ```
 
@@ -714,7 +719,7 @@ HEAD_SHA="$(gh api repos/$REPO/pulls/$PR --jq .head.sha)"   # the head you revie
 VERDICT_FILE="$(mktemp /tmp/review-skill-verdict.XXXXXX)"
 # write your composed FAIL verdict into "$VERDICT_FILE" (first line: review-skill: FAIL @ <HEAD_SHA> — changes-requested)
 # Upsert through the guarded tool (namespace-anchored, so a fresh FAIL upserts whatever prior
-# review-skill marker exists, advisory included) — fail-closed on a malformed marker (<related work item>).
+# review-skill marker exists, advisory included) — fail-closed on a malformed marker (documented repository precedent).
 $VERDICT post --pr "$PR" --gate skill --body-file "$VERDICT_FILE"
 ```
 
@@ -747,18 +752,18 @@ a comment.
 
 ---
 
-## Step 5b — Confirm the verdict landed clean (the shared read-back guard, <related work item>)
+## Step 5b — Confirm the verdict landed clean (the shared read-back guard, documented repository precedent)
 
 After **any** of the three Step-5 upserts (PASS non-blocking, advisory, or FAIL) returns its
 comment id, close the loop: **re-read the comment you just wrote and prove its body is a
 well-formed, leak-free, current-head-bound marker.** The by-value `-f body="$BODY"` post prevents
 the `body=@<path>` leak at the call site, but a source idiom cannot catch a **runtime deviation** —
-the <related work item> failure was a marker comment whose entire body was a local temp path (`@/var/folders/…`):
+the documented repository precedent failure was a marker comment whose entire body was a local temp path (`@/var/folders/…`):
 a broken marker (no SHA-bound verdict for consumers) **and** a public local-path leak. Only a
 post-write read-back sees it.
 
 Do **not** re-implement this against a `$MINE` captured on one Step-5 branch — that carried id is what
-the <related work item> recurrence slipped through (`$MINE` is set only on the comment-upsert branch, so a verdict
+the documented repository precedent recurrence slipped through (`$MINE` is set only on the comment-upsert branch, so a verdict
 landed by any other path reached the guard with an empty id and a broken/leaking marker sailed
 through). Call the **single unconditional wrapper** from the shared contract, which re-derives the
 landed verdict from live PR state (never a carried variable) and runs the read-back on whatever

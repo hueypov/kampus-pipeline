@@ -86,8 +86,9 @@ fixed at 1). See [`README.md`](README.md) for the topology diagram and the comms
 ## Config keys — `crew.config.jsonc`
 
 The personalization seam. The plugin ships [`crew.config.template.jsonc`](crew.config.template.jsonc)
-with `<placeholder>` values only; an operator copies it to an operator-owned, git-ignored
-`.claude/crew.config.jsonc` (or `$CREW_CONFIG`) and fills every placeholder. Resolution order:
+with `<placeholder>` values only; `pipeline init` materializes it as the operator-owned,
+git-ignored `.claude/crew.config.jsonc` (or an operator can use `$CREW_CONFIG`) and the operator
+fills every placeholder. Resolution order:
 `$CREW_CONFIG` if set, else `.claude/crew.config.jsonc`. Every key below matches the template.
 
 | Key | Type | Required | Placeholder |

@@ -7,23 +7,23 @@ description: File a follow-up GitHub issue the moment you spot work you won't do
 
 You spotted something while doing other work. Capturing it must cost you almost nothing — file it and get back to your task. This skill is the seam between "I noticed X" and a triageable GitHub issue, so observations don't die in the conversation.
 
-File autonomously. Do **not** propose-first or ask for permission — the whole point is zero interruption to your main task. The issue you file is raw intake; a separate `triage` skill classifies and prioritizes it later. Your job is to capture context faithfully, not to judge it.
+File autonomously when the repository's contributor guidance permits agents to create GitHub issues. Do **not** propose-first or ask for permission in that configured workflow — the point is to capture a concrete observation before it is lost. The issue is deliberately unclassified intake: a repository may later triage it through people, automation, labels, or another tool, but this portable skill does not assume any of those stages exist. Your job is to capture context faithfully, not to judge it.
 
 ## What you are NOT doing
 
-- **No type.** Don't decide if it's a bug / feature / chore / decision / investigation / epic. That's triage's call.
-- **No priority, no severity.** Don't apply `p0`/`p1`/`p2` or describe something as critical/blocker/minor in a way that pre-empts triage.
+- **No type.** Don't decide if it's a bug / feature / chore / decision / investigation / epic. Classification belongs to the adopting repository, if it uses classification at all.
+- **No priority, no severity.** Don't apply priority labels or describe something as critical/blocker/minor in a way that pre-empts the repository's later assessment.
 - **No solution lock-in.** Your "suggested next step" is a non-binding hint, explicitly the reporter's guess, not a mandate.
 
-You apply exactly one label: `status:needs-triage`. Nothing else. Typing or prioritizing here would poison the triage queue — a hand-applied type looks identical to a triaged one, and triage can no longer trust the signal.
+Apply **no labels by default**. A repository-owned adapter may add labels after it documents their meaning and authority, but this portable intake must not invent queue state. Typing or prioritizing at filing time would make a reporter's guess look indistinguishable from a repository decision.
 
 ## Lead with a plain-language summary
 
 Before the structured sections, open the body with a **plain-language, human-first
 summary — 2–3 sentences a reader grasps on a skim**: what you observed and why it's worth
-tracking, in prose, no jargon. It **precedes, never replaces**, the structured body below —
-a triager skimming the queue reads it first (the human-first-summary mandate from
-[<related work item>](<repository URL>)). Give it the heading `## Summary`.
+tracking, in prose, no jargon. It **precedes, never replaces**, the structured body below, so
+the next reader can understand the observation before interpreting its metadata. Give it the
+heading `## Summary`.
 
 ## The 5-section body template
 
@@ -43,7 +43,7 @@ The body is **type-blind** by design: the same five sections fit a bug, a refact
 <The cost of leaving it. Who or what is affected, and roughly how. Honest about uncertainty — "might cause X" is fine. Don't inflate to manufacture urgency; don't downplay to be polite.>
 
 ## Pointers
-<Where to look: file paths (repo-relative, e.g. `apps/web/worker/...`), function names, related issue/PR numbers, ADR/pattern doc links. Give the next reader a running start.>
+<Where to look: repo-relative file paths (e.g. `src/worker/...`), function names, related issue/PR numbers, ADR/pattern doc links. Give the next reader a running start.>
 
 ## Suggested next step (non-binding)
 <Your best guess at a first move, clearly labeled a guess. "Maybe extract the retry logic into a helper" — not "Extract the retry logic." Triage and the implementer are free to ignore this. Leave it blank if you genuinely have no idea; an empty hint is better than a misleading one.>
@@ -75,15 +75,15 @@ Aim for **session id, model, branch, and timestamp** — but all are best-effort
 The footer is machine context, never personal context.
 
 - **No PII.** No email addresses, no usernames tied to a person, no author identity. `git config user.email` and `user.name` are off-limits — that's why the helper never reads them.
-- **No user-local absolute paths.** Never `/Users/...`, `~/.claude`, `~/.<shared-automation-login>`, or any home-directory path. Paths in the body's Pointers section must be repo-relative. The footer carries no paths at all.
+- **No user-local absolute paths.** Never `/Users/...`, `~/.claude`, `~/.configured automation identity`, or any home-directory path. Paths in the body's Pointers section must be repo-relative. The footer carries no paths at all.
 
 If you ever assemble the footer by hand instead of via the helper, apply the same rule: machine/session context only, and scrub anything that could identify a person or leak a local filesystem layout.
 
 ## Filing the issue
 
-All GitHub operations go through `gh api` REST. **Never GraphQL** — the Use gh api REST for GitHub operations so the pipeline does not require GraphQL support.
+Use the authenticated `gh` CLI when this repository permits agents to file GitHub issues. Do not hard-code a repository name or inherit an organisation-specific API rule. The portable contract is GitHub-backed collaboration when configured, not a requirement that every repository use a particular board, label taxonomy, query endpoint, or issue workflow.
 
-**Resolve the target repo once, up front.** This skill is repo-agnostic — every `gh api` call targets `$REPO`, not a hardcoded repo. Resolve it at the top of your run per the shared contract's **Target repo resolution** ([`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md)): `$CLAUDE_PIPELINE_REPO` if set, else the current repository. In the adopting repository this defaults to `<owner>/<repository>`, so the behavior is unchanged with no config (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository §1).
+**Resolve the target repo once, up front.** Every GitHub operation targets `$REPO`, not a hardcoded repository. Prefer the explicit `CLAUDE_PIPELINE_REPO` override; otherwise resolve the current checkout. If neither is available, return the complete issue draft and explain that a repository target is required before it can be filed. Do not guess an owner/repository name from prose or a sibling checkout.
 
 ```bash
 REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
@@ -91,43 +91,22 @@ REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOw
 
 1. Write the title: a short, specific, type-neutral summary of the observation (≤ ~70 chars). Good: "Retry helper in http worker swallows the abort reason". Bad: "Bug in worker" or "BUG: fix retry".
 2. Build the body: the `## Summary` lead, then the five sections, then a blank line, then the footer block from `footer.sh`.
-3. **Re-query for an existing issue — always, and last.** Report agents run
-   concurrently (several people run them at once), so the same observation may have
-   been filed minutes ago. Run this check *after* composing the body, as the final
-   action before the create call — composing first keeps the window between check
-   and create as small as possible. Run the shared **intake-dedup tool** (the applicable safety invariant):
-   one tested implementation of the "is there already an open issue for this?" query,
-   fed your title plus a few keywords:
+3. **Re-query for an existing issue — always, and last.** Report agents can run concurrently, so the same observation may have been filed minutes earlier. Run this check *after* composing the body and immediately before the create call; composing first keeps the check-to-create window as small as practical. Search the current repository's open issues with the title and a few distinguishing keywords, using the query interface available to the configured `gh` installation:
 
    ```bash
-   pnpm pipeline cli intake-dedup check \
-     --query "<the title + a few distinguishing keywords>"
+   gh issue list --repo "$REPO" --state open \
+     --search "<the title plus distinguishing keywords>" \
+     --limit 20
    ```
 
-   It prints one `#<n>\t<title>` line per candidate duplicate to stdout (empty output
-   ⇒ no likely match) and the candidate count on stderr. Under the hood it runs the
-   same two sources this check always used and fuses them — the label list is
-   read-after-write consistent and catches an issue filed seconds ago, while the
-   search runs against GitHub's eventually-consistent index (fresh issues can lag out
-   of it) but covers older open issues that already left the queue. Keyword joining
-   and query-shape are the tool's job now — you pass free text, not a hand-built
-   `q=` string. It resolves the target repo itself per the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository §1 (`$CLAUDE_PIPELINE_REPO`
-   → `$GITHUB_REPOSITORY` → the current repo), so it needs no `$REPO`.
+   Treat the output as candidates, not an oracle. Search indexes can lag and similar titles can describe different observations. Read the candidate bodies before deciding. If an existing issue covers the same observation, do not file a twin; add genuinely new evidence as a comment when the repository's contribution policy permits comments, then return to the original task. If results are ambiguous, file the specific observation rather than silently dropping it.
+4. File the issue with **no labels by default**. A repository-owned adapter may add labels or workflow metadata after it has documented those semantics.
 
-   If an existing issue covers the same observation, don't file a twin — add anything
-   you know that it lacks as a comment there, and return to your task.
-4. File it, applying only `status:needs-triage`.
-
-Stream the composed body **straight into the create call over stdin** — there is no named temp file to collide on and no shell variable to reuse stale, so two concurrent `report` runs cannot interleave bodies (the cross-filing hazard is structurally unrepresentable, not merely warned against — <related work item>). The `tracker create-issue` verb reads its `--body` from stdin when the flag is absent, so the **quoted** heredoc (`<<'EOF'`) passes the markdown through untouched — multi-line markdown, backticks, and nested fences survive intact, the "backticks survive the shell" guarantee with no round-trip through a variable. Don't hand-roll the `gh api repos/$REPO/issues` create — that inline envelope is exactly what the adoption lint (<related work item>) flags; the verb owns it (the applicable safety invariant; `packages/pipeline-cli/src/tools/tracker/`) and enters the needs-triage queue by default:
+Build the composed body inside the current shell execution, then submit it directly to GitHub. The body must never be written to a fixed or shared temporary path: concurrent runs can otherwise overwrite one another and file the wrong report. A shell variable scoped to this one command is acceptable because it is not shared across runs; a quoted heredoc keeps Markdown, backticks, and nested fences intact. Use the public issue-create endpoint directly so this core skill has no hidden dependency on a non-installed pipeline command:
 
 ```bash
-# The five sections + a blank line + the footer.sh block, piped straight into the
-# create verb over stdin. No mktemp, no $BODY_FILE, no `$(cat …)` — nothing shared to
-# collide on. `create-issue` consumes the whole stream as the body; the quoted `<<'EOF'`
-# heredoc means the shell never touches the markdown, so backticks and nested ``` fences
-# file intact. The verb passes the body by-value through a direct spawn (no `-f body=@file`),
-# so the local-path leak class is gone too.
-{
+TITLE="<short, specific, type-neutral title>"
+BODY="$(
   cat <<'EOF'
 ## Summary
 …
@@ -147,21 +126,31 @@ Stream the composed body **straight into the create call over stdin** — there 
 ## Suggested next step (non-binding)
 …
 EOF
-  echo   # blank line before the footer block
-  claude-plugins/kampus-pipeline/skills/report/footer.sh   # emits its own `---` + <sub>… line
-} | pipeline-cli tracker create-issue --title "<title>"
+  echo # blank line before the footer block
+  claude-plugins/kampus-pipeline/skills/report/footer.sh
+)"
+
+gh api --method POST "repos/$REPO/issues" \
+  -f "title=$TITLE" \
+  -f "body=$BODY" \
+  --jq '"#\(.number) — \(.html_url)"'
 ```
 
-The body never lands on disk under a shared name and never round-trips through a variable, so the two named failure paths this hardening closes — "simplify" to a fixed `/tmp/report-body.md`, or reuse one `$BODY_FILE` across two creates — have no surface to occur on: there is no file path to fix and no variable to reuse. This is the
-first and strongest rule of the per-run scratchpad namespace — §SP of
-[`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md), *prefer no file at all* — and
-`report` is the idiom the rest of the pipeline is measured against (<related work item>, generalized in <related work item>).
+The body never lands on disk under a shared name. Do not “simplify” this into a fixed `/tmp/report-body.md`, a stable `$BODY_FILE`, or a user-local scratch path: those forms can leak machine paths into the issue or cross-file concurrent reports. If a repository wrapper needs a file-based transport, it must allocate a unique per-run path, remove it after the request, and keep it out of all public artifacts.
 
-5. Report back to the user in one line: the issue number and URL (`create-issue` prints them as `tracker: created #<n> — <url>`). Then return to your original task — don't expand into triaging or fixing what you just filed.
+5. Report back to the user in one line: the issue number and URL printed by `gh api`. Then return to your original task — don't expand into classifying, planning, or fixing what you just filed.
+
+## Failure handling and external authority
+
+Issue creation is an external action. Attempt it only when the current repository's guidance permits GitHub issue filing and the observation is safely within that repository's scope. If `gh` is missing, unauthenticated, pointed at the wrong account, or unable to resolve `$REPO`, preserve the complete title and body in the response and state the exact filing blocker. Do not switch to a hard-coded repository, a personal fork, a sibling checkout, or a local text file that another agent will not discover.
+
+Treat GitHub failures precisely. A duplicate candidate is not a network failure; inspect it and either add evidence or file a distinct issue. A permission error means the current identity lacks authority; do not retry through another account. A validation error from GitHub means the title or body needs correction; revise only the malformed field and repeat the same repository-targeted request. A transport failure can be retried once after confirming that the request did not create an issue, because a timed-out response may still have reached GitHub. In every case, keep the body free of local paths, secrets, personal identity, and guessed repository policy.
+
+The portable default deliberately stops after filing. The issue URL is the durable hand-off; labels, milestone placement, assignments, project-board state, linked pull requests, and issue closure are separate repository-owned decisions. This prevents an observation from being silently converted into a workflow commitment merely because an agent noticed it.
 
 ## Conventions
 
-This skill is one of a suite that turns GitHub issues into an agent-operable pipeline; the shared formats and label semantics are documented in [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) (the report template here is its own type-blind thing, but the label dimensions and progress/handoff formats live there).
+This skill is a portable GitHub intake surface. Its body template, privacy rule, repository resolution, duplicate check, and no-label default are fully stated here so an adopting repository receives a complete contract. A repository may layer a richer triage, planning, label, or project-management workflow on top, but that adapter must remain optional and must not redefine a raw report as already classified.
 
-- One observation, one issue. If you noticed two genuinely separate things, file two — don't bundle. (Triage can split bundles, but clean intake saves it the work.)
-- The pre-filing re-query (step 3 above) is mandatory, but it's a search, not an oracle: when the results are genuinely ambiguous, file — a duplicate is cheap for triage to close, a lost observation is gone. (Use the `intake-dedup` tool shown in step 3 — it queries via `gh api` REST, never `gh issue list --search`, which goes through GraphQL that this org breaks.)
+- One observation, one issue. If you noticed two genuinely separate things, file two — don't bundle. A repository may later split or connect them, but clean intake preserves the evidence and the next action.
+- The pre-filing re-query (step 3 above) is mandatory, but it is a search, not an oracle: when the results are genuinely ambiguous, file — a later duplicate decision is cheaper than losing an observation entirely.

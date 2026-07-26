@@ -1,6 +1,6 @@
 ---
 name: glossary
-description: Maintain the repo-owned domain-vocabulary file `.glossary/TERMS.md` — the canonical nouns of the codebase (products, entities, backend/infra terms) every contributor and CI-spawned agent shares. Two modes — bootstrap (seed TERMS.md from a fresh sweep of the feature surfaces when it is thin or absent) and incremental update (given a changed surface — a new feature folder, a new public export, a renamed symbol — add/rename/disambiguate the affected terms since the file's last update). Trigger on "update the glossary", "update TERMS.md", "add a term to the glossary", "bootstrap the glossary", "refresh the domain vocabulary", "the glossary lags the code", "/glossary". NOT the sözlük product feature, NOT the architecture-vocabulary file `LANGUAGE.md`, and NOT an architecture audit — this skill only edits `.glossary/TERMS.md`.
+description: Maintain the repo-owned domain-vocabulary file `.glossary/TERMS.md` — the canonical nouns of the codebase (products, entities, backend/infra terms) every contributor and CI-spawned agent shares. Two modes — bootstrap (seed TERMS.md from a fresh sweep of the feature surfaces when it is thin or absent) and incremental update (given a changed surface — a new feature folder, a new public export, a renamed symbol — add/rename/disambiguate the affected terms since the file's last update). Trigger on "update the glossary", "update TERMS.md", "add a term to the glossary", "bootstrap the glossary", "refresh the domain vocabulary", "the glossary lags the code", "/glossary". NOT a shipped product feature, NOT the architecture-vocabulary file `LANGUAGE.md`, and NOT an architecture audit — this skill only edits `.glossary/TERMS.md`.
 ---
 
 # glossary
@@ -16,7 +16,7 @@ You operate on **one file and one file only**: `.glossary/TERMS.md`. You are **r
 application code** — you read the codebase to learn the vocabulary, you never change it. You
 do **not** open a PR, run a gate, or touch GitHub issues as part of your core loop — this is
 a working-tree doc-maintenance skill, not a pipeline-execution skill. (When a pipeline run
-*dispatched* you to produce this edit, the surrounding `write-code` flow opens the PR; your
+*dispatched* you to produce this edit, the surrounding repository workflow owns any PR; your
 job ends at a correct, committed edit to `.glossary/TERMS.md`.)
 
 ## Scope — what this skill is, and what it is NOT
@@ -28,10 +28,12 @@ job ends at a correct, committed edit to `.glossary/TERMS.md`.)
 - **Terms, not conventions.** This repo's *conventions* already live in `CLAUDE.md` and
   `.patterns/`; this skill does **not** duplicate or maintain them. It is **terms-only** — the
   noun glossary, nothing else.
-- **NOT the sözlük product.** The name is the English-technical `glossary`, deliberately not
-  `sozluk` — *sözlük* is a shipped **product feature** (the Turkish dev-terms dictionary), and
-  a skill named after it would collide with that domain. Per the repo convention (Turkish for
-  product/brand, English for technical), this technical maintenance skill is `glossary`.
+- **NOT a product feature.** `glossary` is the technical maintenance capability, deliberately
+  distinct from any product, brand, user-facing dictionary, or domain feature the adopting
+  repository may ship. Keep its name and terminology clear of local product nouns so a request
+  to maintain contributor vocabulary cannot be mistaken for work on a customer-facing surface.
+  Follow the adopting repository's documented naming and language conventions; this skill does
+  not supply a default language split or reserve a product name of its own.
 - **NOT an architecture audit.** It does not sweep the codebase for shallow modules / refactor
   candidates / deepening opportunities, and it does not file issues. That is a different skill's
   job (`architecture-audit`); this skill's surface is the vocabulary file, not the architecture.
@@ -41,9 +43,9 @@ job ends at a correct, committed edit to `.glossary/TERMS.md`.)
 ## Repo-agnostic — resolve the target once
 
 This skill is **repo-agnostic** (the pipeline suite is an installable plugin — the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository). It
-never hardcodes a repo. When you need the GitHub target (e.g. to cite an issue/ADR number in a
-term's disambiguation note), resolve it once, at the top of your run, per the shared contract's
-**Target repo resolution** ([`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md)):
+never hardcodes a repo. When you need a GitHub target (for example, to cite an issue number in a
+term's disambiguation note), resolve it only for that optional operation. Prefer
+`CLAUDE_PIPELINE_REPO`; otherwise resolve the current checkout:
 
 ```bash
 REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
@@ -98,16 +100,21 @@ lose hand-curated disambiguation notes). Bootstrap is the cold-start case.
 The first-run seed. Run it when there's no glossary worth preserving.
 
 1. **Find the surfaces.** Enumerate the product/feature surfaces the vocabulary should cover —
-   the feature folders, the public exports, the domain modules. In the adopting repository these are under
-   application source directories (for example `apps/*`, `src/*`, or `packages/*`); in another repo,
-   the equivalent top-level domains. List them from the tree, not from memory:
+   the feature folders, public exports, and domain modules. Derive their locations from the
+   adopting repository's tree and contributor guidance, never from an assumed monorepo layout.
+   Start with the tracked top-level directories, then inspect the directories that actually hold
+   the repository's source and public interfaces:
 
    ```bash
    ROOT="$(git rev-parse --show-toplevel)"
-   # feature/domain folders + package names — the surfaces whose nouns the glossary covers
-   ls "$ROOT"/apps/*/src/features 2>/dev/null
-   ls -d "$ROOT"/packages/*/ 2>/dev/null
+   # Candidate top-level domains; inspect the live tree before choosing the code surfaces.
+   git -C "$ROOT" ls-files | awk -F/ 'NF > 1 {print $1}' | sort -u
    ```
+
+   If the repository documents source roots, use those roots. Otherwise inspect the candidate
+   directories and select the ones containing implementation, public interfaces, or domain
+   definitions. Do not treat documentation, vendored dependencies, generated output, or tooling
+   metadata as a vocabulary surface merely because they are tracked.
 
 2. **Harvest the nouns.** For each surface, read enough to name its domain nouns: the product
    name, its entities, the services/tables/exports a contributor must know. Capture the *canonical*
@@ -140,13 +147,14 @@ the change. The discipline is surgical — touch the affected rows, preserve eve
    ROOT="$(git rev-parse --show-toplevel)"
    # the commit that last touched the glossary — the lower bound of "what changed since"
    LAST=$(git -C "$ROOT" log -1 --format=%H -- .glossary/TERMS.md)
-   # the code surfaces that changed since then (feature folders, public exports, renames)
-   git -C "$ROOT" diff --name-status "$LAST"..HEAD -- apps packages
+   # Review changed paths, then retain only the repository's code/domain surfaces.
+   git -C "$ROOT" diff --name-status "$LAST"..HEAD
    ```
 
    If the file has never been committed (you're staging a fresh seed), that's the bootstrap case,
    not this one. If `LAST` is empty for a reason other than absence, fall back to reviewing the
-   working-tree diff (`git -C "$ROOT" diff --name-status HEAD -- apps packages`).
+   working-tree diff (`git -C "$ROOT" diff --name-status HEAD`). Exclude non-code paths only
+   after inspecting the repository's own layout; never rely on a fixed source-root pathspec.
 
 2. **Classify each change against the vocabulary:**
    - **A new noun** (a new feature folder, a new public export, a new entity/table) → **add** a row
@@ -168,16 +176,15 @@ the change. The discipline is surgical — touch the affected rows, preserve eve
    don't invent a marker the file doesn't already use.
 
 The result of either mode is a **clean, committed edit to `.glossary/TERMS.md`** and nothing else —
-no code change, no issue, no PR (the dispatching `write-code` flow, when there is one, owns the PR).
+no code change, no issue, no PR (a dispatching repository workflow, when there is one, owns any PR).
 
 ---
 
 ## Conventions
 
-This skill is one of the pipeline suite; the shared formats, label semantics, and the
-target-repo resolution it cites live in
-[`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md). The vocabulary spine this
-skill maintains is the repo's **4th doc surface** (`.glossary/`), alongside `CLAUDE.md`,
+This skill is one of the portable pipeline suite; its repository-local editing rules and optional
+GitHub resolution are stated at their use sites above. The vocabulary spine this skill maintains
+is the repo's **4th doc surface** (`.glossary/`), alongside `CLAUDE.md`,
 `.decisions/`, and `.patterns/`:
 
 - **One file, terms-only.** `.glossary/TERMS.md` is the whole surface area. Conventions live in

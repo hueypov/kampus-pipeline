@@ -1,9 +1,14 @@
 ---
 name: review-design
-description: Verify a UI-affecting PR against the four-pillars design law (the applicable safety invariant) by driving Playwright over the PR's preview deploy, capturing the changed UI surfaces, and judging the rendered screenshots multimodally — the 4th reviewer skill alongside review-code / review-doc / review-skill in the configured target repo's pipeline. It hard-FAILs on the six enumerable, objective the visual-quality rule that prohibits the six objective UI failures prohibitions (faint-for-meaning, missing focus ring, off-grid spacing/type, void empty state, sub-36px tap target, colour-alone meaning), on an uncaught render exception, and on an unexplained deviation from a blessed golden on a blessed surface (calibration B, <related work item> — the deterministic rendered-vs-golden diff via the `@kampus/design-capture` seam is escalated to multimodal judgment, never auto-failed on the raw diff); all OTHER holistic/taste judgment rides as advisory (non-blocking) notes in the same verdict comment, and it is calibrated to FAIL conservatively — a borderline call is downgraded to advisory, never a hard block. Trigger on "review the design of PR #N", "review-design #N", "run the design gate on #N", "gate the UI PR against the pillars", "does this UI PR meet the design law", "run review-design", or whenever you're asked to confirm a UI PR's rendered surfaces obey the applicable safety invariant before merge. This is the design-class verification stage of the issue-intake pipeline: it consumes the UI PRs write-code opens, renders and looks at them over the preview deploy, and emits a namespaced, SHA-bound `review-design: PASS @ <sha> — merge-ready` / `review-design: FAIL @ <sha> — changes-requested` comment marker (never a native review — the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA), upserted to one-per-PR, embedding the GitHub-hosted screenshot evidence; on a FAIL it feeds the existing write-code repair loop. It never merges; it never emits a review-code / review-doc / review-skill marker.
+description: Verify a UI-affecting PR against the four-pillars design law (the applicable safety invariant) by driving Playwright over the PR's preview deploy, capturing the changed UI surfaces, and judging the rendered screenshots multimodally — the 4th reviewer skill alongside review-code / review-doc / review-skill in the configured target repo's pipeline. It hard-FAILs on the six enumerable, objective the visual-quality rule that prohibits the six objective UI failures prohibitions (faint-for-meaning, missing focus ring, off-grid spacing/type, void empty state, sub-36px tap target, colour-alone meaning), on an uncaught render exception, and on an unexplained deviation from a blessed golden on a blessed surface (calibration B, documented repository precedent — the deterministic rendered-vs-golden diff via the `repository adapter design-capture` seam is escalated to multimodal judgment, never auto-failed on the raw diff); all OTHER holistic/taste judgment rides as advisory (non-blocking) notes in the same verdict comment, and it is calibrated to FAIL conservatively — a borderline call is downgraded to advisory, never a hard block. Trigger on "review the design of PR #N", "review-design #N", "run the design gate on #N", "gate the UI PR against the pillars", "does this UI PR meet the design law", "run review-design", or whenever you're asked to confirm a UI PR's rendered surfaces obey the applicable safety invariant before merge. This is the design-class verification stage of the issue-intake pipeline: it consumes the UI PRs write-code opens, renders and looks at them over the preview deploy, and emits a namespaced, SHA-bound `review-design: PASS @ <sha> — merge-ready` / `review-design: FAIL @ <sha> — changes-requested` comment marker (never a native review — the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA), upserted to one-per-PR, embedding the GitHub-hosted screenshot evidence; on a FAIL it feeds the existing write-code repair loop. It never merges; it never emits a review-code / review-doc / review-skill marker.
 ---
 
 # review-design
+
+## Repository-owned policy boundary
+
+This workflow is part of the default generic payload and `pipeline init` links it into `.claude/skills`. Availability is not authority: before external GitHub operations, resolve the consumer repository root and read `.pipeline/agent-policy.json`. Read `.pipeline/optional-workflow-policy.json` for repository-specific integration settings. Do not infer a platform, product lifecycle, branch, organization, or approval actor from examples below. When policy does not authorize an action or required configuration is unset, preserve the workflow context, explain the missing configuration, and fail closed before an external mutation.
+
 
 You are the **design-class gate** — the agent vision-gate the rule that requires independent visual review for UI-affecting changes records.
 `write-code` already picked a triaged issue, implemented it on a branch, and opened a PR with
@@ -12,7 +17,7 @@ You are the **design-class gate** — the agent vision-gate the rule that requir
 drive the PR's **preview deploy** with Playwright, **capture the changed UI surfaces**, and judge
 those screenshots against the **four-pillars design law** (the applicable safety invariant)
 and its machine-readable transcription in
-[`design-system-manifest.md`](<repository URL>).
+[`design-system-manifest.md`](repository-owned record URL).
 
 **Claude — you, multimodal — are the vision model.** There is no exotic vision service and no human
 in the capture loop (the rule that requires independent visual review for UI-affecting changes, "Fork ruled — agent vision-gate, not human-eyeball"): the reviewer
@@ -45,9 +50,9 @@ embed it as evidence, but decide on what you saw locally.
 The gate is **blocking**, but its hard-FAIL surface is deliberately narrow (the rule that requires independent visual review for UI-affecting changes, "Blocking
 scope — calibrated, fail-conservative"). You hard-FAIL on a small, enumerated set of **objective**
 classes: the six the visual-quality rule that prohibits the six objective UI failures prohibitions (the "never" rules below — **visual facts** a reviewer can
-point at without taste entering the judgment), the deterministic render-exception check (<related work item>), and
+point at without taste entering the judgment), the deterministic render-exception check (documented repository precedent), and
 — the one class this gate adds for the golden-screen loop — an **unexplained** deviation from a
-blessed golden on a blessed surface (the escalate-to-judgment class below; calibration B, <related work item>).
+blessed golden on a blessed surface (the escalate-to-judgment class below; calibration B, documented repository precedent).
 Everything holistic or taste-based ("this feels cramped", "the hierarchy is muddy") rides as
 **advisory, non-blocking notes in the same verdict comment**, never as a FAIL — the golden-deviation
 class does **not** promote any of those taste notes to blocking (the rule that requires independent visual review for UI-affecting changes is unchanged); it adds
@@ -85,14 +90,14 @@ specific prohibition in the verdict:
 6. **Colour-alone meaning.** State or meaning signalled by **colour alone** — a selected/active/error
    state distinguished only by hue, with no second channel (icon, text, shape, weight). (Pillar 4.)
 
-### The render-exception hard-FAIL — a thrown runtime error fails the gate, regardless of the pixels (<related work item>)
+### The render-exception hard-FAIL — a thrown runtime error fails the gate, regardless of the pixels (documented repository precedent)
 
 The six above are **visual facts**. This seventh is a **deterministic** one: a UI that throws an
 **uncaught runtime exception** during the capture render (e.g. a `TypeError`) hard-FAILs the gate —
 **even when the captured frame looks acceptable on that tick**. A single screenshot only sees pixels,
 so a mount/init race that crashes on a "bad tick" while rendering fine on a "good tick" (the
-`@kampus/composer` read-only null-editor `TypeError: Cannot read properties of null (reading
-'commands')`, <related work item>) slipped straight through the visual six and reached live. So the capture render
+`repository adapter composer` read-only null-editor `TypeError: Cannot read properties of null (reading
+'commands')`, documented repository precedent) slipped straight through the visual six and reached live. So the capture render
 also **listens for page errors**, and a thrown exception is a FAIL by itself.
 
 This check is **not a taste call** — it reads the capture helper's per-surface `pageErrors` (Step 2),
@@ -102,26 +107,26 @@ that threw fails the gate no matter how its screenshot scores. Only an **uncaugh
 because dev console.error is noisy (React key/prop warnings) and failing on it would trip the gate on
 benign output — consistent with the fail-conservative calibration.
 
-### The golden-deviation escalate-to-judgment hard-FAIL — an *unexplained* deviation from a blessed golden (calibration B, <related work item>)
+### The golden-deviation escalate-to-judgment hard-FAIL — an *unexplained* deviation from a blessed golden (calibration B, documented repository precedent)
 
 The six are visual facts; the render-exception is deterministic. This eighth class is **different in
 kind**: it is **deterministic-diff → escalate-to-judgment, and it NEVER auto-FAILs on the raw diff**
-(founder decision <related work item>, calibration B). It is the review half of the golden-screen loop (epic
-[<related work item>](<repository URL>)): a small founder-blessed golden set is the
+(founder decision documented repository precedent, calibration B). It is the review half of the golden-screen loop (epic
+[documented repository precedent](repository-owned record URL)): a small founder-blessed golden set is the
 visual reference `write-code` generates toward and the baseline you block deviation from — the answer
-to the rule-compliant-but-amateur composition drift the six prohibitions can't catch (<related work item>/<related work item>/<related work item>,
+to the rule-compliant-but-amateur composition drift the six prohibitions can't catch (documented repository precedent/documented repository precedent/documented repository precedent,
 every local rule passing while the composed surface reads wrong).
 
 **Scope — blessed surfaces only.** This class applies **only** to a changed surface that has a
 **golden baseline** — a surface-id present in the committed `golden-pointer.json`
-(`packages/design-capture/golden-pointer.json`, the applicable safety invariant).
+(`$PIPELINE_DESIGN_CAPTURE_ADAPTER/golden-pointer.json`, the applicable safety invariant).
 A changed surface with **no** golden is **N/A** for this class and behaves exactly as before (the six
 prohibitions + render-exception only). You never block a surface you have no blessed reference for.
 
 **The flow — deterministic diff → escalate → judge:**
 
 1. **Deterministic diff (the objective signal, never the verdict).** For each changed *blessed*
-   surface, compute the rendered-vs-golden diff through the `@kampus/design-capture` golden seam
+   surface, compute the rendered-vs-golden diff through the `repository adapter design-capture` golden seam
    (Step 2b): `resolveGoldenBytes(pointer, surfaceId)` → the golden bytes, then `diffRasters(golden,
    candidate, {masks, channelThreshold})` → the structured `DiffResult` (`magnitude` in [0, 1] + the
    differing `regions`), under the **diff-time flake canon** (known-dynamic regions masked so they
@@ -148,7 +153,7 @@ prohibitions + render-exception only). You never block a surface you have no ble
 **Additive and conjunctive — it can only ever ADD a FAIL, never remove one.** The six prohibitions
 and the render-exception check are untouched, and **all other composition/taste stays advisory** (the rule that requires independent visual review for UI-affecting changes unchanged): this promotes *nothing* else to blocking — it adds exactly the one golden-deviation
 class. Other named composition rules promote to hard-FAIL later, rule-by-rule, only once proven as
-objective as the six (<related work item>) — not here.
+objective as the six (documented repository precedent) — not here.
 
 **Can't-resolve-the-golden is a can't-gate, not a FAIL.** If a changed blessed surface's golden bytes
 can't be resolved (a depo fetch fault — `resolveGoldenBytes` errors, distinct from the `null` an
@@ -164,17 +169,17 @@ notes never flip the verdict to FAIL. (The golden-deviation class above is the *
 composition-level concern can rise to a FAIL through, and only via the blessed-golden reference +
 escalate-to-judgment path — never a bare taste call.)
 
-**<related work item> is folded in here (the rule that requires independent visual review for UI-affecting changes Consequences).** The earlier framing — bolting a "design + a11y
+**documented repository precedent is folded in here (the rule that requires independent visual review for UI-affecting changes Consequences).** The earlier framing — bolting a "design + a11y
 dimension" onto `review-code` / `review-doc` — is **subsumed** by this gate. Design review is its own
 gate with its own SHA-bound marker, not a rider on the code/doc gates; the design + a11y check
-dimension <related work item> named **is** this skill's rubric (the six prohibitions above + the advisory pass).
+dimension documented repository precedent named **is** this skill's rubric (the six prohibitions above + the advisory pass).
 
 ## Authority limit: you never merge
 
 **You do not merge. Not on a pass, not ever, not on your own authority.** Your output is a *verdict*
 — a merge-ready signal (non-blocking) or advice (blocking) plus a fail comment naming the violated
 prohibition. Merging is the deliberate act of **`ship-it`** (the one stage granted merge authority) —
-for the blocking set (§CP) too, only gated on a `<configured-control-plane-team>` approval at head that
+for the blocking set (§CP) too, only gated on a `configured approval authority` approval at head that
 `ship-it` then enqueues on (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues). You signal merge-ready; `ship-it` asserts your PASS, confirms CI
 is green, and squash-merges. Conflating "verified" with "merged" is the self-grading collapse this
 stage exists to prevent — the same invariant the sibling gates hold.
@@ -237,25 +242,25 @@ UI change is *for*, which surfaces it touches) — context, not the rubric.
 ## Step 0 — Classify: is this a UI-affecting PR? (mis-route off-ramp) + §CP
 
 Pull the file list first. This gate applies to a PR that **changes rendered UI** — the frontend
-under `apps/web/src/**` (React components, styles, tokens, routes). If the diff touches **no**
+under `$PIPELINE_APPLICATION_PATH/src/**` (React components, styles, tokens, routes). If the diff touches **no**
 UI-affecting path at all, this is the wrong gate.
 
 This off-ramp predicate is the **SAME one live `UI_RE`** ship-it *requires* on and reviewer.md
-*dispatches* on — re-resolved from `ship-it/SKILL.md@main` via the `?ref=main` idiom, NOT a
-hardcoded third copy. Wiring it to the single source is the <related work item> fix: a hardcoded off-ramp narrower
-than ship-it's require (`^apps/web/src/` vs the old `^apps/web/src/|\.tsx$|\.css$`) let a `.tsx`/`.css`
-outside `apps/web/src` be *required* yet off-ramped here with no marker → an unroutable phantom gate
+*dispatches* on — re-resolved from `ship-it/SKILL.md@configured base branch` via the `?ref=$PIPELINE_BASE_REF` idiom, NOT a
+hardcoded third copy. Wiring it to the single source is the documented repository precedent fix: a hardcoded off-ramp narrower
+than ship-it's require (`^$PIPELINE_APPLICATION_PATH/src/` vs the old `^$PIPELINE_APPLICATION_PATH/src/|\.tsx$|\.css$`) let a `.tsx`/`.css`
+outside `$PIPELINE_APPLICATION_PATH/src` be *required* yet off-ramped here with no marker → an unroutable phantom gate
 that deadlocked ship-it. Fail closed to **has-ui** (proceed and verdict) if the line is unreadable —
 never silently off-ramp, which is the failure that mints the phantom gate.
 
 ```bash
 PR=<pr number>
-# UI-affecting = the ONE live source (ship-it/SKILL.md@main's `UI_RE=` line) — the SAME predicate
+# UI-affecting = the ONE live source (ship-it/SKILL.md@configured base branch's `UI_RE=` line) — the SAME predicate
 # ship-it requires on and reviewer.md dispatches on, so require == dispatch == off-ramp by
-# construction (<related work item>). The literal is the fail-closed REFERENCE, not the live decision source.
-UI_RE='^apps/web/src/'
-UI_EXCLUDE_RE='\.(test|spec)\.tsx?$'   # <related work item>: carve src-colocated test/spec out (no rendered surface); mirrors §CLASS has-docs carve-then-test — ERE has no lookahead, hence the exclude pair
-UI_RAW="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/ship-it/SKILL.md?ref=main" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
+# construction (documented repository precedent). The literal is the fail-closed REFERENCE, not the live decision source.
+UI_RE='^$PIPELINE_APPLICATION_PATH/src/'
+UI_EXCLUDE_RE='\.(test|spec)\.tsx?$'   # documented repository precedent: carve src-colocated test/spec out (no rendered surface); mirrors §CLASS has-docs carve-then-test — ERE has no lookahead, hence the exclude pair
+UI_RAW="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/ship-it/SKILL.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
 UI_LIVE="$(printf '%s\n' "$UI_RAW" | grep '^UI_RE=' | head -n1 || true)"; UX_LIVE="$(printf '%s\n' "$UI_RAW" | grep '^UI_EXCLUDE_RE=' | head -n1 || true)"
 if [ -n "$UI_LIVE" ]; then UI_RE="$(printf '%s' "$UI_LIVE" | sed "s/^UI_RE='//; s/'$//")"; else UI_RE='.'; fi   # unreadable ⇒ '.' ⇒ every path is UI-affecting ⇒ proceed & verdict (never silently off-ramp)
 if [ -n "$UX_LIVE" ]; then UI_EXCLUDE_RE="$(printf '%s' "$UX_LIVE" | sed "s/^UI_EXCLUDE_RE='//; s/'$//")"; else UI_EXCLUDE_RE='$^'; fi   # unreadable ⇒ '$^' never-match ⇒ carve nothing ⇒ proceed & verdict (fail-closed)
@@ -263,7 +268,7 @@ UI_TOUCHED="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
   --jq '.[].filename' | grep -Ev "$UI_EXCLUDE_RE" | grep -E "$UI_RE" || true)"
 ```
 
-- **Empty** (the diff changes no `apps/web/src/**` surface — a pure backend / infra / docs / skill
+- **Empty** (the diff changes no `$PIPELINE_APPLICATION_PATH/src/**` surface — a pure backend / infra / docs / skill
   PR) → **mis-route off-ramp.** Post a **plain note** (no `review-design:` marker — there is no
   rendered UI to verdict) saying `not a UI-affecting PR — no rendered surface to gate; route to
   review-code / review-doc / review-skill by class` and **stop**. Never emit a `review-design` marker
@@ -275,20 +280,20 @@ UI_TOUCHED="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
   present before it merges.)
 
 **Then classify blocking vs non-blocking via the canonical §CP set** — the same probe the sibling
-gates run, read **freshly from `origin/main`** (the embedded literal is the fail-closed reference +
+gates run, read **freshly from `$PIPELINE_BASE_REF`** (the embedded literal is the fail-closed reference +
 drift-lockstep target, not the live decision source; a stale injected snapshot once mis-flagged a
-now-control-plane PR, <related work item>):
+now-control-plane PR, documented repository precedent):
 
 ```bash
-# §CP boundary is single-sourced in pipeline-cli (control-plane-paths/control-plane-re.ts, <related work item>);
-# run `pipeline-cli control-plane-paths` to print it. It is re-resolved from origin/main right below
-# (the <related work item> anti-self-authorization read), so this is only a fail-closed sentinel, never the live source.
-CONTROL_PLANE_RE='.'   # fail-closed default: every path is control-plane until origin/main resolves
-CP_LIVE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=main" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep '^CONTROL_PLANE_RE=' | head -n1 || true)"
+# §CP boundary is single-sourced in pipeline-cli (control-plane-paths/control-plane-re.ts, documented repository precedent);
+# run `pipeline-cli control-plane-paths` to print it. It is re-resolved from $PIPELINE_BASE_REF right below
+# (the documented repository precedent anti-self-authorization read), so this is only a fail-closed sentinel, never the live source.
+CONTROL_PLANE_RE='.'   # fail-closed default: every path is control-plane until $PIPELINE_BASE_REF resolves
+CP_LIVE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep '^CONTROL_PLANE_RE=' | head -n1 || true)"
 if [ -n "$CP_LIVE" ]; then
   CONTROL_PLANE_RE="$(printf '%s' "$CP_LIVE" | sed "s/^CONTROL_PLANE_RE='//; s/'$//")"
 else
-  CONTROL_PLANE_RE='.'   # FAIL CLOSED: can't read origin/main's boundary ⇒ treat as blocking (advisory)
+  CONTROL_PLANE_RE='.'   # FAIL CLOSED: can't read $PIPELINE_BASE_REF's boundary ⇒ treat as blocking (advisory)
 fi
 CONTROL_PLANE_TOUCHED="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
   --jq '.[].filename' | grep -E "$CONTROL_PLANE_RE" || true)"
@@ -298,7 +303,7 @@ CONTROL_PLANE_TOUCHED="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page
   PASS marker binds `ship-it`.
 - **Non-empty** (the UI PR also touches a `.claude`/`.github` path or a gate-critical skill) →
   **blocking** (§CP): you review it and post your findings, but **advisory only** — a
-  `<configured-control-plane-team>` approval at head gates the merge and `ship-it` then enqueues it (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues
+  `configured approval authority` approval at head gates the merge and `ship-it` then enqueues it (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues
   approve-then-enqueue; the rule that only the shipping stage has merge authority single merge authority). Say so in the verdict (Step 5, advisory path).
 
 ---
@@ -309,7 +314,7 @@ CONTROL_PLANE_TOUCHED="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page
 gh api repos/$REPO/pulls/$PR \
   --jq '{number, state, draft, merged, head: .head.ref, base: .base.ref, body}'
 # Resolve the current head SHA the verdict binds to (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA) via the shared
-# `pipeline-cli review-head` verb (<related work item> / <related work item> / <related work item>) — `resolve` is REST-only (this gate
+# `pipeline-cli review-head` verb (documented repository precedent / documented repository precedent / documented repository precedent) — `resolve` is REST-only (this gate
 # reviews the preview URL, not a checked-out tree), fail-safe on a missing/closed/partial head:
 HEAD_SHA="$(pipeline-cli review-head resolve --pr "$PR" | jq -r .headSha)"
 ```
@@ -351,7 +356,7 @@ maps to the page(s) that render it. Read the diff for surface selection:
 gh pr diff $PR || gh api repos/$REPO/pulls/$PR -H "Accept: application/vnd.github.v3.diff"
 ```
 
-Map each changed `apps/web/src/**` surface to the route(s) that render it (a changed
+Map each changed `$PIPELINE_APPLICATION_PATH/src/**` surface to the route(s) that render it (a changed
 `sozluk/TermPage` component → the term route; a changed reaction/vote component → every feed + detail
 route that shows it; a changed empty-state primitive → a route in its **empty** state). Include the
 **state variants** a prohibition needs — an interactive control's `:focus-visible` state (prohibition
@@ -368,7 +373,7 @@ surface-ids are the same `<route>[:state]` capture spec:
 
 ```bash
 # blessed surface-ids: the keys of the committed pointer's `surfaces` map (the applicable safety invariant)
-POINTER=packages/design-capture/golden-pointer.json
+POINTER=$PIPELINE_DESIGN_CAPTURE_ADAPTER/golden-pointer.json
 BLESSED_SURFACES="$(jq -r '.surfaces | keys[]' "$POINTER" 2>/dev/null || true)"
 # the changed BLESSED surfaces = the capture surface-ids (Step 1) ∩ $BLESSED_SURFACES.
 # Empty ∩ ⇒ no blessed surface changed ⇒ the golden-deviation class is N/A this run (skip Step 2b).
@@ -379,19 +384,19 @@ bytes are ready to diff against the golden in Step 2b.
 
 ---
 
-## Step 2 — Capture over the preview deploy, then read the LOCAL bytes (the <related work item> helper seam)
+## Step 2 — Capture over the preview deploy, then read the LOCAL bytes (the documented repository precedent helper seam)
 
 The Playwright capture + GitHub-attachment-upload mechanics are the **sibling helper's** job
-(issue [<related work item>](<repository URL>)), **not re-implemented here**. This
+(issue [documented repository precedent](repository-owned record URL)), **not re-implemented here**. This
 skill *drives* that helper: it is a `packages/*` mechanical-tooling member (pure core + thin Effect
 bin, the `epic-ledger` / `leak-guard` idiom), invoked as a thin bin.
 
 **The seam this skill codes against** (the expected contract — see the PR body's "helper seam" note;
-if <related work item> lands a different package name/flags, this reference updates in lockstep, the rule that requires independent visual review for UI-affecting changes's four
+if documented repository precedent lands a different package name/flags, this reference updates in lockstep, the rule that requires independent visual review for UI-affecting changes's four
 implementation legs land to match):
 
-- **Module:** `@kampus/design-capture` at `packages/design-capture/`, run as `node
-  packages/design-capture/src/bin.ts capture …` (the `pipeline-cli` / `node src/bin.ts` idiom).
+- **Module:** `repository adapter design-capture` at `$PIPELINE_DESIGN_CAPTURE_ADAPTER/`, run as `node
+  $PIPELINE_DESIGN_CAPTURE_ADAPTER/src/bin.ts capture …` (the `pipeline-cli` / `node src/bin.ts` idiom).
 - **Input:** the preview URL, the route+state surface list (Step 1), an output dir for the PNG bytes,
   and the target `repository_id` (for the upload).
 - **Output (stdout JSON):** one record per captured surface —
@@ -400,12 +405,12 @@ implementation legs land to match):
   with `uploadError` set when the undocumented upload endpoint fails — a **tolerated** degradation:
   the gate still judges `localPath`). **`pageErrors`** is the array of runtime errors thrown into the
   page during that surface's render — each `{ kind: "pageerror" | "console.error", text }` — the
-  deterministic <related work item> crash signal (a `pageerror` is the hard-FAIL; a `console.error` is advisory).
+  deterministic documented repository precedent crash signal (a `pageerror` is the hard-FAIL; a `console.error` is advisory).
 
 ```bash
-# Drive the helper (the seam; <related work item> owns the Playwright + upload mechanics):
+# Drive the helper (the seam; documented repository precedent owns the Playwright + upload mechanics):
 OUT="$(mktemp -d)"
-CAPTURES="$(node packages/design-capture/src/bin.ts capture \
+CAPTURES="$(node $PIPELINE_DESIGN_CAPTURE_ADAPTER/src/bin.ts capture \
   --preview-url "$PREVIEW_URL" \
   --surface "<route>[:state]" [--surface "<route>[:state]" ...] \
   --out "$OUT" \
@@ -419,7 +424,7 @@ it is embedded in the verdict as evidence only (the rule that requires independe
 upload failure), that does **not** affect the verdict — you judged the local bytes; note the upload
 degradation in the evidence section and proceed.
 
-**Then extract the deterministic render-exception signal** (<related work item>) — no vision needed, just read
+**Then extract the deterministic render-exception signal** (documented repository precedent) — no vision needed, just read
 `pageErrors`. A surface that threw an **uncaught exception** (`kind == "pageerror"`) during its render
 hard-FAILs the gate regardless of how its screenshot looks; a bare `console.error` is advisory. The
 `design-capture` bin also prints a `render FAILED — …` summary to stderr when any surface threw:
@@ -444,15 +449,15 @@ A non-empty `RENDER_CRASHES` is a **FAIL** (Step 3), naming each thrown error + 
 **Skip this step entirely when no blessed surface changed** (Step 1's intersection was empty) — the
 golden-deviation class is then N/A and the run is exactly as before. When one or more changed surfaces
 *are* blessed, compute the **deterministic** rendered-vs-golden diff for each through the
-`@kampus/design-capture` golden seam. This is the **signal** that decides whether to escalate — it is
-**not** the verdict, and it **never** auto-FAILs (calibration B, <related work item>).
+`repository adapter design-capture` golden seam. This is the **signal** that decides whether to escalate — it is
+**not** the verdict, and it **never** auto-FAILs (calibration B, documented repository precedent).
 
-**The seam this step codes against** (the golden substrate <related work item> landed under the applicable safety invariant — the same
+**The seam this step codes against** (the golden substrate documented repository precedent landed under the applicable safety invariant — the same
 package Step 2 captures with; if it later exposes a dedicated golden-diff bin this reference updates
 in lockstep, as Step 2's capture-seam note does):
 
 - **Resolve the golden** — `resolveGoldenBytes(pointer, surfaceId)` ties the committed pointer to the
-  blessed bytes: `loadGoldenPointer("packages/design-capture/golden-pointer.json")` → `resolveGoldenBytes`
+  blessed bytes: `loadGoldenPointer("$PIPELINE_DESIGN_CAPTURE_ADAPTER/golden-pointer.json")` → `resolveGoldenBytes`
   (pointer → depo URL → bytes). An **unblessed** surface resolves to `null` (already excluded by Step
   1's intersection); a **depo fetch fault** is an error — the *can't-gate* branch below, never a FAIL.
 - **The candidate bytes** are the surface's captured `localPath` PNG from Step 2.
@@ -513,11 +518,11 @@ four-pillars-obeying redesign the issue/PR states — the founder re-blesses to 
 current), **FAIL** only when the deviation is **unexplained/unjustified** (incidental drift the PR
 never set out to make, or a regression / off-law composition on the blessed surface). Never FAIL on
 the raw magnitude alone — the diff is the trigger, your side-by-side judgment is the verdict
-(calibration B, <related work item>). A surface whose golden couldn't be resolved is a **can't-gate note**, neither
+(calibration B, documented repository precedent). A surface whose golden couldn't be resolved is a **can't-gate note**, neither
 PASS nor FAIL of this class.
 
 **The design verdict is conjunctive over the six hard-FAIL prohibitions, the deterministic
-render-exception check (<related work item>), and the golden-deviation class (escalate-to-judgment, <related work item>):** every
+render-exception check (documented repository precedent), and the golden-deviation class (escalate-to-judgment, documented repository precedent):** every
 applicable prohibition must PASS (or be N/A), no surface may have thrown an uncaught exception during
 its render (`RENDER_CRASHES` empty), **and** no changed blessed surface may carry an **unexplained**
 golden-deviation. One objective visual FAIL, one thrown render exception, or one unexplained
@@ -543,33 +548,33 @@ Write the verdict to a per-run temp file so multi-line markdown + backticks surv
 **upsert** it — exactly **one** `review-design` verdict comment per PR (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA rule 2), the
 `mktemp` handle run-unique (the PR number alone isn't — two concurrent reviews would collide). That
 upsert plus its emission guards are the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA glue **all four gates share**, so — exactly as
-`review-doc` — post through the deterministic, unit-tested tool (`pipeline-cli verdict post`, <related work item>).
+`review-doc` — post through the deterministic, unit-tested tool (`pipeline-cli verdict post`, documented repository precedent).
 **The tool is the marker-emit choke point:** it refuses fail-closed *before* landing unless every SHA
 field (the first-line `@ <sha>` and the `Reviewed-head:` anchor) is a clean full 40-hex head SHA —
-closing the mktemp-path leak where a scratch path bled into the `@ <sha>` field (<related work item>). Post it **as
+closing the mktemp-path leak where a scratch path bled into the `@ <sha>` field (documented repository precedent). Post it **as
 a comment, never a native review** (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA rule 4): a native review can't carry the `@ <sha>` in
 the shape this contract controls, so the comment is the single carrier.
 
 **MANDATE (hard invariant, not a suggestion):** `$VERDICT post` (here via the `upsert` wrapper
 below) is the **only** permitted way to emit this verdict marker. A bare `gh api …/comments` /
 `gh pr comment` hand-post of the marker that skips the guard is **FORBIDDEN** (it is the emit-side
-hole <related work item> / <related work item> / <related work item> rode: hand-posting off the verdict lib means `emissionDefect` never
+hole documented repository precedent / documented repository precedent / documented repository precedent rode: hand-posting off the verdict lib means `emissionDefect` never
 runs). If a raw post is ever genuinely unavoidable, the body **MUST** first pass
-`pipeline-cli leak-guard scan-comment` (the <related work item> pre-post net) before the post. This is the
+`pipeline-cli leak-guard scan-comment` (the documented repository precedent pre-post net) before the post. This is the
 single-source rule in
 [gh-issue-intake-formats.md](../gh-issue-intake-formats.md#the-guarded-emit-path-is-mandatory--never-hand-post-a-verdict-marker-off-the-guard) — the *why* lives there, not re-derived here.
 
 The SHA in the first line is **load-bearing**: `ship-it` refuses any verdict not bound to the PR's
 current head (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA). **Token order is fixed** (§5): `@ <HEAD_SHA>` comes **immediately after**
 `PASS`/`FAIL`, **before** `— merge-ready`/`— changes-requested` — never a trailing `@ <sha>` (that
-captures `sha=null` and `ship-it` refuses a correct PASS as `unverified`, <related work item>).
+captures `sha=null` and `ship-it` refuses a correct PASS as `unverified`, documented repository precedent).
 
 Every verdict body carries the canonical **`Reviewed-head: @ <HEAD_SHA>`** anchor line (§6.6 / the rule that records a control-plane advisory reviewed head in its body without making it a merge verdict) — the read-back guard asserts it on every path, and `ship-it`'s §CP enqueue resolves the head
 from exactly that line. Every body also carries an **Evidence** section embedding the helper's
 GitHub-hosted screenshot URLs so a human can see what you judged.
 
 ```bash
-# resolve the verdict CLI once — in-repo-first, published-fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic <related work item>)
+# resolve the verdict CLI once — in-repo-first, published-fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic documented repository precedent)
 if [ -x .pipeline/toolkit/bin/pipeline ]; then
   VERDICT="pnpm pipeline cli verdict"   # the adopting repository-local: the in-repo consolidated bin
 else
@@ -603,8 +608,8 @@ Reviewed-head: @ <HEAD_SHA>
 - [N/A]  Void empty state — no list/detail empty state in the changed surfaces
 - [PASS] Sub-36px tap target — <surface>: hit area ≥ 36px
 - [PASS] Colour-alone meaning — <surface>: state carries a second channel
-- [PASS] Render exception (<related work item>) — no surface threw an uncaught exception during render
-- [PASS/N/A] Golden-deviation (<related work item>) — <blessed surface>: matches golden (magnitude <m>) / intentional redesign, or N/A (no blessed surface changed)
+- [PASS] Render exception (documented repository precedent) — no surface threw an uncaught exception during render
+- [PASS/N/A] Golden-deviation (documented repository precedent) — <blessed surface>: matches golden (magnitude <m>) / intentional redesign, or N/A (no blessed surface changed)
 
 **Advisory (non-blocking)**
 - <holistic/taste note, or a captured console.error, or "none">
@@ -624,14 +629,14 @@ the first line is the **canonical advisory line** — **not** a merge-ready go-a
 carries **no first-line `@ <sha>`** by design (the rule that keeps advisory control-plane evidence separate from merge-authorizing verdicts — it authorizes nothing, so it stays out of
 `ship-it`'s PASS namespace); the reviewed head is recorded once, in the body's canonical
 `Reviewed-head:` line (the rule that records a control-plane advisory reviewed head in its body without making it a merge verdict), which `ship-it`'s §CP enqueue reads. `ship-it` does not
-auto-merge this PR on machine gates alone — it enqueues only once a `<configured-control-plane-team>`
+auto-merge this PR on machine gates alone — it enqueues only once a `configured approval authority`
 approval is present at head (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues).
 
 ```markdown
 review-design: advisory — blocking-set PR (manual merge)
 
 PR #<PR> touches the control plane (§CP) — the agent control plane / pipeline gates (the control-plane rule that requires human approval for changes to automation, CI, or merge safeguards/the related safeguards). My verdict is **advisory only**: it does **not** authorize a merge. Under the §CP
-hard gate (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues), a `<configured-control-plane-team>` member approves this at its current head and
+hard gate (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues), a `configured approval authority` member approves this at its current head and
 `ship-it` then enqueues it (the rule that only the shipping stage has merge authority single merge authority) — there is no human hand-merge in the
 §CP path.
 
@@ -642,8 +647,8 @@ screenshots are evidence only) — all objective prohibitions pass:
 
 **Hard-FAIL prohibitions (the applicable safety invariant)**
 - [PASS/N/A] <the six, as above>
-- [PASS] Render exception (<related work item>) — no surface threw an uncaught exception during render
-- [PASS/N/A] Golden-deviation (<related work item>) — <blessed surface>: matches golden / intentional redesign, or N/A
+- [PASS] Render exception (documented repository precedent) — no surface threw an uncaught exception during render
+- [PASS/N/A] Golden-deviation (documented repository precedent) — <blessed surface>: matches golden / intentional redesign, or N/A
 
 **Advisory (non-blocking)**
 - <note, or "none">
@@ -656,9 +661,9 @@ screenshots are evidence only) — all objective prohibitions pass:
 ### Fail path — an objective prohibition violated, a render exception was thrown, or an unexplained golden-deviation
 
 One or more of the six hard-FAIL prohibitions is **objectively** violated, **or** a surface threw an
-uncaught exception during its render (`RENDER_CRASHES` non-empty, <related work item>), **or** a changed blessed
+uncaught exception during its render (`RENDER_CRASHES` non-empty, documented repository precedent), **or** a changed blessed
 surface carries an **unexplained** golden-deviation (Step 2b escalated it and your side-by-side
-judgment found the deviation unjustified, <related work item>). **Nothing merges. The PR stays open; the linked
+judgment found the deviation unjustified, documented repository precedent). **Nothing merges. The PR stays open; the linked
 issue stays open and assigned** — don't unassign, relabel, or close. Post the SHA-bound FAIL marker
 (the seam `write-code`'s fix round-trip keys on) with the full per-prohibition table — the passing
 rows too, so the author sees how close they are — and the **specific citation** on each FAIL so the
@@ -676,9 +681,9 @@ Reviewed-head: @ <HEAD_SHA>
 - [PASS] <prohibition> — <surface>: <what you saw>
 - [FAIL] Missing focus ring — <surface>: the <control> shows no focus ring in :focus-visible
   (the applicable safety invariant Pillar 4 — "never ship an interactive control with no focus ring")
-- [FAIL] Render exception (<related work item>) — <surface>: threw `TypeError: …` during render (uncaught
+- [FAIL] Render exception (documented repository precedent) — <surface>: threw `TypeError: …` during render (uncaught
   pageerror; the frame looked acceptable on this tick but the surface crashes on a bad tick)
-- [FAIL] Golden-deviation (<related work item>) — <blessed surface>: unexplained deviation from golden (magnitude
+- [FAIL] Golden-deviation (documented repository precedent) — <blessed surface>: unexplained deviation from golden (magnitude
   <m>, region(s) <boxes>); the PR did not set out to change this surface / the change reads off-law —
   <what looks wrong vs the golden>. (Justified redesigns pass; if this change is intentional, state
   it in the PR and have the founder re-bless the golden — the applicable safety invariant.)
@@ -700,13 +705,13 @@ Do **not** post a native `REQUEST_CHANGES` review — `review-design` is comment
 4), so the SHA-bound marker comment is the sole verdict artifact. Do **not** touch the issue's
 labels, assignee, or state on a fail — a failed gate is a no-op on the work state plus a comment.
 
-### Confirm the verdict landed clean (the shared read-back guard, <related work item>)
+### Confirm the verdict landed clean (the shared read-back guard, documented repository precedent)
 
 After **any** of the three upserts returns its comment id, close the loop: call the **single
 canonical** [`verdict_readback_guard`](../gh-issue-intake-formats.md#the-verdict-read-back-guard--after-posting-a-gate-marker-re-read-it-and-fail-loud-verdict_readback_guard)
 from the shared contract with the **`review-design`** gate token — it re-reads the comment you just
 wrote and asserts the canonical `review-design:` marker, the anchored `Reviewed-head: @ <sha>` line,
-and **no leaked local filesystem path** (the <related work item> marker-as-path leak). Do **not** re-derive a local
+and **no leaked local filesystem path** (the documented repository precedent marker-as-path leak). Do **not** re-derive a local
 copy:
 
 ```bash
@@ -727,13 +732,13 @@ match to paper over a moved head.
 
 A single invocation gates one UI PR end to end: classify UI-affecting + blocking/non-blocking via the
 canonical §CP set (Step 0, mis-route off-ramp if not a UI PR), resolve the PR / head SHA / preview
-URL / changed surfaces + flag which changed surfaces are blessed (Step 1), drive the <related work item> helper to
+URL / changed surfaces + flag which changed surfaces are blessed (Step 1), drive the documented repository precedent helper to
 capture over the preview deploy and read the **local bytes** + the per-surface `pageErrors` (Step 2),
-diff each changed *blessed* surface against its golden through the `@kampus/design-capture` seam
+diff each changed *blessed* surface against its golden through the `repository adapter design-capture` seam
 (Step 2b — the deterministic signal, never a raw-diff FAIL), judge each surface against the six
-objective the visual-quality rule that prohibits the six objective UI failures prohibitions plus the deterministic render-exception check (<related work item>) plus the
+objective the visual-quality rule that prohibits the six objective UI failures prohibitions plus the deterministic render-exception check (documented repository precedent) plus the
 golden-deviation class (escalate-to-judgment: an unexplained deviation from a blessed golden hard-
-FAILs, a justified redesign passes — <related work item>), with advisory taste alongside — calibrated to FAIL
+FAILs, a justified redesign passes — documented repository precedent), with advisory taste alongside — calibrated to FAIL
 conservatively (Step 3), then land the SHA-bound `review-design` verdict — PASS (non-blocking) /
 advisory (blocking) on a full pass, or FAIL on an objective violation, a thrown render exception, or
 an unexplained golden-deviation — with the hosted golden-vs-rendered screenshots embedded as evidence,

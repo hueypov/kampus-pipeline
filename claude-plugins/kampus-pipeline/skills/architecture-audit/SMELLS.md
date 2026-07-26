@@ -24,7 +24,7 @@ metric thresholds.
 ## Why these specific smells
 
 These ten are language-relatively-neutral and map directly onto the architecture vocabulary
-in `.glossary/LANGUAGE.md` (depth, seam, locality, leverage). They cover the main failure
+in `.glossary/LANGUAGE.md` (depth, seam, locality, leverage). They cover the configured base branch failure
 modes this audit is designed to find. The catalog is a starter — extend it as patterns recur
 in this codebase (e.g. props-drilling for React-heavy code, provider-soup for context-heavy
 code, layer-as-config for skill/plugin repos). When you extend it, the coverage gate emits

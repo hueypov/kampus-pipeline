@@ -29,8 +29,8 @@ substrate's `spawn-role` subcommand.
 2. **Spawn the member by role:**
 
    ```bash
-   .pipeline/toolkit/bin/pipeline crew spawn-role cartographer      # the HITL cartographer — boots idle
-   .pipeline/toolkit/bin/pipeline crew spawn-role engineering-manager --instance <id>   # one more engine
+   pipeline crew spawn-role cartographer      # the HITL cartographer — boots idle
+   pipeline crew spawn-role engineering-manager --instance <id>   # one more engine
    ```
 
    The launcher does the full bind (per-pane channel scope, tmux placement, model tier, agent
@@ -57,12 +57,8 @@ The shipped plugin carries **zero** operator data; every operator-specific value
 the one [personalization seam](PERSONALIZATION.md). You fill it once at stand-up and edit it
 whenever a dimension changes.
 
-1. **Copy the placeholder-only template to your operator-owned, git-ignored config:**
-
-   ```bash
-   cp "${CLAUDE_PLUGIN_ROOT}/crew.config.template.jsonc" .claude/crew.config.jsonc
-   echo ".claude/crew.config.jsonc" >> .gitignore
-   ```
+1. **Open the placeholder-only, operator-owned config created by `pipeline init`:**
+   `.claude/crew.config.jsonc` is already git-ignored.
 2. **Fill every `<placeholder>`.** The full key-by-key contract — types, which are required,
    the enumerations for `tier`/`channels.mode`, and the ref grammar — is
    [Reference → config keys](REFERENCE.md#config-keys--crewconfigjsonc); the rationale for each
@@ -77,6 +73,65 @@ whenever a dimension changes.
    launch (so a frequent Claude Code auto-update never fail-closes the boot); set it only to
    deliberately lock a version.
 
+## Watch and use the crew tmux window
+
+**Goal:** observe the live Crew sessions, inspect a role when needed, and leave them running
+when you disconnect.
+
+tmux is the Crew's **visible runtime**, not its coordination transport. The agents coordinate
+through the tracker and MCP channel; the tiled panes let an operator watch or briefly interact
+with those live sessions without hand-launching replacements.
+
+1. **Check that tmux is available:**
+
+   ```bash
+   tmux -V
+   ```
+
+2. **Choose where the Crew should appear, then stand it up.**
+
+   - **Already inside tmux:** `stand-up` opens a window named `crew` in your *current* tmux
+     session.
+
+     ```bash
+     tmux new-session -s work
+     pipeline crew stand-up
+     tmux select-window -t work:crew
+     ```
+
+   - **Outside tmux:** `stand-up` creates or reuses a detached tmux session named `crew` and
+     places the tiled `crew` window there. Attach after the command returns.
+
+     ```bash
+     pipeline crew stand-up
+     tmux attach -t crew
+     ```
+
+   The launcher creates the first pane, splits every additional role into the same window, and
+   tiles the layout. Do not create panes or launch `claude` sessions by hand: they would not have
+   the Crew's role, channel, and tracker binding.
+
+3. **Navigate without stopping the Crew.** Press `Ctrl-b` first, then:
+
+   - Arrow keys — move between role panes.
+   - `z` — temporarily zoom the selected pane; press `Ctrl-b z` again to restore the tile.
+   - `[` — enter scroll/copy mode to inspect older output; press `q` to return.
+   - `d` — detach and leave every role running.
+
+   Reattach later with `tmux attach -t crew` when using the fallback session, or attach to your
+   original session and select its `crew` window when you stood it up inside tmux.
+
+4. **Use lifecycle commands, not terminal interrupts.** A pane is a live role session. To stop
+   one role, use `retire-role`; to stop the roster, use `stand-down`:
+
+   ```bash
+   pipeline crew retire-role engineering-manager --instance <id>
+   pipeline crew stand-down
+   ```
+
+   Avoid `Ctrl-c`, `exit`, or killing panes directly. Those bypass the launcher's cleanup and
+   leave the tracker or role lease to recover later.
+
 ## Reboot the crew
 
 **Goal:** cycle the crew — after a config change, a CLI update, or a wedged session — with no
@@ -87,9 +142,9 @@ Reboot is teardown then stand-up. Pick the scope: one member, or the whole crew.
 1. **One wedged member** — retire just it and re-spawn, leaving the rest running:
 
    ```bash
-   .pipeline/toolkit/bin/pipeline crew retire-role engineering-manager --instance <id>   # engine needs --instance
-   .pipeline/toolkit/bin/pipeline crew retire-role cartographer                          # a bridge takes none
-   .pipeline/toolkit/bin/pipeline crew spawn-role engineering-manager --instance <id>
+   pipeline crew retire-role engineering-manager --instance <id>   # engine needs --instance
+   pipeline crew retire-role cartographer                          # a bridge takes none
+   pipeline crew spawn-role engineering-manager --instance <id>
    ```
 
    `retire-role` kills that member's pane and reclaims its artifacts; its role lease frees by
@@ -97,8 +152,8 @@ Reboot is teardown then stand-up. Pick the scope: one member, or the whole crew.
 2. **The whole crew** — tear down, then stand back up:
 
    ```bash
-   .pipeline/toolkit/bin/pipeline crew stand-down    # symmetric teardown of stand-up's per-pane scope + approvals
-   .pipeline/toolkit/bin/pipeline crew stand-up      # re-derive the roster from the (possibly edited) config
+   pipeline crew stand-down    # symmetric teardown of stand-up's per-pane scope + approvals
+   pipeline crew stand-up      # re-derive the roster from the (possibly edited) config
    ```
 
    `stand-up` re-reads the config, so a reboot is how a [personalization](#configure-personalization)
@@ -149,8 +204,8 @@ stand-up registered.
 1. **Retire one member:**
 
    ```bash
-   .pipeline/toolkit/bin/pipeline crew retire-role <role>              # a bridge — no instance
-   .pipeline/toolkit/bin/pipeline crew retire-role engineering-manager --instance <id>   # one engine instance
+   pipeline crew retire-role <role>              # a bridge — no instance
+   pipeline crew retire-role engineering-manager --instance <id>   # one engine instance
    ```
 
    It kills that member's pane and reclaims its inbox/artifacts; the role lease frees by TTL,
@@ -159,7 +214,7 @@ stand-up registered.
 2. **Retire the whole crew:**
 
    ```bash
-   .pipeline/toolkit/bin/pipeline crew stand-down
+   pipeline crew stand-down
    ```
 
    The symmetric teardown of `stand-up` — it removes the launcher-owned per-pane project scope

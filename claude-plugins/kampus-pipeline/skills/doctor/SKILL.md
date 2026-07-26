@@ -1,26 +1,30 @@
 ---
 name: doctor
-description: Check that a repository is ready to use the private, project-local kampus pipeline toolkit. Use for "doctor", "preflight", "check pipeline prerequisites", "verify pipeline setup", or "/doctor".
+description: Check that a repository is ready to use the private, project-local kampus pipeline toolkit. Use for "doctor", "preflight", "check pipeline prerequisites", or "verify pipeline setup".
 ---
 
 # doctor
 
-Run the toolkit's read-only preflight from the adopting repository root:
+Run the toolkit's read-only portable-core preflight from an adopting repository:
 
 ```bash
 pnpm pipeline init --check
 ```
 
-This validates the Git project root, initialized `.pipeline/toolkit` submodule,
-Node, pnpm, the local `pipeline-cli` and `pipeline-crew-mcp` packages, Claude
-Code, GitHub CLI authentication, tmux, and the crew configuration template.
+It validates the Git project root, initialized `.pipeline/toolkit` submodule,
+required Node and pnpm versions, and every managed portable-core path, hook, and
+package script recorded by `pipeline init`.
 
-If the crew is configured, also validate the real operator config before
-starting sessions:
+It does not require GitHub authentication, tmux, a crew configuration, or
+user-level Claude settings merely to validate the local bootstrap. Before an
+agent runs a GitHub workflow, verify its current credentials and target with:
 
 ```bash
-pnpm pipeline crew check-config
+gh auth status
+gh repo view --json nameWithOwner -q .nameWithOwner
 ```
 
-Report the command output exactly. Do not run fix commands, add labels, change
-GitHub configuration, or install registry packages on the operator's behalf.
+Run any enabled optional integration's documented preflight separately.
+
+Report the command output exactly. Do not run fix commands, alter tracker state,
+or install global packages on the operator's behalf.

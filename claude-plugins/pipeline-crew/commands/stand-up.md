@@ -18,10 +18,8 @@ You must have a **filled** operator config before standing up — the plugin shi
 placeholder template. If you have not done this yet, follow the
 [PERSONALIZATION.md](../PERSONALIZATION.md) stand-up steps first:
 
-```bash
-cp .claude/crew.config.template.jsonc .claude/crew.config.jsonc
-# fill EVERY <placeholder>, then git-ignore your copy
-```
+`pipeline init` creates the placeholder-only, git-ignored file at
+`.claude/crew.config.jsonc`. Fill every `<placeholder>` there before standing the Crew up.
 
 The launcher resolves the config by the same order as every seam key: `$CREW_CONFIG` if
 set, otherwise the working repo's `.claude/crew.config.jsonc`.

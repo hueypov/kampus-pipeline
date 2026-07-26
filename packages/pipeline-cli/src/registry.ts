@@ -31,6 +31,7 @@ import {intakeComposeCommand} from "./tools/intake-compose/command.ts";
 import {intakeDedupCommand} from "./tools/intake-dedup/command.ts";
 import {leakGuardCommand} from "./tools/leak-guard/command.ts";
 import {mergeQueueClassifyCommand} from "./tools/merge-queue-classify/command.ts";
+import {mainSyncCommand} from "./tools/main-sync/command.ts";
 import {orphanHealCommand} from "./tools/orphan-heal/command.ts";
 import {patchGuardCommand} from "./tools/patch-guard/command.ts";
 import {pathFilterGuardCommand} from "./tools/path-filter-guard/command.ts";
@@ -47,11 +48,13 @@ import {splitGuardCommand} from "./tools/split-guard/command.ts";
 import {structuredOutputGuardCommand} from "./tools/structured-output-guard/command.ts";
 import {tokenSpendCommand} from "./tools/token-spend/command.ts";
 import {trackerCommand} from "./tools/tracker/command.ts";
+import {trivialDiffCommand} from "./tools/trivial-diff/command.ts";
 import {unresolvedThreadsGuardCommand} from "./tools/unresolved-threads-guard/command.ts";
 import {verdictCommand} from "./tools/verdict/command.ts";
 import {wayfinderMapCommand} from "./tools/wayfinder-map/command.ts";
 import {workflowContractCommand} from "./tools/workflow-contract/command.ts";
 import {worktreeGuardCommand} from "./tools/worktree-guard/command.ts";
+import {worktreeSweepCommand} from "./tools/worktree-sweep/command.ts";
 import {versionCommand} from "./version.ts";
 
 /** The Node platform service union the bin provides — the requirement ceiling for a tool. */
@@ -96,6 +99,9 @@ export const registeredTools: ReadonlyArray<RegisteredTool> = [
 	roadmapCommand,
 	roadmapGuardCommand,
 	worktreeGuardCommand,
+	mainSyncCommand,
+	worktreeSweepCommand,
+	trivialDiffCommand,
 	spawnGuardCommand,
 	leakGuardCommand,
 	mergeQueueClassifyCommand,

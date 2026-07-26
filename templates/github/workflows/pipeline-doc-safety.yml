@@ -30,6 +30,8 @@ jobs:
         run: corepack enable
       - name: Install toolkit dependencies
         run: pnpm --dir .pipeline/toolkit install --frozen-lockfile
+      - name: Validate architecture decisions
+        run: ./.pipeline/toolkit/bin/pipeline cli decisions-index validate
       - name: Scan changed documentation for local paths
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}

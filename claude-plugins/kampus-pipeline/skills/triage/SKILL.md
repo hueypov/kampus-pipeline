@@ -1,11 +1,16 @@
 ---
 name: triage
-description: Process the GitHub triage queue — classify, enrich, prioritize, split, or close issues labeled status:needs-triage on the configured target repo. Trigger on "triage the queue", "triage issue #N", "process needs-triage", "classify these issues", "/triage", or whenever you're asked to make the backlog actionable. This is the guardrail between raw intake (the report skill) and pickable work (write-code): nothing reaches a write-code agent without passing through here.
+description: Process the GitHub triage queue — classify, enrich, prioritize, split, or close issues labeled $PIPELINE_STATUS_TRIAGE on the configured target repo. Trigger on "triage the queue", "triage issue #N", "process needs-triage", "classify these issues", "/triage", or whenever you're asked to make the backlog actionable. This is the guardrail between raw intake (the report skill) and pickable work (write-code): nothing reaches a write-code agent without passing through here.
 ---
 
 # triage
 
-You are the guardrail. Raw issues land in `status:needs-triage` — filed by agents
+## Repository-owned policy boundary
+
+This workflow is part of the default generic payload and `pipeline init` links it into `.claude/skills`. Availability is not authority: before external GitHub operations, resolve the consumer repository root and read `.pipeline/agent-policy.json`. Read `.pipeline/optional-workflow-policy.json` for repository-specific integration settings. Do not infer a platform, product lifecycle, branch, organization, or approval actor from examples below. When policy does not authorize an action or required configuration is unset, preserve the workflow context, explain the missing configuration, and fail closed before an external mutation.
+
+
+You are the guardrail. Raw issues land in `$PIPELINE_STATUS_TRIAGE` — filed by agents
 via the `report` skill, or free-form by humans. Your job is to turn each one into a
 single, actionable, correctly-typed, prioritized unit that a `write-code` agent can
 pick up cold and trust — or to close it with an audit trail if it can't be salvaged.
@@ -16,18 +21,18 @@ kill-last**: enrich before you close, and never close a human's issue at all.
 
 ## The mandate, per issue
 
-For each `status:needs-triage` issue, you produce exactly one of three outcomes:
+For each `$PIPELINE_STATUS_TRIAGE` issue, you produce exactly one of three outcomes:
 
-1. **Triaged** — classified, enriched, prioritized, labeled `status:triaged`. The
+1. **Triaged** — classified, enriched, prioritized, labeled `$PIPELINE_STATUS_CLASSIFIED`. The
    normal path. (A bundle is split first; each resulting unit is triaged.)
 2. **Needs-info** — a human-filed issue you can't act on as-is. Labeled
-   `status:needs-info` with a comment asking specific questions. **Never closed.**
+   `$PIPELINE_STATUS` with a comment asking specific questions. **Never closed.**
 3. **Closed not-planned** — an unsalvageable *agent*-filed issue. Closed with a
    reason comment and `closed-by-triage`. Last resort, never for human issues.
 
 ## All GitHub ops via `gh api` REST — never GraphQL
 
-Every read and write goes through `gh api` — the org's legacy Projects-classic
+Every read and write goes through `gh api` — the org's legacy configured planning board
 integration errors out GraphQL issue queries, so this is a hard constraint, not a style
 call. Resolve the target repo once, up front (this skill is repo-agnostic — every call
 targets `$REPO`); the full resolution rule is the shared contract's **Target repo
@@ -41,16 +46,16 @@ REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOw
 List the queue:
 
 ```bash
-gh api "repos/$REPO/issues?state=open&labels=status:needs-triage&per_page=100" \
+gh api "repos/$REPO/issues?state=open&labels=$PIPELINE_STATUS_TRIAGE&per_page=100" \
   --jq '.[] | "#\(.number) (\(.user.login)) \(.title)"'
 ```
 
 ## The glossary — read `.glossary/`, use the canonical terms
 
 As you classify, enrich, or rewrite a body, reach for the repo-owned vocabulary register
-rather than inventing names (the one-concept-named-four-ways drift, <related work item>; the applicable safety invariant):
-[`.glossary/TERMS.md`](<repository URL>)
-(domain nouns) and [`.glossary/LANGUAGE.md`](<repository URL>)
+rather than inventing names (the one-concept-named-four-ways drift, documented repository precedent; the applicable safety invariant):
+[`.glossary/TERMS.md`](repository-owned record URL)
+(domain nouns) and [`.glossary/LANGUAGE.md`](repository-owned record URL)
 (architecture vocabulary) — the single source; never copy a definition into this skill.
 
 ---
@@ -112,7 +117,7 @@ fi
 place triage's claim differs from `write-code`'s, and it's load-bearing: `write-code`'s
 picker (Step 1) **skips any issue with a non-null assignee**, so a triaged issue left
 self-assigned by triage would be invisible to every `write-code` agent — triaged but
-unpickable forever. Releasing closes that interaction: the issue leaves triage `status:triaged`
+unpickable forever. Releasing closes that interaction: the issue leaves triage `$PIPELINE_STATUS_CLASSIFIED`
 **and unassigned**, exactly what the picker expects. (`needs-info` and `closed` outcomes
 release too — see Step 6.)
 
@@ -131,7 +136,7 @@ judgment (Step 5) and the classification (Step 2).
 
 You board-read every intake issue anyway, so this is the **zero-new-surface enforcement
 point** for the human path: a UI/hand-filed issue never ran `report`'s pre-file dedup check
-(the <related work item> class), so triage is where a human-filed duplicate is caught. Run the same shared
+(the documented repository precedent class), so triage is where a human-filed duplicate is caught. Run the same shared
 **intake-dedup tool** the `report` skill uses (the applicable safety invariant), on *this* issue's own title +
 keywords, excluding itself so it never flags itself:
 
@@ -153,7 +158,7 @@ Read the candidates — it's a search, not an oracle. If one genuinely covers th
   path ([`close-not-planned.md`](./close-not-planned.md) — the duplicate-content-preservation
   step is exactly this case).
 - **Human-filed duplicate** → **never auto-closed** (Step 5). Comment linking the original
-  (`duplicate of #M`) and apply `status:needs-info`, or triage it normally with a triage-note
+  (`duplicate of #M`) and apply `$PIPELINE_STATUS`, or triage it normally with a triage-note
   cross-link — the human decides whether to close their own. The dedup surfaces it; it does
   not close it.
 
@@ -163,18 +168,18 @@ An empty result is the common case — proceed to classify.
 
 ## Step 2 — Classify into exactly ONE of six types
 
-Every issue gets exactly one `type:*`. The boundaries are locked — when an issue
+Every issue gets exactly one `$PIPELINE_WORK_ITEM_TYPE`. The boundaries are locked — when an issue
 seems to straddle two, the distinguishing question in each definition is the
-tiebreaker. Apply the canonical label name (`type:bug`, etc.).
+tiebreaker. Apply the canonical label name (`$PIPELINE_WORK_ITEM_TYPE`, etc.).
 
-| Type | `type:*` label | Definition — the issue is this when… |
+| Type | `$PIPELINE_WORK_ITEM_TYPE` label | Definition — the issue is this when… |
 |---|---|---|
-| **bug** | `type:bug` | **Behavior diverges from intent.** Something already built does the wrong thing. There's a "supposed to" being violated. |
-| **feature** | `type:feature` | **A new capability, directly implementable.** It doesn't exist yet, the path to building it is clear, and it fits in a PR or a few. |
-| **chore** | `type:chore` | **No behavior change.** Refactors, renames, dependency bumps, test hygiene, dead-code removal, doc edits. The observable behavior of the system is identical before and after. |
-| **decision** | `type:decision` | **One question; the output is a recorded choice.** A fork in the road that needs settling (an ADR), not code. If the deliverable is "we decided X" rather than "we built X", it's a decision. |
-| **investigation** | `type:investigation` | **An unknown; the output is knowledge.** Root cause is not yet understood. The deliverable is a diagnosis — *then* maybe a fix, a decision, or a new report. If you can't yet say what to build because you don't yet know what's wrong, it's an investigation. |
-| **epic** | `type:epic` | **Too big for one PR; it spawns children.** Multiple questions and/or multiple implementable units under one umbrella. The deliverable is a plan plus sub-issues, not a single change. |
+| **bug** | `$PIPELINE_WORK_ITEM_TYPE` | **Behavior diverges from intent.** Something already built does the wrong thing. There's a "supposed to" being violated. |
+| **feature** | `$PIPELINE_WORK_ITEM_TYPE` | **A new capability, directly implementable.** It doesn't exist yet, the path to building it is clear, and it fits in a PR or a few. |
+| **chore** | `$PIPELINE_WORK_ITEM_TYPE` | **No behavior change.** Refactors, renames, dependency bumps, test hygiene, dead-code removal, doc edits. The observable behavior of the system is identical before and after. |
+| **decision** | `$PIPELINE_WORK_ITEM_TYPE` | **One question; the output is a recorded choice.** A fork in the road that needs settling (an ADR), not code. If the deliverable is "we decided X" rather than "we built X", it's a decision. |
+| **investigation** | `$PIPELINE_WORK_ITEM_TYPE` | **An unknown; the output is knowledge.** Root cause is not yet understood. The deliverable is a diagnosis — *then* maybe a fix, a decision, or a new report. If you can't yet say what to build because you don't yet know what's wrong, it's an investigation. |
+| **epic** | `$PIPELINE_TYPE_EPIC` | **Too big for one PR; it spawns children.** Multiple questions and/or multiple implementable units under one umbrella. The deliverable is a plan plus sub-issues, not a single change. |
 
 ### The boundaries that actually bite
 
@@ -184,8 +189,8 @@ tiebreaker. Apply the canonical label name (`type:bug`, etc.).
 - **bug vs investigation** — if the wrong behavior is understood and the fix is
   nameable, it's a bug. If you'd have to *investigate* to even say what's wrong (an
   intermittent hang, an unexplained exit code), it's an investigation. "Filed to
-  investigate later" in the body is a strong tell. A `type:investigation` whose answer
-  *might* turn out to be a trivial fix is **still `type:investigation`** — do **not**
+  investigate later" in the body is a strong tell. A `$PIPELINE_WORK_ITEM_TYPE` whose answer
+  *might* turn out to be a trivial fix is **still `$PIPELINE_WORK_ITEM_TYPE`** — do **not**
   re-type it to `bug`/`chore` in anticipation. If the diagnosis lands on a trivial,
   bounded fix, `write-code` collapses the investigation into one PR under its
   bounded-collapse branch (the four AND-ed bounds in
@@ -252,9 +257,9 @@ How to split:
    If an existing issue already covers it, enrich/triage that one instead of filing
    a twin. (This rule exists because a triage run once filed a duplicate of an issue
    that had landed in the queue minutes earlier.)
-3. **Create-once guard — key the child-create on the parent back-reference (<related work item>).**
+3. **Create-once guard — key the child-create on the parent back-reference (documented repository precedent).**
    The child-create is otherwise **non-idempotent**: a retry or a re-emit of the same
-   split fires a second byte-identical twin (the <related work item>/<related work item> double-fire — two children
+   split fires a second byte-identical twin (the documented repository precedent/documented repository precedent double-fire — two children
    5s apart). Before every split-child POST, ask `split-guard` whether a child that
    already covers *this* `(parent, title)` unit exists — keyed on the durable
    `split from #<parent>` back-reference each split child carries (item 5 below), **not**
@@ -271,7 +276,7 @@ How to split:
    it. This closes the sequential re-emit hole; the Step-0 claim still guards a concurrent
    sibling sweep, and Step 3.2's `intake-dedup` still guards a report-agent twin.
 4. **Create one new issue per extra unit** via REST — **only when the create-once guard
-   found no existing child** — each labeled `status:needs-triage` so it re-enters the
+   found no existing child** — each labeled `$PIPELINE_STATUS_TRIAGE` so it re-enters the
    queue (you'll triage the new ones on a later pass — or this same run — like any other).
    Give each a sharp single-unit title and a body that states the one problem, following
    the report skill's 5-section shape where it fits (see
@@ -290,7 +295,7 @@ How to split:
    empty husk open.
 
 ```bash
-# 1. Create-once guard: skip the POST if a child already covers this (parent, title) unit (<related work item>).
+# 1. Create-once guard: skip the POST if a child already covers this (parent, title) unit (documented repository precedent).
 EXISTING=$(pnpm pipeline cli split-guard check \
   --parent "$N" --title "<single-unit title>")
 if [ -n "$EXISTING" ]; then
@@ -298,8 +303,8 @@ if [ -n "$EXISTING" ]; then
 else
   # 2. Body MUST carry the `split from #<N>` back-reference — it is the guard's create-once key.
   #    The `tracker create-issue` verb owns this intake-create envelope (the applicable safety invariant;
-  #    `packages/pipeline-cli/src/tools/tracker/`), filing a status:needs-triage issue — don't
-  #    hand-roll the `gh api repos/$REPO/issues` create (the adoption lint (<related work item>) flags it).
+  #    `packages/pipeline-cli/src/tools/tracker/`), filing a $PIPELINE_STATUS_TRIAGE issue — don't
+  #    hand-roll the `gh api repos/$REPO/issues` create (the adoption lint (documented repository precedent) flags it).
   pipeline-cli tracker create-issue --title "<single-unit title>" --body "$BODY"
   # then cross-link via a comment on the original (Step 6 shows the comment call)
 fi
@@ -333,7 +338,7 @@ What the rewrite adds:
   related issues. Promote anything load-bearing the original buried.
 - **Repo-relative paths only — never machine-local paths.** The body is a shared
   artifact, like a committed file: every path in your enrichment must be
-  repo-relative (`apps/web/worker/…`, `.decisions-….md`) or a dependency's
+  repo-relative (`$PIPELINE_APPLICATION_PATH/worker/…`, `.decisions-….md`) or a dependency's
   package-internal module, resolvable by anyone who checks out the repo. **Never**
   write a path that only exists on the filer's machine — an absolute path
   (`/Users/…`), a home-dir clone (`~/code/…`, `~/.vault/…`), or a sibling-repo
@@ -367,7 +372,7 @@ leak.** The no-machine-local-paths rule above governs the *whole* body — the e
 write **and** the original you preserve. "Preserve byte-for-byte" fails *toward* exposure when
 the original itself contains a machine-local path (a `/var/folders/…<user-hash>…` temp path, a
 home path, an absolute `/Users/…`): a naive verbatim re-emit re-commits that leak into a public
-issue (the <related work item>-class violation; the concrete re-leak was <related work item>). So **before** the original
+issue (the documented repository precedent-class violation; the concrete re-leak was documented repository precedent). So **before** the original
 goes into the `<details>` block, run it through the shared `pipeline-cli` leak matcher and
 **redact** any matched local path — REDACT, not strip: the redaction preserves evidential shape
 (`@/var/folders/<redacted>` still documents "a temp path was posted as the whole body") while
@@ -382,17 +387,17 @@ Every temp file below lives under `$RUN_SCRATCH`, the per-run scratchpad namespa
 in [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §SP. An issue number is
 **not** a unique key — two triage runs over the same issue (a sweep plus a re-triage) collide on
 `/tmp/triage-original-<N>.md`, and a clobbered file **reads back cleanly with the other run's
-body**, so triage would silently preserve the wrong original inside `<details>` (<related work item>):
+body**, so triage would silently preserve the wrong original inside `<details>` (documented repository precedent):
 
 ```bash
 # §SP: the per-run scratch namespace — deterministic + fail-closed, never a shared fallback.
 # Keyed on the session id (not a bare `mktemp -d`) because the PATCH block below runs in a LATER
 # Bash call, where every shell variable is gone: it re-derives this same path to read body.md back.
 [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || {
-  echo "triage: §SP — CLAUDE_CODE_SESSION_ID unset; refusing to write issue bodies to a shared path (<related work item>)." >&2; exit 1; }
+  echo "triage: §SP — CLAUDE_CODE_SESSION_ID unset; refusing to write issue bodies to a shared path (documented repository precedent)." >&2; exit 1; }
 RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/$CLAUDE_CODE_SESSION_ID/triage-<N>"
 rm -rf "$RUN_SCRATCH" && mkdir -p "$RUN_SCRATCH" || {
-  echo "triage: §SP could not create a per-run scratch dir — refusing to write issue bodies to a shared path (<related work item>)." >&2; exit 1; }
+  echo "triage: §SP could not create a per-run scratch dir — refusing to write issue bodies to a shared path (documented repository precedent)." >&2; exit 1; }
 
 gh api "repos/$REPO/issues/<N>" --jq '.body' > "$RUN_SCRATCH/original.md"
 # redact any machine-local path leak in the ORIGINAL before it goes into <details>; leak-free
@@ -405,7 +410,7 @@ Assemble the new body in a temp file — under `$RUN_SCRATCH` for the same reaso
 into `$BODY` so multi-line markdown, backticks, and the nested fences survive the shell:
 
 ```bash
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (<related work item>)}/triage-<N>"   # §SP re-derive — same recipe as the block above, NO reset
+RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/triage-<N>"   # §SP re-derive — same recipe as the block above, NO reset
 [ -s "$RUN_SCRATCH/body.md" ] || {
   echo "triage: §SP — $RUN_SCRATCH/body.md is missing/empty; refusing to PATCH the issue with an empty body." >&2; exit 1; }
 BODY="$(cat "$RUN_SCRATCH/body.md")"
@@ -444,7 +449,7 @@ not a bare collapsed element), and the brief inside is verbatim (post-redaction)
 exact bytes `plan-epic` splices are unchanged for any leak-free brief. The `<summary>` is the epic variant of the other
 types' `Original report (verbatim)` — `Original brief` names an epic's original as its
 *brief* (Step 2's tell), the same verbatim-provenance guarantee. (If an epic was filed
-truly threadbare, prefer `status:needs-info` over mangling it.)
+truly threadbare, prefer `$PIPELINE_STATUS` over mangling it.)
 
 **Re-typing an issue? Reconcile the BODY, not just a comment.** When you change an
 already-typed issue's type (a `decision` re-scoped to `feature`, a `bug` recut as a
@@ -452,8 +457,8 @@ already-typed issue's type (a `decision` re-scoped to `feature`, a `bug` recut a
 the body, not a comment, is the source of truth a `review-*` gate and a `write-code` agent
 read. A re-type that lands the new scope in a **comment** while leaving the stale
 criteria in the body ships a misleading spec: the coder builds against decision-era ACs
-("record an ADR", "file follow-ups") that no longer describe the work (<related work item> →
-<related work item>). So on any re-type, **rewrite the body's acceptance criteria to the new type**
+("record an ADR", "file follow-ups") that no longer describe the work (documented repository precedent →
+documented repository precedent). So on any re-type, **rewrite the body's acceptance criteria to the new type**
 (reusing Step 4's temp-file `PATCH` flow), then record the re-scope rationale in a
 comment — the comment explains *why*, the body carries *what to build*.
 
@@ -466,7 +471,7 @@ gets filtered. This is a judgment call, not a protocol — you recognize a human
 you don't parse a flag.
 
 **The account is not the tell — the shape is.** Every collaborator on this repo
-(`<shared-automation-login>`, `cansirin`, …) files both ways: as a human in passing, and via `report`
+(`configured automation identity`, `cansirin`, …) files both ways: as a human in passing, and via `report`
 agents running under their own account. So never treat "who filed it" as settling
 the question; read the body.
 
@@ -474,7 +479,7 @@ the question; read the body.
 reliable input is defined once in
 [`gh-issue-intake-formats.md` §4.5](../gh-issue-intake-formats.md) — cite it, don't
 re-derive it. In short: authorship is unusable (every report-filed issue shows
-`author: <shared-automation-login>` via the shared token), so the signal is the `Filed by an agent` footer.
+`author: configured automation identity` via the shared token), so the signal is the `Filed by an agent` footer.
 **Footer ABSENT ⇒ hand-typed in the GitHub UI ⇒ human-owned ⇒ PROTECTED (never
 auto-close); footer PRESENT ⇒ filed via the report skill (including a human-invoked
 `/report`) ⇒ raw INTAKE ⇒ auto-close-ELIGIBLE after confirmation — the confirmation step
@@ -508,18 +513,18 @@ When in doubt, **treat it as human.** The cost of wrongly closing a human's issu
 (they feel ignored) is worse than the cost of wrongly leaving an agent's issue open
 (it sits in needs-info, cheap to revisit).
 
-**For a human-filed issue you can't act on as-is:** apply `status:needs-info` (not a
+**For a human-filed issue you can't act on as-is:** apply `$PIPELINE_STATUS` (not a
 type, not a priority, not triaged) and post a comment asking the *specific* questions
 that would unblock triage. Specific, not generic — "Which file? What's the expected
 behavior vs what you saw? Is this blocking anything?" beats "please add more detail".
 You may still type a human issue if it's already clear; needs-info is only for the
 ones you genuinely can't classify or act on yet.
 
-**Needs-info leaves the queue:** remove `status:needs-triage` when you apply
-`status:needs-info` (same DELETE call as the triaged path in Step 6). A parked
+**Needs-info leaves the queue:** remove `$PIPELINE_STATUS_TRIAGE` when you apply
+`$PIPELINE_STATUS` (same DELETE call as the triaged path in Step 6). A parked
 question must not re-surface in every sweep and queue listing; it re-enters the
-queue when whoever answers swaps the labels back (`status:needs-info` →
-`status:needs-triage`). It *does* still appear in the keyword-search half of the
+queue when whoever answers swaps the labels back (`$PIPELINE_STATUS` →
+`$PIPELINE_STATUS_TRIAGE`). It *does* still appear in the keyword-search half of the
 pre-filing re-query, since it stays open — that's intentional, don't "fix" the
 search command to filter it out: a report agent finding a needs-info twin should
 comment there rather than file anew.
@@ -558,30 +563,30 @@ backlog unsequenceable.
 
 ### Apply the labels (triaged path)
 
-The canonical `type:*` / `p*` / `status:*` label set is defined by the label
+The canonical `$PIPELINE_WORK_ITEM_TYPE` / `p*` / `status:*` label set is defined by the label
 bootstrap / formats contract ([`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md)) —
 triage *applies* labels from that existing set, and must never silently auto-mint an
 off-spec label via `POST .../labels`.
 
-A triaged issue carries the one `type:*`, one `p*`, and `status:triaged`, and leaves the
-queue (its `status:needs-triage` removed). Apply the whole transition with the `Tracker`
+A triaged issue carries the one `$PIPELINE_WORK_ITEM_TYPE`, one `p*`, and `$PIPELINE_STATUS_CLASSIFIED`, and leaves the
+queue (its `$PIPELINE_STATUS_TRIAGE` removed). Apply the whole transition with the `Tracker`
 verb — the classification is the parameter, the label plumbing is the verb's:
 
 ```bash
 pipeline-cli tracker apply-triage <N> --type <type> --p <priority>
 ```
 
-The verb adds the `type:` / priority / `status:triaged` labels and drops the queue label
+The verb adds the `type:` / priority / `$PIPELINE_STATUS_CLASSIFIED` labels and drops the queue label
 in one envelope (the applicable safety invariant; `packages/pipeline-cli/src/tools/tracker/`). Dropping the queue
 label is idempotent: a `404 "Label does not exist"` when the issue never carried
-`status:needs-triage` (a pre-bootstrap issue predating the label) is tolerated, since the
+`$PIPELINE_STATUS_TRIAGE` (a pre-bootstrap issue predating the label) is tolerated, since the
 goal — issue out of the queue — is met either way. Pass `--status <stage>` to target a
 different lifecycle stage (e.g. `needs-info`); it defaults to `triaged`. Don't hand-roll
-the REST label calls — that inline envelope is exactly what the adoption lint (<related work item>) flags.
+the REST label calls — that inline envelope is exactly what the adoption lint (documented repository precedent) flags.
 
-`status:triaged` is an explicit signature only *you* apply — it tells write-code the
+`$PIPELINE_STATUS_CLASSIFIED` is an explicit signature only *you* apply — it tells write-code the
 issue was actually reviewed. Never let a type label alone stand in for it; a
-hand-slapped `type:*` with no triaged status must not look pickable.
+hand-slapped `$PIPELINE_WORK_ITEM_TYPE` with no triaged status must not look pickable.
 
 ### Assign a milestone (optional — only on a clear match)
 
@@ -611,8 +616,8 @@ unmilestoned and move on.
 they differ in how much judgment the match takes:
 
 - **Surface milestones** (e.g. Search / Bookmarks / Account / Report) are **mechanical**: key
-  off the **product surface you already determined** reading the issue in Step 1 — a sözlük
-  bug → the sözlük surface milestone. If a surface milestone exists and open for the issue's
+  off the **product surface you already determined** reading the issue in Step 1 — a configured content feature
+  bug → the configured content feature surface milestone. If a surface milestone exists and open for the issue's
   surface, the match is near-rote.
 - **Strategic milestones** (e.g. Broken core loops / Pipeline hardening / Test & CI) need
   **judgment** — "is this broken-vs-missing? pipeline-critical?". Attempt these
@@ -624,7 +629,7 @@ Read the open milestones, then assign **only on a clear match**:
 ```bash
 # the existing open milestones — the ONLY legal assignment targets (never create one)
 gh api "repos/$REPO/milestones?state=open" --jq '.[] | "#\(.number)\t\(.title)"'
-# on a clear match only — one single-field, last-write-wins PATCH (benign, <related work item>)
+# on a clear match only — one single-field, last-write-wins PATCH (benign, documented repository precedent)
 gh api -X PATCH "repos/$REPO/issues/<N>" -f milestone=<n>
 # no clear match → assign nothing; an unmilestoned issue is well-formed (do NOT clear-then-set)
 ```
@@ -648,7 +653,7 @@ for a Step 3 empty-husk close). **Never close a human-filed issue** (Step 5).
 
 Once the issue has reached its outcome — triaged, needs-info, or closed — **remove your
 self-assignment** so the claim doesn't outlive the sweep. This is mandatory on the
-triaged path (otherwise the issue is `status:triaged` but unpickable — `write-code`'s
+triaged path (otherwise the issue is `$PIPELINE_STATUS_CLASSIFIED` but unpickable — `write-code`'s
 picker skips any non-null assignee, Step 0). Do it on the other two paths as well, for
 consistency: a parked `needs-info` issue or a closed one should carry no stray triage
 claim. The DELETE is idempotent — a 404 means it was already unassigned, which is fine.
@@ -659,30 +664,30 @@ gh api -X DELETE repos/$REPO/issues/<N>/assignees -f "assignees[]=$ME" 2>/dev/nu
 ```
 
 (A `closed-by-triage` issue is closed *and* unassigned; a needs-info issue is parked with
-`status:needs-info`, no triage claim. Only a triaged issue stays open, and it must be
+`$PIPELINE_STATUS`, no triage claim. Only a triaged issue stays open, and it must be
 unassigned to be pickable.)
 
 ---
 
 ## Running the queue
 
-You can triage one named issue (`triage issue <related work item>`) or sweep the whole queue. When
+You can triage one named issue (`triage issue documented repository precedent`) or sweep the whole queue. When
 sweeping:
 
-1. List `status:needs-triage` (the snippet at the top).
+1. List `$PIPELINE_STATUS_TRIAGE` (the snippet at the top).
 2. For each issue, **claim it first (Step 0)** — a concurrent sibling sweep may have
    picked the same issue off the same snapshot, so claim-or-skip before you mutate it. If
    the claim backs off (already claimed), move to the next issue. Then triage the claimed
    issue through Steps 1–6, **releasing the claim** at the end (Step 6, Release the claim).
-3. If you split a bundle, the new children re-enter `status:needs-triage` — pick them
+3. If you split a bundle, the new children re-enter `$PIPELINE_STATUS_TRIAGE` — pick them
    up on the same sweep or a follow-up; they're triaged (claim → Steps 1–6 → release)
    like any other issue.
 4. **Re-list the queue before declaring the sweep done.** Report agents file
    concurrently, so issues land mid-sweep and a snapshot-only sweep leaves fresh arrivals
-   behind. An issue *claimed* by a sibling sweep still shows `status:needs-triage` (the
+   behind. An issue *claimed* by a sibling sweep still shows `$PIPELINE_STATUS_TRIAGE` (the
    claim is an assignee, not a label), so it reappears here; Step 0's Rule-0 back-off skips
    it until that sweep releases. Loop until the listing has no issue you can claim — every
-   *completed* outcome (triaged / needs-info / closed) removes `status:needs-triage`, so
+   *completed* outcome (triaged / needs-info / closed) removes `$PIPELINE_STATUS_TRIAGE`, so
    that is the termination test.
 5. Report a short ledger back: per issue, the outcome (type+priority+triaged, plus the
    milestone if one was a clear match / needs-info / closed) in one line each. Don't
@@ -734,7 +739,7 @@ This skill is one of a suite (`report` → **`triage`** → `plan-epic` → `rev
 pipeline. The shared label semantics and the body/comment/dependency formats live in
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md). You consume exactly
 the issues the `report` skill files (recognize its 5-section + metadata-footer shape —
-Step 5), and you hand `status:triaged` issues off to `plan-epic` (epics) and
+Step 5), and you hand `$PIPELINE_STATUS_CLASSIFIED` issues off to `plan-epic` (epics) and
 `write-code` (everything else — a standalone issue is pickable straight from your gate;
 an epic's children become pickable only after `plan-epic` plans them and `review-plan`
-flips them `status:planned → status:triaged`).
+flips them `$PIPELINE_STATUS → $PIPELINE_STATUS_CLASSIFIED`).

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# The present-path twin of validate-cycle-absence.sh (issue <related work item>, epic <related work item>).
+# The present-path twin of validate-cycle-absence.sh (issue documented repository precedent, epic documented repository precedent).
 #
 # validate-cycle-absence.sh only ever exercises the foreign-repo ABSENT branch (no
-# product-development-cycle.md ⇒ every cycle-aware skill no-ops). That leaves the adopting repository's
+# $PIPELINE_DEVELOPMENT_CYCLE_POLICY ⇒ every cycle-aware skill no-ops). That leaves the adopting repository's
 # real state — the cycle doc IS present — proven by nothing in CI: the cycle machinery's
 # present-and-active branch was itself a silent no-op gate (the applicable safety invariant names "the CI cycle
 # test only proves the absent path" as a confirmed instance of the class).
@@ -13,7 +13,7 @@
 #        plan-epic   stamps a containment marker (flag|exempt) from the cycle policy
 #        write-code  ships dark behind a default-off flag (defaultVariation)
 #        review-code verifies the flag-gating before PASS
-#        ship-it     surfaces the release queue (status:awaiting-release)
+#        ship-it     surfaces the release queue ($PIPELINE_STATUS)
 #   2. HERMETIC runtime — with the cycle doc present the canonical probe resolves `present`,
 #      and every present-path action fires (the inverse walkthrough of the absence script).
 #
@@ -27,13 +27,13 @@ set -euo pipefail
 # root, so its own dir IS that root — resolve from BASH_SOURCE (physical path, -P, so the
 # .claude/skills symlink doesn't poison the repo-root walk below) so it works from any cwd.
 skills_dir="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# The repo root that holds product-development-cycle.md. Prefer git (robust to where the
+# The repo root that holds $PIPELINE_DEVELOPMENT_CYCLE_POLICY. Prefer git (robust to where the
 # script lives in the tree); fall back to the physical plugin path
 # (<root>/claude-plugins/kampus-pipeline/skills) when git is unavailable.
 repo_root="$(git -C "$skills_dir" rev-parse --show-toplevel 2>/dev/null || (cd "$skills_dir/../../.." && pwd))"
 
 # The one well-known cycle-doc path every consumer probes (formats §1, single source).
-CYCLE_DOC_PATH="product-development-cycle.md"
+CYCLE_DOC_PATH="$PIPELINE_DEVELOPMENT_CYCLE_POLICY"
 # The canonical probe string each skill must cite — a content read against the well-known path.
 PROBE_NEEDLE="contents/${CYCLE_DOC_PATH}"
 
@@ -45,7 +45,7 @@ declare -a CYCLE_SKILLS=(
 	"plan-epic   cycle doc present"
 	"write-code  defaultVariation"
 	"review-code (verify|run).{0,40}gating"
-	"ship-it     status:awaiting-release"
+	"ship-it     $PIPELINE_STATUS"
 )
 # Every skill must also pair its present-path action with the present resolution of the probe —
 # the literal CYCLE_DOC=present (or the gh-api content read that establishes it). Asserted
@@ -105,7 +105,7 @@ done
 tmp_root="$(mktemp -d)"
 trap 'rm -rf "$tmp_root"' EXIT
 
-# A the adopting repository-shaped install: a repo root with a product-development-cycle.md at the root.
+# A the adopting repository-shaped install: a repo root with a $PIPELINE_DEVELOPMENT_CYCLE_POLICY at the root.
 touch "$tmp_root/README.md" "$tmp_root/CLAUDE.md" "$tmp_root/$CYCLE_DOC_PATH"
 
 probe_cycle_doc() { # the canonical probe, working-tree form — echoes present|absent

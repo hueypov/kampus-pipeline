@@ -60,15 +60,9 @@ template. From now on, use `pnpm pipeline …` rather than a marketplace command
 
 ## Step 2 — fill your operator config
 
-The shipped template holds only `<placeholders>`. Copy it to an operator-owned config and fill
-**every** placeholder — this is the one place your people, machine, and model tiers enter:
-
-```bash
-# Copy the placeholder-only template to the default config path.
-cp .claude/crew.config.template.jsonc .claude/crew.config.jsonc
-# Git-ignore your copy — it holds your operator data and must never be committed.
-echo ".claude/crew.config.jsonc" >> .gitignore
-```
+The shipped template holds only `<placeholders>`. `pipeline init` creates the operator-owned,
+git-ignored `.claude/crew.config.jsonc` from it. Fill **every** placeholder — this is the one
+place your people, machine, and model tiers enter.
 
 Now open `.claude/crew.config.jsonc` and fill each `<...>`. The keys you must set to reach a
 live crew:
@@ -162,8 +156,8 @@ You took a repo from zero crew to a standing operation:
 
 | Move | Command | What it established |
 |---|---|---|
-| Initialize | `pipeline init` | the four agent defs + the two commands + the config template |
-| Personalize | `cp … crew.config.jsonc` + fill | your one operator config — the whole per-install seam |
+| Initialize | `pipeline init` | the four agent defs + the two commands + the git-ignored placeholder config |
+| Personalize | fill `.claude/crew.config.jsonc` | your one operator config — the whole per-install seam |
 | Stand up | `/stand-up` | the tracker + self-driving bridges + N engines, live and channel-bound |
 | Scale / HITL | [`/spawn-role <role>`](commands/spawn-role.md) | one on-demand role (the cartographer, or an extra engine) into the running crew |
 

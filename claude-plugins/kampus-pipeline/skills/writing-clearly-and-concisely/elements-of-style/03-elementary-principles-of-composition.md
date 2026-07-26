@@ -316,7 +316,7 @@ The subject of a sentence and the principal verb should not, as a rule, be separ
 | Wordsworth, in the fifth book of The Excursion, gives a minute description of this church. | In the fifth book of The Excursion, Wordsworth gives a minute description of this church. |
 | Cast iron, when treated in a Bessemer converter, is changed into steel. | By treatment in a Bessemer converter, cast iron is changed into steel. |
 
-The objection is that the interposed phrase or clause needlessly interrupts the natural order of the main clause. Usually, however, this objection does not hold when the order is interrupted only by a relative clause or by an expression in apposition. Nor does it hold in periodic sentences in which the interruption is a deliberately used means of creating suspense (see examples under Rule 18).
+The objection is that the interposed phrase or clause needlessly interrupts the natural order of the configured base branch clause. Usually, however, this objection does not hold when the order is interrupted only by a relative clause or by an expression in apposition. Nor does it hold in periodic sentences in which the interruption is a deliberately used means of creating suspense (see examples under Rule 18).
 
 The relative pronoun should come, as a rule, immediately after its antecedent.
 
@@ -375,7 +375,7 @@ The proper place in the sentence for the word, or group of words, which the writ
 
 The word or group of words entitled to this position of prominence is usually the logical predicate, that is, the *new* element in the sentence, as it is in the second example.
 
-The effectiveness of the periodic sentence arises from the prominence which it gives to the main statement.
+The effectiveness of the periodic sentence arises from the prominence which it gives to the configured base branch statement.
 
 Four centuries ago, Christopher Columbus, one of the Italian mariners whom the decline of their own republics had put at the service of the world and of adventure, seeking for Spain a westward passage to the Indies as a set-off against the achievements of Portuguese discoverers, lighted on America.
 

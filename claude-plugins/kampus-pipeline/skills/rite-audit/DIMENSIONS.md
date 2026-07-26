@@ -1,13 +1,15 @@
 # The dimension contract
 
+The repository-owned audit-stage adapter supplies the product-specific identities, routes, selectors, and lifecycle rule named by each dimension. A dimension preserves the contract below and must report **BLOCKED** when that mapping is absent; it must never manufacture product-specific routes, roles, or fixtures.
+
 This is the **extension point** of the rite-audit harness. A *dimension* is one self-contained
 vertical of the audit — its surfaces, its explorer steps, and its pass/fail rubric — that runs
 over the same provisioned stage and emits its own raw findings. The harness runs every registered
-dimension and unions their findings; the verdict report (<related work item>) aggregates them into a dated
+dimension and unions their findings; the verdict report (the repository verdict-report record) aggregates them into a dated
 archive.
 
-This file is the **contract** the dimensions plug into: the accessibility dimension (<related work item>) and
-the sandbox-leak dimension (<related work item>) are written *to this spec* from this file alone, and <related work item>
+This file is the **contract** the dimensions plug into: the accessibility dimension (the repository accessibility record) and
+the sandbox-leak dimension (the repository containment-audit record) are written *to this spec* from this file alone, and the repository verdict-report record
 reads the `Finding` / `DimensionResult` shapes defined here. It is the interface, not a
 suggestion — keep it the single source of these shapes; do not redefine them per dimension.
 
@@ -16,7 +18,7 @@ suggestion — keep it the single source of these shapes; do not redefine them p
 A dimension is one Markdown file, `dimensions/<id>.md`, that declares exactly four things:
 
 1. **`id`** — a stable kebab-case identifier (`functional-rite`, `a11y`, `sandbox-leak`). This is
-   the `dimension` component of the verdict key <related work item> groups on (see *The verdict key* below) and
+   the `dimension` component of the verdict key the repository verdict-report record groups on (see *The verdict key* below) and
    the value the SKILL.md *Active dimensions* table registers. It must equal the file's basename.
 2. **`surfaces`** — the subset of the SKILL.md route map this dimension walks. Naming them up
    front bounds the dimension and lets a reader see its blast radius.
@@ -25,15 +27,15 @@ A dimension is one Markdown file, `dimensions/<id>.md`, that declares exactly fo
    re-deriving the run context, route map, or driver.
 4. **`rubric`** — an **ordered list of named checks**. Each check is one falsifiable assertion and
    emits **exactly one** `Finding` *per surface it walks*. The check name is stable across runs so
-   findings are comparable run-over-run (<related work item> diffs on the verdict key — see below).
+   findings are comparable run-over-run (the repository verdict-report record diffs on the verdict key — see below).
 
 ## The shared primitives (consumed, never re-derived)
 
 Every dimension consumes these from the harness — a dimension never re-implements them:
 
-- **The run context** `{ baseUrl, testMod, stage, target }` — the `AuditRunInput` the
-  `@kampus/audit-stage` lifecycle hands the run hook (<related work item>). The source of the stage URL and the
-  minted test-mod. **A dimension must read these off the context, never hardcode a URL or
+- **The run context** `{ baseUrl, reviewerFixture, stage, target }` — the `AuditRunInput` the
+  `$PIPELINE_RITE_AUDIT_STAGE_ADAPTER` lifecycle hands the run hook (the repository audit-stage record). The source of the stage URL and the
+  minted reviewer fixture. **A dimension must read these off the context, never hardcode a URL or
   credential** (the stage is ephemeral; a literal is stale next run).
 - **The route map** — the canonical surface table in [`SKILL.md`](./SKILL.md). A dimension names
   the subset it walks; it does not restate paths.
@@ -46,7 +48,7 @@ Every dimension consumes these from the harness — a dimension never re-impleme
 ## The `Finding` record (the atom every check emits)
 
 Each check emits exactly one `Finding`. This is the **raw** output the harness unions and hands
-to <related work item> — its fields are the contract <related work item> structures and archives:
+to the repository verdict-report record — its fields are the contract the repository verdict-report record structures and archives:
 
 ```ts
 interface Finding {
@@ -62,12 +64,12 @@ interface Finding {
 
 ### The verdict key — the (dimension, check, surface) TRIPLE
 
-<related work item> groups and diffs findings on the **(`dimension`, `check`, `surface`) triple**, never on
+the repository verdict-report record groups and diffs findings on the **(`dimension`, `check`, `surface`) triple**, never on
 `(dimension, check)` alone. A single rubric check runs across **several surfaces** — a dimension
 emits one `Finding` *per surface it walks* (the a11y and sandbox-leak dimensions assert the same
-check on `/auth`, `/divan`, `/pano`, … and emit a `Finding` for each). Keying on the pair would
-**collide** those distinct findings into one — a regression on `/divan` would mask a pass on
-`/auth`, or overwrite it in the diff. The `surface` field exists precisely to make the key a
+check on `$RITE_REGISTRATION_ROUTE`, `$RITE_REVIEW_ROUTE`, `$RITE_FEED_ROUTE`, … and emit a `Finding` for each). Keying on the pair would
+**collide** those distinct findings into one — a regression on `$RITE_REVIEW_ROUTE` would mask a pass on
+`$RITE_REGISTRATION_ROUTE`, or overwrite it in the diff. The `surface` field exists precisely to make the key a
 triple: `(dimension, check, surface)` is unique per emitted `Finding`, so the verdict keeps every
 per-surface finding distinct and a two-run diff attributes a change to the exact surface that
 moved. Use `"n/a"` for `surface` only when a check is genuinely surface-independent; even then it
@@ -82,7 +84,7 @@ participates in the key, so a surface-less check still has a unique triple.
   no observable change. **BLOCKED is never a pass.** It rolls up as FAIL at the dimension level.
 
 A check is **never** silently omitted and a "couldn't tell" is **never** recorded as PASS — the
-audit exists to make a broken rite unmistakable (story 11). When the choice is between PASS and
+audit exists to make a broken rite unmistakable (the failure-visibility invariant). When the choice is between PASS and
 BLOCKED, it is BLOCKED.
 
 ## The `DimensionResult` (what a dimension emits)
@@ -98,7 +100,7 @@ interface DimensionResult {
 ```
 
 The roll-up rule is fixed and shared: **`status = PASS` iff every `Finding` is PASS; otherwise
-FAIL** (a single FAIL or BLOCKED fails the dimension). <related work item> may present per-check detail, but the
+FAIL** (a single FAIL or BLOCKED fails the dimension). the repository verdict-report record may present per-check detail, but the
 dimension's headline status is this roll-up.
 
 ## Running a dimension
@@ -111,23 +113,23 @@ The harness runs each active dimension over the *one* provisioned stage:
 4. Compute the `DimensionResult` roll-up and return it.
 
 Dimensions are **independent** — order does not change any dimension's verdict — but they share
-the single stage and the single self-registered çaylak the functional rite creates, so run the
+the single stage and the single self-registered candidate contributor the functional rite creates, so run the
 functional rite first when a later dimension wants to observe its artifacts (e.g. sandbox-leak
-inspecting the çaylak's sandboxed content). A dimension that needs its own fixture self-registers
+inspecting the candidate contributor's sandboxed content). A dimension that needs its own fixture self-registers
 it through the UI rather than depending on another dimension's state.
 
 ## Adding a dimension (the extension procedure)
 
-To add the a11y (<related work item>) or sandbox-leak (<related work item>) dimension, or any future one:
+To add the a11y (the repository accessibility record) or sandbox-leak (the repository containment-audit record) dimension, or any future one:
 
 1. **Write `dimensions/<id>.md`** declaring the four parts (`id`, `surfaces`, `probe`, `rubric`),
-   consuming the shared primitives — do not redefine the `Finding`/`DimensionResult` shapes or the
+   consuming the shared primitives — do not redefine the `Finding` / `DimensionResult` shapes or the
    run context; reference them here.
 2. **Register it** in the *Active dimensions* table in [`SKILL.md`](./SKILL.md) with its `id` and
    file, flipping its status from planned to active.
-3. **Emit `Finding`s in the shape above**, with stable `check` names, so <related work item> can aggregate and
+3. **Emit `Finding`s in the shape above**, with stable `check` names, so the repository verdict-report record can aggregate and
    diff run-over-run with no per-dimension special-casing.
 
 That is the whole interface: a new dimension is one file plus one table row. The harness loop,
-the `Finding` shape, the roll-up rule, and the raw-findings hand-off to <related work item> are unchanged by
+the `Finding` shape, the roll-up rule, and the raw-findings hand-off to the repository verdict-report record are unchanged by
 adding one.

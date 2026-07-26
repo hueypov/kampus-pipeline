@@ -3,7 +3,7 @@
 # non-empty `name` and `description`, and that `name` matches its directory. The
 # `description` is what the harness routes on, so a malformed one silently makes a
 # skill unroutable — this guard fails the build instead. Run locally or from CI
-# (see .github/workflows/ci.yml). Issue <related work item>.
+# (see .github/workflows/ci.yml). Issue documented repository precedent.
 set -euo pipefail
 
 # This script lives in .claude/skills/, so its own dir IS the skills root —

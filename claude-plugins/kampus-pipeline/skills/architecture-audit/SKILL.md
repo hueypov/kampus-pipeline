@@ -1,6 +1,6 @@
 ---
 name: architecture-audit
-description: Walk a codebase for architectural friction and file each deepening opportunity as a triageable GitHub issue — one issue per consolidated, deduped finding, entering the report→triage intake. Read-only on application code; the only mutation is filing issues. Uses a lens-diversified three-pass walk (Locality / Testability / Vocabulary), a smell-catalog coverage gate, cross-finding consolidation, and dedup-against-open-issues before filing. Trigger on "audit architecture", "find deepening opportunities", "find shallow modules", "find refactor candidates", "audit the codebase", "where should I refactor?", or "/architecture-audit".
+description: Walk a codebase for architectural friction and file each deepening opportunity as a repository-neutral GitHub issue — one issue per consolidated, deduped finding through the installed `report` capability. Read-only on application code; the only mutation is filing issues. Uses a lens-diversified three-pass walk (Locality / Testability / Vocabulary), a smell-catalog coverage gate, cross-finding consolidation, and dedup-against-open-issues before filing. Trigger on "audit architecture", "find deepening opportunities", "find shallow modules", "find refactor candidates", "audit the codebase", "where should I refactor?", or "/architecture-audit".
 ---
 
 # architecture-audit
@@ -10,34 +10,39 @@ a refactor that turns a shallow module into a deep one — into the issue pipeli
 intake. The aim is testability and AI-navigability.
 
 This skill is the in-repo, pipeline-native twin of the personal `audit-architecture`
-workflow, **diverged in exactly one way that matters: its output is triageable GitHub
-issues, never a repo or vault doc.** Each consolidated, deduped finding becomes **one
-issue** filed through the existing `report` path — raw `status:needs-triage` intake,
-type-blind, one finding = one issue — so the audit feeds the same `report → triage →
-plan-epic → write-code` machinery every other observation does, instead of producing a
-standalone artifact a human has to re-read and re-file. **This emits-issues contract is
-the applicable safety invariant** (the audit-emits-issues + 4th-surface decision); cite it and don't reintroduce
-an audit-doc output.
+workflow, **with one portable output contract: it produces GitHub issues, never a repo or
+vault doc.** Each consolidated, deduped finding becomes **one issue** filed through the
+installed `report` capability. The report is intentionally unclassified and unlabeled by
+default, so a repository can apply its own later planning or triage process without the audit
+silently imposing one. This emits-issues contract keeps the audit actionable instead of
+producing a standalone artifact a human must re-read and re-file; do not reintroduce an
+audit-doc output as a substitute for the issue hand-off.
 
 This skill is **read-only on application code**. It runs lens passes with a tool-restricted
 explorer and files issues; it never edits the audited code, never writes a doc into the
 repo, and never drops into a grilling loop.
 
-## All GitHub ops via `gh api` REST — never GraphQL
+## GitHub issue hand-off
 
-The Use gh api REST for GitHub operations so the pipeline does not require GraphQL support. Every issue read and write goes through `gh api` REST. This is not a style
-preference — GraphQL calls error out on this org.
-
-**Resolve the target repo once, up front.** This skill is repo-agnostic — every `gh api`
-call targets `$REPO`, not a hardcoded repo. Resolve it at the top of your run per the shared
-contract's **Target repo resolution**
-([`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md)): `$CLAUDE_PIPELINE_REPO`
-if set, else the current repository. In any adopting repository this defaults to
-the current GitHub repository, so no configuration is needed for the common case.
+This skill is repo-agnostic: its GitHub issue work uses the installed `report` capability,
+which resolves the current repository or `CLAUDE_PIPELINE_REPO` and owns the privacy,
+duplicate-check, and issue-creation procedure. Do not hard-code a repository, a label, a board,
+or a query technology here. If GitHub issue filing is unavailable, complete the read-only audit,
+return each ready-to-file finding, and state that the repository must enable or perform the
+report hand-off; do not create a local audit document in its place.
 
 ```bash
 REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
 ```
+
+The separation between audit and report is deliberate. The audit owns evidence quality: lens
+coverage, consolidation, vocabulary discipline, and an honest explanation of why a finding
+matters. The report owns external authority: target resolution, issue-body transport, privacy,
+and the last duplicate check. Do not copy the report's create command into this skill merely to
+save a hand-off step; two subtly different issue envelopes drift quickly and make the same
+finding behave differently depending on which skill emitted it. Equally, do not let a report
+failure loosen the audit's evidence bar. Return the complete finding with the precise blocker so
+a repository-authorized reporter can file the same issue without repeating the exploration.
 
 ## Vocabulary — read it from `.glossary/*`, don't carry your own
 
@@ -54,7 +59,7 @@ lives in the **committed repo glossary**, read fresh each run:
   test, "the interface is the test surface", "one adapter = hypothetical seam, two = real").
   Use these terms exactly in every finding.
 - **`.glossary/TERMS.md`** — the **domain vocabulary**: the canonical product/domain nouns
-  (sözlük, pano, künye, …). Name the module by its domain term — "the sözlük entry module",
+  (configured content feature, pano, künye, …). Name the module by its domain term — "the configured content feature entry module",
   not "the FooBarHandler".
 
 Read both before walking code:
@@ -192,27 +197,25 @@ an already-open issue covering the same observation. The audit is re-runnable an
 report agents exist, so the same friction may already be filed:
 
 ```bash
-# (a) the live needs-triage queue — read-after-write consistent, catches a just-filed twin
-gh api "repos/$REPO/issues?state=open&labels=status:needs-triage&per_page=100" \
-  --jq '.[] | "#\(.number) \(.title)"'
-# (b) the search index — covers older open issues that already left the queue
-#     join keywords with + (raw spaces produce a malformed query URL)
-gh api "search/issues?q=repo:$REPO+is:issue+is:open+<keywords>" \
-  --jq '.items[] | "#\(.number) \(.title)"'
+# Search the repository's open issues using the title plus distinguishing keywords.
+# The installed report skill owns the final query and filing procedure; this local
+# read is only a first pass while consolidating findings.
+gh issue list --repo "$REPO" --state open \
+  --search "<finding title plus distinguishing keywords>" \
+  --limit 20
 ```
 
-Both commands guard different failure modes — don't drop either: (a) is read-after-write
-consistent and catches an issue filed seconds ago; (b) runs against GitHub's eventually-
-consistent index and covers older open issues already triaged out of the queue. **If an open
-issue already covers a finding, don't file a twin** — add anything it lacks as a comment there
-and move on. When results are genuinely ambiguous, file: a duplicate is cheap for triage to
-close, a lost finding is gone.
+The report skill repeats the duplicate check immediately before its create call; do not treat
+this earlier search as sufficient when the audit has been running for a while. **If an open
+issue already covers a finding, don't file a twin** — add anything it lacks as a comment when
+the repository permits it and move on. When results are genuinely ambiguous, file: a later
+duplicate decision is cheaper than silently losing a concrete finding.
 
-**File via the `report` path.** Each surviving finding is filed exactly as
-[`../report/SKILL.md`](../report/SKILL.md) files a raw observation: the type-blind five-section
-body, the metadata footer, and **only** the `status:needs-triage` label — no type, no priority.
-This skill is read-side of the same intake; it never classifies or prioritizes (that's triage's
-call). Map the finding into the report template:
+**File via the installed `report` capability.** Each surviving finding is filed using the
+complete five-section body, metadata footer, duplicate check, privacy rule, and no-label default
+defined in [`../report/SKILL.md`](../report/SKILL.md). This skill never classifies or prioritizes
+the finding; that is an adopting repository's later decision. Map the finding into the report
+template:
 
 - **What I was doing** — "Architecture audit of `<scope>`, <lens(es)> pass."
 - **What I observed** — the architectural friction, in `.glossary/LANGUAGE.md` vocab, with the
@@ -227,23 +230,16 @@ call). Map the finding into the report template:
   seam), explicitly labeled a guess, never a mandate.
 
 ```bash
-# one finding, one issue — only status:needs-triage, exactly like report. The
-# `tracker create-issue` verb owns this intake-create envelope (the applicable safety invariant;
-# `packages/pipeline-cli/src/tools/tracker/`) and enters the needs-triage queue by default;
-# Use the toolkit’s issue-reporting helper when the repository enables it; do
-# not duplicate a repository-specific issue creation convention in this skill.
-BODY_FILE="$(mktemp /tmp/arch-audit-body.XXXXXX)"   # per-run temp file (concurrent runs share /tmp)
-# … write the five sections + footer into "$BODY_FILE" …
-BODY="$(cat "$BODY_FILE")"
-pipeline-cli tracker create-issue \
-  --title "<short, type-neutral finding summary (≤ ~70 chars)>" \
-  --body "$BODY"
+# One finding, one issue. Follow the installed report procedure for the complete
+# body and create call; do not duplicate a repository-specific create convention,
+# add labels, or create a shared temporary body file in this audit skill.
+# report: <short, type-neutral finding summary (≤ ~70 chars)>
 ```
 
 Use the `report` footer helper for the metadata block so it stays free of PII and local paths
-([`../report/footer.sh`](../report/footer.sh)); `report`'s footer-privacy rule (no email or
-person-tied username, no user-local home/absolute paths, repo-relative pointers only) is
-non-negotiable here too — see [`../report/SKILL.md`](../report/SKILL.md) §Footer privacy.
+([`../report/footer.sh`](../report/footer.sh)); the report privacy rule (no email or person-tied
+username, no user-local home/absolute paths, repo-relative pointers only) is non-negotiable here
+too — see [`../report/SKILL.md`](../report/SKILL.md) §Footer privacy.
 
 ### 6. Close
 
@@ -254,9 +250,9 @@ fix what you just filed, and do **not** write an audit doc — the issues are th
 
 ## Hard rules
 
-- **Output is issues, never a doc (the applicable safety invariant).** One issue per consolidated, deduped finding,
-  filed as raw `status:needs-triage` intake via the `report` path. No repo audit doc, no vault
-  doc, no inline ADR.
+- **Output is issues, never a doc.** One issue per consolidated, deduped finding, filed through
+  the installed `report` capability with its no-label default. No repo audit doc, no vault doc,
+  and no inline ADR.
 - **Vocabulary comes from `.glossary/*`.** Architecture terms from `.glossary/LANGUAGE.md`,
   domain terms from `.glossary/TERMS.md`. No "component / service / API / boundary". The skill
   does not carry its own copy of the vocabulary.
@@ -265,8 +261,8 @@ fix what you just filed, and do **not** write an audit doc — the issues are th
   any Edit/Write or repo-mutating Bash. The only mutation this skill performs is filing issues.
 - **Repo-agnostic.** Every `gh api` call targets `$REPO`; no hardcoded repo in code or trigger
   text.
-- **Type-blind, priority-blind on file.** Apply only `status:needs-triage`. Classifying or
-  prioritizing here poisons the triage queue.
+- **Type-blind, priority-blind on file.** Do not apply labels or workflow metadata. Classifying
+  or prioritizing here turns an audit observation into an unsupported repository decision.
 - **Three lenses, parallel, instruction-framed.** Not one lens, not serial, not persona-style.
   The variance reduction comes from prompt diversity.
 - **Preserve divergent findings.** Single-lens findings survive into the filed set; cluster
@@ -280,9 +276,9 @@ fix what you just filed, and do **not** write an audit doc — the issues are th
 
 ## Conventions
 
-This skill is one of a suite that turns GitHub issues into an agent-operable pipeline; the
-shared formats, label semantics, and target-repo resolution live in
-[`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md), and the raw-intake filing
-mechanics it reuses live in [`../report/SKILL.md`](../report/SKILL.md). The emits-issues +
-The audit stays repository-local: it uses an explicit repository override when
-one is supplied and otherwise derives the current GitHub repository.
+This skill is one of a suite that turns GitHub issues into an agent-operable workflow. The
+installed [`../report/SKILL.md`](../report/SKILL.md) owns the portable intake shape, privacy
+rules, duplicate check, and target-repository resolution. The audit stays repository-local: it
+uses an explicit repository override when supplied and otherwise derives the current GitHub
+repository. Its emits-issues contract remains deliberately narrow: it identifies and explains
+architectural friction, then hands it off without adding a source-specific planning stage.

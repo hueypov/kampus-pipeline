@@ -6,7 +6,7 @@ description: Author and maintain this repo's `.patterns/*.md` docs from source s
 # canon
 
 You author and maintain `.patterns/*.md` — the repo's **how-the-code-is-shaped** doc
-surface: the evergreen references every `write-code` run grounds in before it touches a
+surface: the evergreen references every repository authoring run grounds in before it touches a
 service. A pattern doc nobody refreshes rots — it lags the live code, drifts from the
 grounding sources `CLAUDE.md` mandates, and then **actively misleads** every agent that
 trusts it. Your job is to keep that *how*-knowledge current against the source that is the
@@ -17,8 +17,8 @@ with a row in `.patterns/index.md`.)
 
 You operate on **one surface only**: `.patterns/*.md` (the docs + their `index.md`). You are
 **read-only on application code** — you read the repo source and the grounding sources to
-*learn* the pattern; you never change them, file an issue, or open a PR. (When a `write-code`
-run *dispatched* you, the surrounding flow opens the PR and a review gate handles it; your job
+*learn* the pattern; you never change them, file an issue, or open a PR. (When a repository
+authoring run *dispatched* you, that surrounding flow owns any PR and review; your job
 ends at a correct, committed edit under `.patterns/`.)
 
 ## Scope — what this skill is, and what it is NOT
@@ -40,13 +40,19 @@ The repo's knowledge is split across surfaces; canon owns exactly one. Stay in y
 ## Repo-agnostic — resolve the target once
 
 This skill is **repo-agnostic** (the pipeline suite is an installable plugin). It never
-hardcodes a repo. When you need the GitHub target (e.g. to cite an issue/ADR number), resolve
-it once, at the top of your run, per the shared contract's **Target repo resolution**
-([`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md)):
+hardcodes a repo. When you need a GitHub target (for example, to cite an issue number), resolve
+it only for that optional operation. Prefer `CLAUDE_PIPELINE_REPO`; otherwise resolve the
+current checkout. The pattern-maintenance workflow itself remains repository-local:
 
 ```bash
 REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
 ```
+
+GitHub resolution is deliberately narrow here. It may support a link or citation, but it never
+changes where pattern documents are read, written, or validated: those operations stay rooted
+in the current repository's `.patterns/` directory. If the optional lookup fails, continue the
+repository-local documentation work and omit the unavailable remote citation rather than
+inventing a target or turning a pattern refresh into an issue workflow.
 
 The **paths themselves are repo-relative** — `.patterns/` at the repo root — resolved from
 the working tree, never an absolute or home path. Resolve the repo root with
@@ -214,14 +220,14 @@ change. Surgical — touch the drifted parts, preserve everything else.
    reconcile the link.
 
 The result of either mode is a **clean, committed edit under `.patterns/`** and nothing else —
-no code change, no issue, no PR (the dispatching `write-code` flow, when there is one, owns the
-PR and the gate).
+no code change, no issue, no PR (a dispatching repository workflow, when there is one, owns any
+PR and gate).
 
 ---
 
 ## Always update the index
 
-`.patterns/index.md` is the routing table `write-code` reads to find the doc — a doc with no
+`.patterns/index.md` is the routing table contributors and repository workflows read to find the doc — a doc with no
 row is a doc no agent finds. Whenever you add or rename a doc, fix its row:
 
 - **Add** a row in the **layer section** the doc belongs to — match the existing
@@ -262,10 +268,9 @@ confirm it matches the source verbatim, not a paraphrase.
 
 ## Conventions
 
-This skill is one of the pipeline suite; the shared formats, label semantics, and the
-target-repo resolution it cites live in
-[`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md). The load-bearing invariants
-are stated at their use sites above; the spine: **`.patterns/` only** (the *why* lives in
+This skill is one of the portable pipeline suite. Its repository-local editing rules and optional
+GitHub resolution are stated at their use sites above. The load-bearing invariants are:
+**`.patterns/` only** (the *why* lives in
 `.decisions/`, the *nouns* in `.glossary/`, conventions in `CLAUDE.md` — don't widen past it),
 **source is the source of truth** (when the doc and the source disagree, fix the doc), **the
 index bar gates a new doc** (an honest no-op beats a doc that fails it), and **read-only on

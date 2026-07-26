@@ -1,9 +1,14 @@
 ---
 name: write-code
-description: Pick the next actionable issue off the configured target repo and execute it end to end — claim it by self-assigning, implement on a branch, open a PR that closes it, log progress on the issue, and hand off to the parent epic; OR, given a PR number, enter repair mode and consume a gate's latest FAIL verdict to fix-and-resubmit on the same branch. Trigger on "work the next issue", "pick up an issue", "implement issue #N", "run write-code", "do the next task", "/write-code", or whenever you're asked to turn triaged work into a PR; trigger repair mode on "repair PR #N", "fix the failed review on #N", "address the FAIL on PR #N". This is the execution stage of the issue-intake pipeline: it consumes `status:triaged` issues and produces PRs that `review-code`/`review-doc`/`review-skill` gate, and it consumes those gates' FAIL markers to drive the fix round-trip.
+description: Pick the next actionable issue off the configured target repo and execute it end to end — claim it by self-assigning, implement on a branch, open a PR that closes it, log progress on the issue, and hand off to the parent epic; OR, given a PR number, enter repair mode and consume a gate's latest FAIL verdict to fix-and-resubmit on the same branch. Trigger on "work the next issue", "pick up an issue", "implement issue #N", "run write-code", "do the next task", "/write-code", or whenever you're asked to turn triaged work into a PR; trigger repair mode on "repair PR #N", "fix the failed review on #N", "address the FAIL on PR #N". This is the execution stage of the issue-intake pipeline: it consumes `$PIPELINE_STATUS_CLASSIFIED` issues and produces PRs that `review-code`/`review-doc`/`review-skill` gate, and it consumes those gates' FAIL markers to drive the fix round-trip.
 ---
 
 # write-code
+
+## Repository-owned policy boundary
+
+This workflow is part of the default generic payload and `pipeline init` links it into `.claude/skills`. Availability is not authority: before external GitHub operations, resolve the consumer repository root and read `.pipeline/agent-policy.json`. Read `.pipeline/optional-workflow-policy.json` for repository-specific integration settings. Do not infer a platform, product lifecycle, branch, organization, or approval actor from examples below. When policy does not authorize an action or required configuration is unset, preserve the workflow context, explain the missing configuration, and fail closed before an external mutation.
+
 
 You are the executor. The backlog has already been triaged (`triage`) and any epic
 has been planned into children with a dependency topology (`plan-epic`). Your job is
@@ -31,12 +36,12 @@ reason — you fix, an **independent** re-review re-gates; you never write the P
 [Why the author may fix its own FAIL'd PR](#why-the-author-may-fix-its-own-faild-pr-this-is-not-a-firewall-violation)).
 This invariant is the skill's own rule, enforced here — **it does not rely on a per-spawn
 hand-off instruction** (which agents demonstrably ignored, walking themselves into the gate on
-their own PR — <related work item>).
+their own PR — documented repository precedent).
 
 ## All GitHub ops via `gh api` REST — never GraphQL
 
 Every issue/PR/label read and write goes through `gh api` — the org's legacy
-Projects-classic integration errors out GraphQL issue queries, so this is a hard
+configured planning board integration errors out GraphQL issue queries, so this is a hard
 constraint, not a style call (branch/commit/PR-open use `git`/`gh` per repo conventions).
 Resolve the target repo once, up front (this skill is repo-agnostic — every call targets
 `$REPO`); the full resolution rule is the shared contract's **Target repo resolution**
@@ -70,9 +75,9 @@ slightly different bullet style still means what it means), write canonically.
 
 Before you draft a PR title/body, a progress comment, an epic handoff, or any identifier
 you introduce, read the repo-owned vocabulary register and reach for its names rather than
-inventing your own (the one-concept-named-four-ways drift, <related work item>; the applicable safety invariant):
-[`.glossary/TERMS.md`](<repository URL>)
-(domain nouns) and [`.glossary/LANGUAGE.md`](<repository URL>)
+inventing your own (the one-concept-named-four-ways drift, documented repository precedent; the applicable safety invariant):
+[`.glossary/TERMS.md`](repository-owned record URL)
+(domain nouns) and [`.glossary/LANGUAGE.md`](repository-owned record URL)
 (architecture vocabulary) — the single source; never copy a definition into this skill.
 
 ---
@@ -104,7 +109,7 @@ three* PASS markers).
 ### A rebase invalidates the PASS — rebase → re-review → ship is atomic
 
 Whenever a PR head moves after it was reviewed — most often **a rebase to catch up to
-`main`**, but any force-push — the prior `review-code`/`review-doc`/`review-skill` PASS is bound
+`configured base branch`**, but any force-push — the prior `review-code`/`review-doc`/`review-skill` PASS is bound
 to the *old* head and is **staleness-invalidated** (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA): the verdict attests the exact
 tree it reviewed, and the rebased head is, in principle, un-reviewed. `ship-it` will then
 correctly refuse with `unverified (verdict not bound to current head)` (its Step 2b). That
@@ -121,13 +126,13 @@ moment it landed, so "ship on the existing PASS after a rebase" is self-contradi
 The pattern that **never hits this**: **review the exact head you ship.** A flow that reviews
 and ships in one pass over a single head never orphans its verdict; the split
 review-then-rebase-then-ship flow is the only one that does, and the fresh re-review is what
-re-binds the verdict to the head being merged (<related work item>).
+re-binds the verdict to the head being merged (documented repository precedent).
 
 ---
 
 ## Step 1 — Pick the next issue
 
-The pick rule is deterministic. Among **open** issues that are `status:triaged` **and
+The pick rule is deterministic. Among **open** issues that are `$PIPELINE_STATUS_CLASSIFIED` **and
 unassigned**:
 
 1. **Highest priority bucket first:** all `p0` before any `p1`, all `p1` before any
@@ -147,21 +152,21 @@ Assigned issues are someone else's claim — **skip them**. Skip on *any* non-nu
 not on an exact match: under the Step 3 claim race an issue may **transiently** show two
 co-assignees for the window before the winner evicts the loser, and skipping any assigned
 issue keeps that transient state safe — a half-resolved claim is never double-picked, it's
-simply passed over until it settles to its single winner. `status:needs-triage`,
-`status:needs-info`, and closed issues are not pickable (they haven't cleared triage).
+simply passed over until it settles to its single winner. `$PIPELINE_STATUS_TRIAGE`,
+`$PIPELINE_STATUS`, and closed issues are not pickable (they haven't cleared triage).
 
 ### Pre-pick exception — resume your own failed PR first
 
 The "skip assigned issues" rule has **exactly one exception**: a PR *you* opened that came
 back FAIL. Its `Fixes #N` issue is still assigned to you (review-code/review-doc/review-skill
 leave it open and assigned on a FAIL), which would make it unpickable by the rule above — but
-that arc is **yours to drive forward, not skip**. So **before** picking new `status:triaged`
+that arc is **yours to drive forward, not skip**. So **before** picking new `$PIPELINE_STATUS_CLASSIFIED`
 work, scan your own open PRs for one whose **latest** gate verdict (in *any* of the three
 namespaces) is an unaddressed FAIL:
 
 ```bash
 ME=$(gh api user --jq '.login')
-# resolve the verdict CLI once — in-repo-first, published-fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic <related work item>).
+# resolve the verdict CLI once — in-repo-first, published-fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic documented repository precedent).
 # Each per-(PR, gate) FAIL-bound-to-head resolution below delegates to `pipeline-cli verdict read`
 # (ACL author-gate + latest-wins + SHA-staleness, the authorization rule that accepts privileged actions only from repository members; its unit tests are the contract).
 if [ -x .pipeline/toolkit/bin/pipeline ]; then
@@ -229,7 +234,7 @@ Two properties make this scan terminate rather than starve:
   escalation hands it to a human but leaves its latest verdict at FAIL, so without this skip
   the scan would re-match it forever — re-enter repair, recount 3 FAILs, re-escalate — and
   never advance to fresh work. Excluding capped PRs lets the picker step over the escalated
-  PR and pick new `status:triaged` work.
+  PR and pick new `$PIPELINE_STATUS_CLASSIFIED` work.
 
 List the candidate pool, priority bucket by priority bucket, stopping at the first
 bucket that has any unassigned candidate:
@@ -237,7 +242,7 @@ bucket that has any unassigned candidate:
 ```bash
 # p0 first; only fall through to p1, then p2 if a bucket is empty of unassigned issues
 for P in p0 p1 p2; do
-  gh api "repos/$REPO/issues?state=open&labels=status:triaged,$P&sort=created&direction=asc&per_page=100" \
+  gh api "repos/$REPO/issues?state=open&labels=$PIPELINE_STATUS_CLASSIFIED,$P&sort=created&direction=asc&per_page=100" \
     --jq '.[] | select(.assignee == null and (.pull_request | not)) | "#\(.number)\t\(.created_at)\t\(.title)"'
 done
 ```
@@ -276,7 +281,7 @@ Milestone shapes the pick in two modes:
   the milestone dimension doesn't separate them (both in, both out, or no active
   milestone). The "active milestone" is resolved from a **single durable surface, not a
   per-run guess**: it is the arc pinned by the one `active` row of
-  [`ROADMAP.md`](<repository URL>)'s `## Arcs` table
+  [`ROADMAP.md`](repository-owned record URL)'s `## Arcs` table
   (the founder-voice roadmap projects each arc onto a GitHub milestone; exactly one arc is
   `active` at a time — the applicable safety invariant).
   An operator's explicit `work milestone N` still overrides it (the mode below). When **no**
@@ -292,7 +297,7 @@ Milestone shapes the pick in two modes:
   ```bash
   # explicit milestone drain: same priority spine, scoped to milestone N (REST, never GraphQL)
   for P in p0 p1 p2; do
-    gh api "repos/$REPO/issues?state=open&milestone=$N&labels=status:triaged,$P&sort=created&direction=asc&per_page=100" \
+    gh api "repos/$REPO/issues?state=open&milestone=$N&labels=$PIPELINE_STATUS_CLASSIFIED,$P&sort=created&direction=asc&per_page=100" \
       --jq '.[] | select(.assignee == null and (.pull_request | not)) | "#\(.number)\t\(.created_at)\t\(.title)"'
   done
   ```
@@ -305,7 +310,7 @@ Milestone shapes the pick in two modes:
   operator has chosen to focus N.
 
 In both modes the pickability predicate is **unchanged** — milestone only *orders* among
-issues that are already pickable (`status:triaged` + unassigned, sub-issue eligibility per
+issues that are already pickable (`$PIPELINE_STATUS_CLASSIFIED` + unassigned, sub-issue eligibility per
 Step 2). Read an issue's milestone with
 `gh api repos/$REPO/issues/<N> --jq '.milestone.number // "none"'` (none ⇒ the well-formed
 default — most issues carry no milestone) per the contract's REST surface.
@@ -328,7 +333,7 @@ standalone, skip to Step 3.
 
 For a sub-issue, **read the parent epic first** — its plan, its `## Dependencies`
 topology, and its progress (the handoff-note comment stream). A child is only pickable
-when its dependencies are all closed. There is **no `status:blocked` label**;
+when its dependencies are all closed. There is **no `$PIPELINE_STATUS` label**;
 eligibility is computed fresh on every pick from the epic's `## Dependencies` section.
 
 ```bash
@@ -356,16 +361,16 @@ A child `#C` is **unblocked** iff:
 
 Both conditions must hold. If either fails — a phase predecessor is open, or a
 `requires:` target is open — the child is **blocked: skip it** and fall back to the
-next pickable issue (the next unassigned `status:triaged` issue in priority/age
+next pickable issue (the next unassigned `$PIPELINE_STATUS_CLASSIFIED` issue in priority/age
 order, re-running Step 1 with this child excluded). Do **not** apply a label, do
 **not** comment "blocked" — blockedness is a derived, transient fact, not a stored
 state. The child becomes pickable the moment its blocker closes; on the next pick the
 recomputation will let it through.
 
-> Worked: epic with `### Phase 1: <related work item>, <related work item>` and `### Phase 2: <related work item> (requires: <related work item>)`.
-> If you're eyeing `<related work item>`: it needs `<related work item>` closed (its `requires:`). It does **not**
-> need `<related work item>` — `<related work item>` is a phase-1 sibling but `<related work item>` only gated on `<related work item>`. Note the
-> subtlety: `<related work item>` is *in Phase 2*, so the phase-boundary rule would also gate it on
+> Worked: epic with `### Phase 1: documented repository precedent, documented repository precedent` and `### Phase 2: documented repository precedent (requires: documented repository precedent)`.
+> If you're eyeing `documented repository precedent`: it needs `documented repository precedent` closed (its `requires:`). It does **not**
+> need `documented repository precedent` — `documented repository precedent` is a phase-1 sibling but `documented repository precedent` only gated on `documented repository precedent`. Note the
+> subtlety: `documented repository precedent` is *in Phase 2*, so the phase-boundary rule would also gate it on
 > all of Phase 1 — but a `requires:` that names a strict subset is the planner saying
 > "this specific edge is what matters." When a `requires:` is present, honor it as the
 > precise gate; when it's absent, fall back to the phase-boundary default. If a child
@@ -378,10 +383,10 @@ recomputation will let it through.
 Claiming backs Step 1's "skip assigned issues" rule so other write-code agents step over a
 claimed issue. But the bare GitHub assignee **cannot** be the claim: it is **last-write-wins,
 additive, not compare-and-swap** (two agents that both saw #N unassigned co-assign `[A, B]`,
-<related work item>) — and worse, **every draining agent here pushes as the single git identity `<shared-automation-login>`**,
+documented repository precedent) — and worse, **every draining agent here pushes as the single git identity `configured automation identity`**,
 so the old `min(login)` tiebreak degenerated to a no-op (both co-racers compute
-`min == <shared-automation-login> == me` and both implement #N; the <related work item> double-implement). The fix is the
-**agent-distinguishable claim marker** (the claim-ownership rule that gives work to the earliest authorized session-stamped claim, <related work item>):
+`min == configured automation identity == me` and both implement #N; the documented repository precedent double-implement). The fix is the
+**agent-distinguishable claim marker** (the claim-ownership rule that gives work to the earliest authorized session-stamped claim, documented repository precedent):
 a claim **comment** stamped with your `CLAUDE_CODE_SESSION_ID`, the per-agent UUID the
 runtime exposes that the shared login cannot provide.
 
@@ -425,7 +430,7 @@ branch or build, using your own `CLAUDE_CODE_SESSION_ID` as the token:
 
 ```bash
 # 0. Fail-closed on a missing token: the claim comment is the ONLY agent-distinguishable signal
-#    under the shared `<shared-automation-login>` login — with no token a co-racer is unresolvable, so NEVER claim
+#    under the shared `configured automation identity` login — with no token a co-racer is unresolvable, so NEVER claim
 #    (and never fall back to the login-keyed assignee as ownership — that is the §7 degeneracy).
 if [ -z "$CLAUDE_CODE_SESSION_ID" ]; then
   echo "no CLAUDE_CODE_SESSION_ID in env — cannot post an agent-distinguishable claim. BACK OFF, re-pick." >&2
@@ -474,10 +479,10 @@ See [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §7 for the
 derivation, and the pre-spawn / delegated-ownership protocol — this step implements that contract,
 it does not re-derive it.
 
-Now **route by type** before implementing — a `type:decision` or `type:investigation`
+Now **route by type** before implementing — a `$PIPELINE_WORK_ITEM_TYPE` or `$PIPELINE_WORK_ITEM_TYPE`
 issue is not a "write code and open a PR" issue. See [Type routing](#type-routing)
 and branch there if the issue carries one of those types. Everything else
-(`type:feature`, `type:chore`, `type:bug`) is the implement-and-PR path below.
+(`$PIPELINE_WORK_ITEM_TYPE`, `$PIPELINE_WORK_ITEM_TYPE`, `$PIPELINE_WORK_ITEM_TYPE`) is the implement-and-PR path below.
 
 ---
 
@@ -488,9 +493,9 @@ The claim (Step 3) guarantees you *won* a unit of work; this guard guarantees yo
 *operate on* a number you won. They are complements: without it, a mis-attributed issue/PR
 number — a wrong `<N>` substituted into a `gh api … /comments`, a `git push` to the wrong
 branch, a close on the wrong issue — silently mutates **another agent's live work**. That is
-the <related work item> near-miss this step closes (a coder nearly killed another agent's live PR via a
+the documented repository precedent near-miss this step closes (a coder nearly killed another agent's live PR via a
 mis-attributed number); it is the `write-code` adoption of the claim-ownership rule that gives work to the earliest authorized session-stamped claim
-§4 (surface <related work item>).
+§4 (surface documented repository precedent).
 
 **Before any mutating action that targets an issue/PR number** — open a PR against it (Step 5),
 comment on it (Step 6 progress, Step 7 handoff), `git switch`/`git push` its branch (repair
@@ -531,7 +536,7 @@ is the **only** sanctioned path to a mutation that names `<N>`, no bypass:
 # its embedded session id == MY_CLAIM. Returns 0 only on a proven-own claim; non-zero (REFUSE) on
 # an absent OR a foreign claim. The the claim-ownership rule that gives work to the earliest authorized session-stamped claim §2 resolution — CLAIM_RE + the write+ ACL trust root
 # (the authorization rule that accepts privileged actions only from repository members) + the earliest-(created_at, comment id) tiebreak — is owned once by the shared verb
-# `pipeline-cli claim is-mine`; CITE it, never hand-roll the jq (<related work item>, the same envelope
+# `pipeline-cli claim is-mine`; CITE it, never hand-roll the jq (documented repository precedent, the same envelope
 # extraction the shipped review-verdict and tracker verbs underwent). The verb is default-deny: an absent claim, an
 # unauthorized-only claim, a foreign owner, and a missing session all resolve NOT-mine (exit
 # non-zero) — exactly this guard's fail-closed refusal, so the exit-status contract is preserved.
@@ -557,30 +562,30 @@ ownership check is the degeneracy this guard exists to remove.
 > claim); repair R2/R3 guard the **PR's linked issue `#N`** (the claim lives on the issue, so
 > resolving `Fixes #N` and confirming its claim is `MY_CLAIM` is what proves the PR is yours to
 > push); the **repair escalation** sites — both the N=3 cap block and the freeze-after-round-K
-> block — guard the **PR's linked issue `#N`** too (the escalation comment + `status:needs-triage`
+> block — guard the **PR's linked issue `#N`** too (the escalation comment + `$PIPELINE_STATUS_TRIAGE`
 > relabel are number-targeting mutations reachable as a fresh stateless repair's *first* mutation,
 > escalating instead of running R2/R3, so the R2/R3 guards never fire — gate the escalation itself);
 > type-routing closes guard the **issue** you close.
 
 > **Composition + ship-ordering (the one honest caveat).** This guard is the **read-side
 > complement** of the claim *write*: it verifies the marker that the claim surface posts — the
-> Step-3 issue self-claim and the §7 contract (surface <related work item>), or the orchestrator's pre-spawn
-> claim threaded as `MY_CLAIM` (surface <related work item>). It is **live-correct only once a claim marker is
+> Step-3 issue self-claim and the §7 contract (surface documented repository precedent), or the orchestrator's pre-spawn
+> claim threaded as `MY_CLAIM` (surface documented repository precedent). It is **live-correct only once a claim marker is
 > posted ahead of the mutation** — which the integrated pipeline always does (orchestrator
 > pre-claims, or `write-code` self-claims at its claim step). Landing this guard **ahead of** a
 > claim-marker-posting surface would, by its own fail-closed contract, refuse `write-code`'s own
-> mutations (no marker yet to verify) — so its ship is sequenced **with or after** <related work item>/<related work item>, a
+> mutations (no marker yet to verify) — so its ship is sequenced **with or after** documented repository precedent/documented repository precedent, a
 > control-plane ship decision, not a fail-open hedge to weaken here.
 
-### Rehearsal — a mis-attributed number is refused (the <related work item> reproduction)
+### Rehearsal — a mis-attributed number is refused (the documented repository precedent reproduction)
 
 The guard handed a number it did **not** claim refuses to mutate it. Walk the three resolutions:
 
 1. **Foreign claim — REFUSE.** Agent B (its own session `B-sid`) holds the earliest authorized
-   claim on issue `<related work item>`. Agent A (`MY_CLAIM = A-sid`) is handed `<related work item>` by a mis-attributed number
+   claim on issue `documented repository precedent`. Agent A (`MY_CLAIM = A-sid`) is handed `documented repository precedent` by a mis-attributed number
    and reaches a mutation. `claim_is_mine 900` resolves `winner = B-sid`; `B-sid != A-sid` ⇒
-   **FAILED (fail-closed): <related work item> is claimed by ANOTHER agent** — A pushes/closes nothing. This is
-   the <related work item> near-miss, now structurally unreachable.
+   **FAILED (fail-closed): documented repository precedent is claimed by ANOTHER agent** — A pushes/closes nothing. This is
+   the documented repository precedent near-miss, now structurally unreachable.
 2. **Absent claim — REFUSE.** The number names an issue with **no** authorized claim marker (or
    only a forged claim from a non-collaborator, which the authorization rule that accepts privileged actions only from repository members author-gate drops). `winner` is
    empty ⇒ **FAILED (fail-closed): no authorized claim marker** — A cannot prove ownership, so it
@@ -630,7 +635,7 @@ COMMON="$(cd "$COMMON" && pwd)"
 # env var $CLAUDE_CODE_AGENT (stable across an agent's Bash calls, unlike a shell `export`),
 # corroborated by a set $WORKTREE_ROOT — NOT a per-run guess. A genuine standalone human run (a
 # direct `/write-code`) matches NEITHER. This is what lets the fail-closed branch below distinguish
-# "isolation expected but the harness no-op'd provisioning" (<related work item>) from a legitimate standalone
+# "isolation expected but the harness no-op'd provisioning" (documented repository precedent) from a legitimate standalone
 # run, so it fires LOUD in the first case without regressing the second. See the applicable safety invariant.
 ISOLATION_EXPECTED=0
 case "$CLAUDE_CODE_AGENT" in coder|*coder*) ISOLATION_EXPECTED=1 ;; esac   # ran AS the coder agent-type
@@ -638,16 +643,16 @@ case "$CLAUDE_CODE_AGENT" in coder|*coder*) ISOLATION_EXPECTED=1 ;; esac   # ran
 echo "write-code preflight: git-dir=$GITDIR common-dir=$COMMON cwd=$(pwd) isolation-expected=$ISOLATION_EXPECTED (agent=${CLAUDE_CODE_AGENT:-unset} worktree-root=${WORKTREE_ROOT:+set})"   # emit scanned scope (the applicable safety invariant §1)
 if [ "$GITDIR" = "$COMMON" ]; then
   if [ "$ISOLATION_EXPECTED" = 1 ]; then
-    # FAIL-CLOSED LOUD (the <related work item> branch): isolation was EXPECTED but this run is on the PRIMARY
+    # FAIL-CLOSED LOUD (the documented repository precedent branch): isolation was EXPECTED but this run is on the PRIMARY
     # checkout with no linked worktree — the harness's `git worktree add` + $WORKTREE_ROOT injection
-    # silently didn't run for this coder spawn (<related work item>'s harness no-op). Because the whole repo-side
+    # silently didn't run for this coder spawn (documented repository precedent's harness no-op). Because the whole repo-side
     # worktree-guard keys on $WORKTREE_ROOT, that no-op ALSO disarmed it, leaving this preflight the
     # sole surviving layer. Do NOT self-provision here: doing so papers over the harness failure and
-    # leaves the two-layer primary-corruption defense collapsed to one, invisibly (<related work item> class).
+    # leaves the two-layer primary-corruption defense collapsed to one, invisibly (documented repository precedent class).
     echo "write-code preflight FAILED (fail-closed, LOUD): worktree isolation was EXPECTED (agent=${CLAUDE_CODE_AGENT:-?}, worktree-root=${WORKTREE_ROOT:+set}) but this run is on the PRIMARY checkout (git-dir == common-dir) and \$WORKTREE_ROOT is unset." >&2
-    echo "  ROOT CAUSE: the harness's worktree provisioning (git worktree add + \$WORKTREE_ROOT injection) did NOT run for this coder spawn — the <related work item> harness no-op. The repo-side worktree-guard also keys on \$WORKTREE_ROOT, so it is disarmed too; only this preflight is left." >&2
-    echo "  REFUSING to self-provision — that would hide the harness failure and leave the two-layer defense collapsed to one, invisibly (the primary-checkout-corruption class, <related work item>)." >&2
-    echo "  ROUTED BLOCKER — surface UP to the operator/EM: 'harness worktree provisioning no-op'd for a coder spawn (isolation expected, \$WORKTREE_ROOT unset); the out-of-repo harness half (<related work item>) needs attention. Do NOT blindly retry the same spawn.'" >&2
+    echo "  ROOT CAUSE: the harness's worktree provisioning (git worktree add + \$WORKTREE_ROOT injection) did NOT run for this coder spawn — the documented repository precedent harness no-op. The repo-side worktree-guard also keys on \$WORKTREE_ROOT, so it is disarmed too; only this preflight is left." >&2
+    echo "  REFUSING to self-provision — that would hide the harness failure and leave the two-layer defense collapsed to one, invisibly (the primary-checkout-corruption class, documented repository precedent)." >&2
+    echo "  ROUTED BLOCKER — surface UP to the operator/EM: 'harness worktree provisioning no-op'd for a coder spawn (isolation expected, \$WORKTREE_ROOT unset); the out-of-repo harness half (documented repository precedent) needs attention. Do NOT blindly retry the same spawn.'" >&2
     exit 1
   fi
   # isolation was NOT expected ⇒ a genuine standalone run: fall through to the Non-isolated fallback,
@@ -657,15 +662,15 @@ if [ "$GITDIR" = "$COMMON" ]; then
   echo "  This run did NOT expect isolation (standalone) — take the Non-isolated fallback below to create a worktree before mutating." >&2
   exit 1
 else
-  # POSITIVE worktree assertion — loud + EARLY (<related work item>). git-dir != common-dir is the ONE trust
+  # POSITIVE worktree assertion — loud + EARLY (documented repository precedent). git-dir != common-dir is the ONE trust
   # signal for "I am in my own linked worktree" that survives the misleading env a worktree spawn
-  # is handed: $WORKTREE_ROOT is unset (the reverted <related work item> provisioning hook) and $CLAUDE_CODE_AGENT
-  # reports the PARENT's value (inherited agent-type, <related work item>) — so neither can anchor worktree
+  # is handed: $WORKTREE_ROOT is unset (the reverted documented repository precedent provisioning hook) and $CLAUDE_CODE_AGENT
+  # reports the PARENT's value (inherited agent-type, documented repository precedent) — so neither can anchor worktree
   # identity. This git-plumbing check can, and does so independently of both. Capture $WT from THIS
   # evidence, never from the untrustworthy env and never from a file. This assertion fires BEFORE the
   # first Edit/Write on purpose: a raw Edit/Write to a primary-checkout absolute path is not a git op,
   # so neither the repo-side worktree-guard nor wt_preflight fires on it — the ONLY thing standing
-  # between a cwd-reset + stale-Read-cache and a stray write into shared primary `main` is anchoring
+  # between a cwd-reset + stale-Read-cache and a stray write into shared primary `configured base branch` is anchoring
   # every edit under this $WT (see "Anchor every Edit/Write to $WT" below). Establishing $WT loudly
   # here is what makes that anchoring actionable from the first file touch.
   WT="$(git rev-parse --show-toplevel)"
@@ -681,18 +686,18 @@ log) and **idempotent** (read-only `git rev-parse`, safe to re-run). **Never** r
 preflight by deleting it or relaxing the comparison; a green preflight is the precondition every
 mutation in Steps 4–7 relies on.
 
-**The primary-checkout refusal forks on whether isolation was *expected* (the applicable safety invariant, <related work item>).** The
+**The primary-checkout refusal forks on whether isolation was *expected* (the applicable safety invariant, documented repository precedent).** The
 `git-dir == common-dir` refusal is a hard stop in both directions, but *how* you're meant to
 recover differs, and conflating the two is what let a harness failure hide:
 
 - **Isolation was EXPECTED** (`isolation-expected=1` — the run is under the coder agent-type, or
   `$WORKTREE_ROOT` was set) yet you're on the primary checkout ⇒ **fail closed LOUD and STOP.**
-  This is the [<related work item>](<repository URL>) harness no-op: the harness
+  This is the [documented repository precedent](repository-owned record URL) harness no-op: the harness
   was supposed to provision a linked worktree and inject `$WORKTREE_ROOT` but silently didn't, which
   *also* disarms the whole `$WORKTREE_ROOT`-keyed repo-side worktree-guard — so this preflight is
   the only surviving layer. **Do NOT self-provision to route around it.** Self-provisioning here
   would paper over the harness failure and leave the two-layer primary-corruption defense collapsed
-  to one, *invisibly* (the [<related work item>](<repository URL>)
+  to one, *invisibly* (the [documented repository precedent](repository-owned record URL)
   primary-checkout-corruption class). Instead surface the printed **ROUTED BLOCKER** up to the
   operator/EM so the out-of-repo harness half gets fixed rather than silently absorbed.
 - **Isolation was NOT expected** (`isolation-expected=0` — a genuine standalone `write-code`, e.g.
@@ -709,20 +714,20 @@ what's matched, the run degrades to `isolation-expected=0` (today's silent self-
 dangerous primary-checkout mutation — the loud branch only *adds* a stop, it never removes the
 existing refusal.
 
-**The success path asserts worktree identity LOUDLY, on env-independent evidence (<related work item>).** When
+**The success path asserts worktree identity LOUDLY, on env-independent evidence (documented repository precedent).** When
 `git-dir != common-dir` the preflight no longer proceeds *silently*: it captures `$WT` from that
 positive git-plumbing evidence and prints a `CONFIRMED` line naming the worktree root. This is the
 producer/preflight half of the worktree-misID class — a worktree-isolated spawn is handed a
-**misleading process env** (`$WORKTREE_ROOT` unset because the <related work item> provisioning hook was reverted;
-`$CLAUDE_CODE_AGENT` carrying the *parent's* agent-type via inheritance, <related work item>), so neither env var
+**misleading process env** (`$WORKTREE_ROOT` unset because the documented repository precedent provisioning hook was reverted;
+`$CLAUDE_CODE_AGENT` carrying the *parent's* agent-type via inheritance, documented repository precedent), so neither env var
 can anchor "am I in my worktree?" The `git-dir != common-dir` plumbing can, and the assertion keys on
 *only* that — never on an agent-type string, so no fix relocates the fragile coupling (the same
-principle as <related work item>'s the roster rule that keeps unique-seam bridges singleton while seam-free engines may scale note). **This is deliberately distinct from <related work item>.** <related work item> is the
+principle as documented repository precedent's the roster rule that keeps unique-seam bridges singleton while seam-free engines may scale note). **This is deliberately distinct from documented repository precedent.** documented repository precedent is the
 **consumer/failure-side** change: it re-keys the `ISOLATION_EXPECTED` *detector* (the
 `case "$CLAUDE_CODE_AGENT"` on the `git-dir == common-dir` branch above) onto the same env-independent
 primary-checkout corroboration, to parity with `bash-pin.ts`. This issue is the **positive/success-side**
-assertion. The two live on **opposite sides of the same `if`** and do not overlap: <related work item> hardens *when
-to fail closed*, <related work item> hardens *what a pass positively establishes*. The `ISOLATION_EXPECTED` detector
+assertion. The two live on **opposite sides of the same `if`** and do not overlap: documented repository precedent hardens *when
+to fail closed*, documented repository precedent hardens *what a pass positively establishes*. The `ISOLATION_EXPECTED` detector
 is intentionally left untouched here so the two changes can't double-implement or contradict.
 
 <a id="per-mutation-preflight"></a>
@@ -732,7 +737,7 @@ is intentionally left untouched here so the two changes can't double-implement o
 > where the cwd points). A `git commit`/`git push`/branch op issued *after* such a reset runs
 > against the **shared primary tree** even though the opening preflight was green — so two
 > parallel runs serialize their commits onto whatever branch the primary tree is on,
-> cross-contaminating each other's PRs (<related work item>). One pass at Step-4 start does **not** hold for
+> cross-contaminating each other's PRs (documented repository precedent). One pass at Step-4 start does **not** hold for
 > the whole run.
 >
 > Capture your worktree root once, then run this **mandatory per-mutation preflight** —
@@ -760,14 +765,14 @@ is intentionally left untouched here so the two changes can't double-implement o
 > ```
 
 <a id="anchor-edits-to-wt"></a>
-> **Anchor EVERY `Edit`/`Write` to `$WT` — the raw-write path no git guard covers (<related work item>).**
+> **Anchor EVERY `Edit`/`Write` to `$WT` — the raw-write path no git guard covers (documented repository precedent).**
 > `wt_preflight` and the repo-side worktree-guard both gate **head-moving git ops**. A raw
 > `Edit`/`Write` to a file is **not** a git op, so **neither guard fires on it** — an edit whose
 > target is a **primary-checkout absolute path** writes straight into the shared primary tree,
 > silently, and is caught (if at all) only by a coder noticing the primary went dirty before commit.
 > This is not hypothetical: with `$WORKTREE_ROOT` unset and the cwd reset to the primary checkout
 > between calls, a coder's *first* `Edit`/`Write` took primary-checkout absolute paths from session
-> `gitStatus`/`Read` context and landed edits on primary `main` (<related work item> sharpening) — the guards never
+> `gitStatus`/`Read` context and landed edits on primary `configured base branch` (documented repository precedent sharpening) — the guards never
 > saw it because it wasn't a git op.
 >
 > So the opening preflight's `$WT` capture is load-bearing for **file edits, not just git ops**:
@@ -778,19 +783,19 @@ is intentionally left untouched here so the two changes can't double-implement o
 > `$WT`; for every edit, confirm the path begins with `$WT`. Treat a primary-checkout absolute path
 > in your context as **stale** (cwd-reset + Read-cache), not as your worktree.
 
-This constrains how you branch: `main`
-is already checked out in the primary tree, so `git checkout main` **fails** inside an
-isolated worktree (`fatal: 'main' is already checked out at <primary>`). Branch from
-latest origin `main` **without checking it out**:
+This constrains how you branch: `configured base branch`
+is already checked out in the primary tree, so `git checkout configured base branch` **fails** inside an
+isolated worktree (`fatal: 'configured base branch' is already checked out at <primary>`). Branch from
+latest origin `configured base branch` **without checking it out**:
 
 ```bash
 # Fetch the base fresh, and FAIL-LOUD if it doesn't run: FETCH_HEAD is what the branch below is
 # cut from, so a silently-failed fetch (network blip, a harness worktree whose exec env stripped
 # PATH) leaves FETCH_HEAD at a STALE prior tip, and the branch misses a base file merged just
 # before branch-cut → the SHA-bound run-evidence check false-fails on a file the head never
-# carried (<related work item>; the same stale-base class <related work item> fixed at the repair step). Never proceed on an
+# carried (documented repository precedent; the same stale-base class documented repository precedent fixed at the repair step). Never proceed on an
 # unverified fetch — assert it succeeded before branching off FETCH_HEAD.
-git fetch origin main || { echo "write-code: 'git fetch origin main' failed — refusing to branch off a stale FETCH_HEAD (would cut a head missing a just-merged base file; <related work item>)." >&2; exit 1; }
+git fetch origin configured base branch || { echo "write-code: 'git fetch origin configured base branch' failed — refusing to branch off a stale FETCH_HEAD (would cut a head missing a just-merged base file; documented repository precedent)." >&2; exit 1; }
 # Derive the prefix from THIS checkout's git identity — never a hardcoded literal. A copied
 # literal namespaces every agent's branch under one person's handle regardless of who runs.
 PREFIX="$(git config user.name | tr '[:upper:] ' '[:lower:]-')"   # e.g. "Umut Sirin" → "umut-sirin"
@@ -802,10 +807,10 @@ BRANCH="$PREFIX/<slug-for-issue-N>-$(uuidgen | head -c 8)"
 wt_preflight && git switch -c "$BRANCH" FETCH_HEAD   # branch create is a git mutation → gate it (per-mutation preflight above)
 ```
 
-It's `git switch -c "$BRANCH" FETCH_HEAD` (not `git checkout main`) on purpose: in an
-isolated worktree `main` is checked out elsewhere, so branching directly off the
+It's `git switch -c "$BRANCH" FETCH_HEAD` (not `git checkout configured base branch`) on purpose: in an
+isolated worktree `configured base branch` is checked out elsewhere, so branching directly off the
 freshly-fetched `FETCH_HEAD` is the only flow that works — don't "fix" it back to a
-`main` checkout.
+`configured base branch` checkout.
 
 <a id="branch-name-is-re-derived-live"></a>
 > **The branch name is created once here, then RE-DERIVED LIVE from the worktree at every
@@ -816,7 +821,7 @@ freshly-fetched `FETCH_HEAD` is the only flow that works — don't "fix" it back
 > `$BRANCH` is **empty**, and an agent that "carries" it by writing the name to a scratchpad
 > file improvises a **cross-lane hazard**: a plain `/tmp` (or shared-scratchpad) path like
 > `branch.txt` is **unkeyed**, so a concurrent lane clobbers it mid-run and the reader
-> pushes to the **sibling lane's ref** (<related work item> — the <related work item> lane pushed toward the <related work item>
+> pushes to the **sibling lane's ref** (documented repository precedent — the documented repository precedent lane pushed toward the documented repository precedent
 > lane's branch). The `uuidgen` nonce makes each lane's *value* unique, but a shared
 > *filename* is what collides.
 >
@@ -838,7 +843,7 @@ freshly-fetched `FETCH_HEAD` is the only flow that works — don't "fix" it back
 > only if — a per-run cache is genuinely unavoidable, allocate it under `$RUN_SCRATCH` per §SP
 > (never a bare `branch.txt`, and never a path keyed only on the issue number). The reason this
 > matters beyond a mis-push: a clobbered scratchpad file **reads back successfully** with the
-> sibling lane's content, so nothing errors and the wrong ref looks right (<related work item>, and the <related work item>
+> sibling lane's content, so nothing errors and the wrong ref looks right (documented repository precedent, and the documented repository precedent
 > reviewer that diffed the wrong PR).
 
 The prefix is **derived** from this checkout's `git config user.name`, not a copied literal —
@@ -851,30 +856,30 @@ pass; `no` means config/docs/scaffolding where test-first doesn't apply.
 As you write, apply CLAUDE.md's "Comments earn their place or die" collapse convention to
 the code you generate: state a *why* once at its most load-bearing site and point elsewhere
 with `// See ADR NNNN` / `#NNNN` — never re-derive the same ADR rationale across multiple
-docblocks in a file (the `coder.md` standing invariant is the source; <related work item>).
+docblocks in a file (the `coder.md` standing invariant is the source; documented repository precedent).
 
 <a id="non-isolated-fallback"></a>
 > **Non-isolated fallback.** For the rare invocation that isn't already in a worktree,
-> spin one up rather than checking out `main`. **Fetch first** — the local `origin/main`
+> spin one up rather than checking out `configured base branch`. **Fetch first** — the local `$PIPELINE_BASE_REF`
 > remote-tracking ref can predate a just-merged base commit (e.g. a run-evidence-referenced
-> tooling file added seconds before branch-cut), so `git worktree add … origin/main` off a
-> stale ref cuts a head that misses that file and false-fails the SHA-bound CI (<related work item>; the same
-> stale-base class <related work item> fixed at the repair step). Create the worktree on the per-run
+> tooling file added seconds before branch-cut), so `git worktree add … $PIPELINE_BASE_REF` off a
+> stale ref cuts a head that misses that file and false-fails the SHA-bound CI (documented repository precedent; the same
+> stale-base class documented repository precedent fixed at the repair step). Create the worktree on the per-run
 > `$BRANCH` (nonce and all) at a per-run worktree path off the **freshly-fetched** tip, so two
-> concurrent fallback runs collide on neither the branch nor the dir: `git fetch origin main;
+> concurrent fallback runs collide on neither the branch nor the dir: `git fetch origin configured base branch;
 > WT="../wt-issue-<N>-$(uuidgen | head -c 8)"; git worktree add -b "$BRANCH" "$WT" FETCH_HEAD`,
 > then `cd "$WT"`. Branch off `FETCH_HEAD` (the just-fetched origin tip), **never** the possibly-stale
-> `origin/main` ref. When you're done, remove it with `git worktree remove "$WT"` (never
+> `$PIPELINE_BASE_REF` ref. When you're done, remove it with `git worktree remove "$WT"` (never
 > `--force` — a dirty tree then errors out and is KEPT). A build worktree that made commits and
 > is *not* removed here (an aborted run, a fallback that never reached its done-step) does not
-> leak unbounded: it is backstopped by `pipeline-cli worktree-sweep --execute` (<related work item>/<related work item>),
+> leak unbounded: it is backstopped by `pipeline-cli worktree-sweep --execute` (documented repository precedent/documented repository precedent),
 > which reclaims a `.claude/worktrees/` build tree only once it is clean + merged + idle +
-> unlocked with no open PR — the <related work item> liveness guard, non-`--force`. After the `cd "$WT"`, **re-run the Step 4 preflight** — the
+> unlocked with no open PR — the documented repository precedent liveness guard, non-`--force`. After the `cd "$WT"`, **re-run the Step 4 preflight** — the
 > fresh worktree's git-dir now differs from the common dir, so the check passes and you may
 > mutate. This fallback is **only for the standalone (`isolation-expected=0`) path** — a run where
-> isolation was *expected* must NOT reach it: the preflight's loud branch (the applicable safety invariant, <related work item>) hard-stops
+> isolation was *expected* must NOT reach it: the preflight's loud branch (the applicable safety invariant, documented repository precedent) hard-stops
 > that case *before* here, because self-provisioning would silently absorb a harness provisioning
-> failure (<related work item>) and collapse the two-layer defense to one. For a standalone run this is the only
+> failure (documented repository precedent) and collapse the two-layer defense to one. For a standalone run this is the only
 > sanctioned route from a primary-checkout start; the preflight stays fail-closed until a real
 > worktree exists. Here too the branch name is **created once**
 > and thereafter **re-derived live** from the worktree (`git -C "$WT" branch
@@ -902,7 +907,7 @@ pnpm typecheck
 ```
 
 `pnpm typecheck` fans out (`turbo run typecheck`) to each app's project-aware checker — for
-`apps/web` that is `pnpm fate:generate && tsgo -b tsconfig.worker.json tsconfig.node.json &&
+`$PIPELINE_APPLICATION_PATH` that is `pnpm fate:generate && tsgo -b tsconfig.worker.json tsconfig.node.json &&
 tsgo -p tsconfig.app.json …` — so it covers the **full workspace under the real project graph,
 including every newly-added test file**, with the repo's strict flags
 (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`) in force. **Do NOT** substitute a
@@ -911,7 +916,7 @@ hand-rolled `tsc -p tsconfig.json` (or any bare `tsc`): the repo's checker is **
 root-`tsconfig.json` `tsc` run uses a *different, partial project scope* that **omits the
 app's test files** — so a type error in a new test file passes your self-check and only
 surfaces when CI (or `review-code`) re-runs the real `pnpm typecheck` at head, costing a full
-FAIL → repair round-trip the pre-push gate exists to prevent (<related work item>; the <related work item> / <related work item>
+FAIL → repair round-trip the pre-push gate exists to prevent (documented repository precedent; the documented repository precedent / documented repository precedent
 incidents — new test files that failed `TS18048` / `TS2412` / `TS2345` only under the gate's
 `tsgo`). **New test files are full TS under the same flags and the same project as production
 code — a test-file type error is a real gate failure, not noise.** So run `pnpm typecheck`
@@ -923,10 +928,10 @@ For **lint**, run **`pnpm lint:worktree`**, not `pnpm lint`. Bare `pnpm lint`
 worktree's own CWD, which physically sits under `.claude/worktrees/<id>` and so
 matches the retained `!**/.claude/worktrees` exclusion — biome reports "0 files /
 paths ignored" without linting anything (a false-clean that sailed past local checks
-and only failed in CI; <related work item>, <related work item>,
+and only failed in CI; documented repository precedent, documented repository precedent,
 [the applicable safety invariant).
 `pnpm lint:worktree` lints the **explicit changed files** instead (committed *and*
-working-tree, vs `origin/main`), filtered to biome-handled extensions so a
+working-tree, vs `$PIPELINE_BASE_REF`), filtered to biome-handled extensions so a
 docs/markdown-only diff is a **clean skip (exit 0)**, never bare `.`. It catches the
 same violations CI's `lint / format / typecheck` job would — including in root and
 `.claude/**` files, which a bare `biome check apps packages` would miss — so a clean
@@ -948,7 +953,7 @@ file on disk — but the harness's auto-mode **self-modification classifier keys
 issue/tool rather than the user's own message. The identical file edited via the real
 `claude-plugins/**/skills/**` path is not flagged. So the `.claude/` path is a coin-flip into an
 **opaque** failure (it surfaces as a generic `build-failed` with no PR, not "blocked by the self-mod
-guard"), costing a wasted retry + manual diagnosis (<related work item>, <related work item>). Always resolve the real path first.
+guard"), costing a wasted retry + manual diagnosis (documented repository precedent, documented repository precedent). Always resolve the real path first.
 PR bodies and progress comments must describe the changed path as the real `claude-plugins/**/skills/**`
 path too, so the diff a reviewer reads matches what you wrote.
 
@@ -960,14 +965,14 @@ path too, so the diff a reviewer reads matches what you wrote.
 
 Commit per repo conventions, gating each `git commit` on `wt_preflight` (the
 [per-mutation preflight](#per-mutation-preflight) above) so a between-calls cwd reset can't
-land the commit on the primary tree. Don't push to or PR from `main`.
+land the commit on the primary tree. Don't push to or PR from `configured base branch`.
 
 ---
 
 ## Step 4a — Read the four-pillars design law before you generate any UI (UI diffs only)
 
 When this diff will **generate or edit a user-facing UI surface**, read
-[`design-system-manifest.md`](<repository URL>)
+[`design-system-manifest.md`](repository-owned record URL)
 **before you author the UI**, and generate to it — role-token annotations, component-selection
 rules, and the per-pillar prohibitions. That manifest is the agent-readable transcription of the
 four-pillars design law (the applicable safety invariant) —
@@ -979,7 +984,7 @@ a pillar violation after the fact. Making this an explicit step closes the build
 CLAUDE.md happening to name the file.
 
 **Fires only for a UI diff — a no-op otherwise (graceful absence).** Scope it to a diff that changes a
-rendered frontend surface (`apps/web/src/**`, the same probe as Step 4d); a worker/tooling/docs/skill
+rendered frontend surface (`$PIPELINE_APPLICATION_PATH/src/**`, the same probe as Step 4d); a worker/tooling/docs/skill
 diff authors no UI and skips this step entirely — the same first-class-absence shape as Steps 4b/4d/4e.
 
 ---
@@ -988,7 +993,7 @@ diff authors no UI and skips this step entirely — the same first-class-absence
 
 When the child you picked carries **`**Containment:** flag (default-off)`**, the implementation
 above isn't done until the new user-facing path **ships dark**: behind a boolean flag that is
-**off by default**, so the feature reaches `main` and production deployed-but-not-live until a
+**off by default**, so the feature reaches `configured base branch` and production deployed-but-not-live until a
 human deliberately flips it. This is the product-development cycle's **agents-deploy / humans-release**
 contract (the rule that repository-specific release-cycle behavior no-ops when the repository has no cycle document):
 your autonomous merge is the *deploy*, the flip is the human *release*, and a default-off flag is
@@ -1012,7 +1017,7 @@ CONTAINMENT=$(gh api repos/$REPO/issues/<N> --jq '.body' \
 ```
 
 **Graceful absence — the dark-ship behavior applies only when there's a cycle.** It fires **only**
-when the marker resolves to `flag` *and* the repo has a `product-development-cycle.md` (the one
+when the marker resolves to `flag` *and* the repo has a `$PIPELINE_DEVELOPMENT_CYCLE_POLICY` (the one
 canonical probe, formats §1). On `exempt`, `none`, a missing line, or an **absent** cycle doc (a
 foreign install with no cycle and no flag substrate — the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository), this
 step is a **no-op**: you implement and ship the change exactly as Steps 4/5 already describe, with
@@ -1021,7 +1026,7 @@ graceful-absence contract `plan-epic` (stamp) and `review-code` (verify) honor:
 
 ```bash
 # the canonical cycle-doc probe (formats §1); absent ⇒ no cycle ⇒ ship normally, no flag
-gh api "repos/$REPO/contents/product-development-cycle.md" --jq '.path' >/dev/null 2>&1 \
+gh api "repos/$REPO/contents/$PIPELINE_DEVELOPMENT_CYCLE_POLICY" --jq '.path' >/dev/null 2>&1 \
   && CYCLE_DOC=present || CYCLE_DOC=absent
 # ship dark ONLY when:  [ "$CONTAINMENT" = flag ] && [ "$CYCLE_DOC" = present ]
 ```
@@ -1036,8 +1041,8 @@ The change gates behind a default-off flag, which is **one of two shapes** that 
   and name it `<product>-<feature>-<purpose>` in lowercase kebab-case. The name describes the
   behavior being gated, not a transient implementation detail.
 - **Gated behind a flag a PRIOR PR already declared** — the flag resource is **not in this diff**
-  (an earlier PR minted it; you only add the gated path under the existing key). The <related work item>/<related work item>
-  shape: a feature gated behind the prior-PR <related work item> authorship flag.
+  (an earlier PR minted it; you only add the gated path under the existing key). The documented repository precedent/documented repository precedent
+  shape: a feature gated behind the prior-PR documented repository precedent authorship flag.
 
 Whichever shape applies, **capture the exact kebab-case flag key as `FLAG_KEY`** — it is the single
 fact that flows out of this step. The load-bearing invariant the patterns own is **default =
@@ -1045,18 +1050,18 @@ safe-state**, the three facets `review-code` Step 3b will verify, so build to ma
 from the outside:
 
 - **Declare it default-off** (newly-declared shape only) — a
-  `FlagshipFlag(..., { defaultVariation: "off", … })` in
-  `apps/web/worker/db/resources.ts` (workflow Step 1), with the per-flag metadata (owner,
+  `configured release serviceFlag(..., { defaultVariation: "off", … })` in
+  `$PIPELINE_APPLICATION_PATH/worker/db/resources.ts` (workflow Step 1), with the per-flag metadata (owner,
   originating issue, removal trigger) that lets it be retired later. In the prior-PR shape the
   declaration already exists upstream — don't re-declare it; just reference its key.
 - **Gate the new path with the safe read default** — server `flags.get*(key, false)` and client
   `useFlag(key, false)` / `<FlagGate fallback={…}>`, so the new path is unreachable until the flip
-  and any Flagship outage degrades to the **old** path (workflow Step 2).
+  and any configured release service outage degrades to the **old** path (workflow Step 2).
 - **No leak** — every entry into the new behavior sits behind the gate: no default-on, no inverted
   gate, no ungated client path.
 
 **Emit `FLAG_KEY` into the PR body — the producer half of ship-it's release-queue detector.**
-ship-it Step 5b queues `status:awaiting-release` on the merged PR iff one of two PR-ground-truth
+ship-it Step 5b queues `$PIPELINE_STATUS` on the merged PR iff one of two PR-ground-truth
 signals fires: (a) the diff *adds* a flag declaration, or (b) the PR body carries a plain
 `Flag: <key>` line. Signal (a) is **absent by construction in the prior-PR shape** (the flag
 declaration lives in an earlier diff), so signal (b) is the **only** signal that survives across
@@ -1064,9 +1069,9 @@ PRs — and it survives only if write-code *writes* it. So whenever this step fi
 shape, one consistent producer rule, never two** — **carry `FLAG_KEY` into Step 5's PR-body
 construction as a plain `Flag: <FLAG_KEY>` line** (see Step 5). Without it, a prior-PR dark ship is
 structurally invisible to Step 5b and silently skips the agents-deploy / humans-release flag-flip
-gate the rule that repository-specific release-cycle behavior no-ops when the repository has no cycle document exists to enforce (<related work item>).
+gate the rule that repository-specific release-cycle behavior no-ops when the repository has no cycle document exists to enforce (documented repository precedent).
 
-The PR then ships dark the normal way (Step 5): the diff is `apps/web/**`, **not** control-plane, so
+The PR then ships dark the normal way (Step 5): the diff is `$PIPELINE_APPLICATION_PATH/**`, **not** control-plane, so
 `review-code`'s PASS auto-ships it on green CI — and it reaches production **off** because both the
 declared default and the read default are off. Note this in your Step 6 progress comment (the flag
 key + that it ships dark) so `review-code` and a later releaser can find it. **Out of scope here:**
@@ -1098,7 +1103,7 @@ verbatim. Two scope narrowings apply here because this is an in-flight build, no
 whole-codebase pass:
 
 - **Changed lines only.** Deslop the comments *your diff added or touched*
-  (`git diff origin/main...HEAD` for the committed range, plus any working-tree changes) —
+  (`git diff $PIPELINE_BASE_REF...HEAD` for the committed range, plus any working-tree changes) —
   not pre-existing comments elsewhere in the files you edited. A drive-by deslop of
   untouched code widens the diff `review-code` must verify and isn't the issue's scope.
 - **Preserve load-bearing notes.** The carve-out is the point: a local invariant at its
@@ -1117,16 +1122,16 @@ commit) so the pushed head carries the cleaned diff.
 > `review-*` verdict marker. The independent gate still judges the result with fresh eyes —
 > this step only keeps the wall out of what it judges.
 
-> **Placement rationale — superseded by the applicable safety invariant (the enforcement moved to the gate).** <related work item>
+> **Placement rationale — superseded by the applicable safety invariant (the enforcement moved to the gate).** documented repository precedent
 > first wired the deslop discipline here as the author's self-check *and* the sole enforcement —
 > placement (a) over a `review-code` finding (b) or both (c) — arguing comment density was "a
 > self-correctable authoring concern, not a correctness contract the gate must adjudicate." That
-> premise was **falsified** by merged-PR evidence (<related work item>/<related work item> landed ~29% comment lines despite
+> premise was **falsified** by merged-PR evidence (documented repository precedent/documented repository precedent landed ~29% comment lines despite
 > Step 4c running): self-deslop is **author-biased** — the agent that just wrote each justification
 > is the worst judge of its own slop, the same self-evaluation bias the pipeline pays a separate
 > reviewer to remove for correctness. ADR
 > [0119](the applicable safety invariant)
-> resolves <related work item> by moving the **judging authority to the independent `review-code` gate** (its
+> resolves documented repository precedent by moving the **judging authority to the independent `review-code` gate** (its
 > Step 3d, a standing diff-hygiene criterion like `lint`/`typecheck`), where fresh eyes remove the
 > bias by construction. Step 4c is **retained but demoted** to the cheap author-side pre-pass above
 > — it cuts obvious slop early so fewer repair rounds are spent on it, but it is no longer *the*
@@ -1142,22 +1147,22 @@ before pushing: render the composed surface over a local build, **look** at the 
 fix composition defects against the four pillars — the same law `review-design` will grade
 against (the applicable safety invariant,
 transcribed for agents in
-[`design-system-manifest.md`](<repository URL>);
+[`design-system-manifest.md`](repository-owned record URL);
 read it, don't re-derive the pillars here). This catches the class no per-slot check can:
-**every slot is locally law-compliant yet the assembled page reads amateur** — the sözlük-subnav
+**every slot is locally law-compliant yet the assembled page reads amateur** — the configured content feature-subnav
 detached-sibling smell (manifest §nav placement). The manifest's static prohibition pass (its
 "How write-code consumes this" step 4) verifies each *part*; only looking at the render verifies
 the *whole*.
 
 **Fires only for a UI diff — a no-op otherwise (graceful absence).** Scope it to a diff that
-changes a rendered frontend surface (`apps/web/src/**`); a worker/tooling/docs/skill diff has no
+changes a rendered frontend surface (`$PIPELINE_APPLICATION_PATH/src/**`); a worker/tooling/docs/skill diff has no
 composed surface to look at, so this step is skipped entirely — the same first-class-absence shape
-as Step 4b (`git diff --name-only origin/main...HEAD | grep -q '^apps/web/src/'`).
+as Step 4b (`git diff --name-only $PIPELINE_BASE_REF...HEAD | grep -q '^$PIPELINE_APPLICATION_PATH/src/'`).
 
 **The loop — render → look → fix:**
 
 1. **Render** the composed surface over a running local `alchemy dev` build via the
-   render-and-capture harness (<related work item>, the `@kampus/design-capture` local-render leg): it targets
+   render-and-capture harness (documented repository precedent, the `repository adapter design-capture` local-render leg): it targets
    the local worker, renders against an **empty local D1** (designed-empty states are in scope — no
    seeding, per the founder v1 non-goal + security guard), honors the dev-override cookie so
    flag-gated UI renders, and writes a **cropped/downscaled** PNG of the changed region. Don't
@@ -1189,10 +1194,10 @@ render→look→fix loop above has a stronger anchor than taste against the pill
 reference the surface is meant to match. Feed that golden into the loop so your output converges
 **reference-vs-rendered**, not only clears the six the visual-quality rule that prohibits the six objective UI failures prohibitions (story 4). This is the
 generation half of the golden-screen loop (epic
-[<related work item>](<repository URL>), the applicable safety invariant):
+[documented repository precedent](repository-owned record URL), the applicable safety invariant):
 the blessed golden set is the reference you generate *toward* here, and the same baseline the
 independent `review-design` gate blocks *deviation from* — converging in authoring is what keeps that
-gate from having to escalate (its counterpart golden-deviation class, <related work item>). Read `review-design`'s
+gate from having to escalate (its counterpart golden-deviation class, documented repository precedent). Read `review-design`'s
 golden-deviation section for the shared vocabulary — *golden*, *blessed surface*, *deviation* — and
 stay consistent with it; do **not** duplicate its blocking logic here (this is a self-check that
 converges, not a gate that fails).
@@ -1202,19 +1207,19 @@ pointer and intersect its blessed surface-ids with the surfaces this diff render
 intersection gets the reference anchor. A changed surface **not** in the pointer has **no** golden —
 it stays exactly the plain pillars loop above, with **no** new anchor and **no** new gating (the same
 N/A the review side gives an unblessed surface). Never invent a reference for a surface the founder
-never blessed. The pointer is the committed source of truth (`packages/design-capture/golden-pointer.json`,
+never blessed. The pointer is the committed source of truth (`$PIPELINE_DESIGN_CAPTURE_ADAPTER/golden-pointer.json`,
 its `surfaces` map keyed by the same `<route>[:state]` capture surface-id):
 
 ```bash
 # blessed surface-ids: the keys of the committed pointer's `surfaces` map (the applicable safety invariant).
 # Intersect with the surfaces THIS diff renders (Step 4d capture) — only that ∩ is reference-anchored.
 # Empty ∩ ⇒ no blessed surface changed ⇒ this whole sub-loop is a no-op; the plain pillars loop stands.
-POINTER=packages/design-capture/golden-pointer.json
+POINTER=$PIPELINE_DESIGN_CAPTURE_ADAPTER/golden-pointer.json
 BLESSED_SURFACES="$(jq -r '.surfaces | keys[]' "$POINTER" 2>/dev/null || true)"
 ```
 
 **The reference-anchored loop — consume the seam, never re-implement the diff.** For each blessed
-changed surface, resolve its golden through the `@kampus/design-capture` golden seam (the *one* notion
+changed surface, resolve its golden through the `repository adapter design-capture` golden seam (the *one* notion
 of "the golden for this surface", shared with the review side) and add a **compare-to-reference** leg
 to render→look→fix:
 
@@ -1223,7 +1228,7 @@ to render→look→fix:
   `resolveGoldenUrl(pointer, surfaceId)` → the immutable depo image URL to **look at beside** your
   rendered capture. `loadGoldenPointer(POINTER)` gives the in-memory pointer; `blessedSurfaces(pointer)`
   and `resolveGoldenEntry(pointer, surfaceId)` list/inspect the blessed set. These are real
-  `@kampus/design-capture` exports — call them; do **not** re-derive the pointer parse or the depo URL.
+  `repository adapter design-capture` exports — call them; do **not** re-derive the pointer parse or the depo URL.
 - **Look, golden beside rendered.** Judge composition/gestalt with the golden as the target, not free
   taste — does the assembled surface *read as* its blessed reference (balance, rhythm, hierarchy,
   placement)? If you want the objective magnitude/region signal, run the **same** deterministic diff
@@ -1248,7 +1253,7 @@ This is a **self-check, not a gate — the split-role firewall holds** exactly a
 looking at your own render before you push is the sanctioned self-edit, not a review. You do **not**
 run `review-design`/`review-code` on your PR and you do **not** emit a `review-*` verdict; the
 independent `review-design` gate judges the assembled result with fresh eyes against the same four
-pillars — and re-diffs the blessed golden itself (<related work item>), escalating an *unexplained* deviation to a
+pillars — and re-diffs the blessed golden itself (documented repository precedent), escalating an *unexplained* deviation to a
 FAIL. This reference-anchored self-check converges toward that same golden before you push, so the
 gate rarely has to escalate. It only keeps the obvious composition breaks out of what it judges,
 saving a repair round. At PR-open the before/after captures attach to the PR — see Step 5's
@@ -1262,7 +1267,7 @@ When this diff **authors prose a human reads** — a doc page, an error message,
 the imported writing-craft skill for that surface **before you write the prose**, then author to it.
 This is the doc-path analog of Step 4d: the same self-check shape, on the writing surface instead of
 the render. It exists because the writing-craft skills were imported as **wired-in, not ambient** —
-the settled integration-depth decision ([<related work item>](<repository URL>)):
+the settled integration-depth decision ([documented repository precedent](repository-owned record URL)):
 write-code consults them on the way *in* so generated prose conforms to Diátaxis + Strunk from the
 first draft, rather than leaving `review-doc`/`review-skill` to catch a mode-mix or an AI tell after
 the fact. This is the authoring counterpart of the same manifest-before-UI read Step 4a makes for
@@ -1288,7 +1293,7 @@ skip for that surface, never a block.
   TR/EN language law is untouched: this governs the **English** technical prose; Turkish product copy
   stays Turkish (`.glossary/LANGUAGE.md`).
 - **Error copy** — the English source string a user reads when an operation fails, in
-  [`apps/web/src/fate/wireMessages.ts`](<repository URL>)
+  [`$PIPELINE_APPLICATION_PATH/src/fate/wireMessages.ts`](repository-owned record URL)
   → state the condition in plain second-person language, say what the user can do next when
   applicable, and keep it neutral and concise. Never expose error codes, infrastructure details,
   exception text, database names, or file paths. Give each wire code one canonical base message;
@@ -1296,7 +1301,7 @@ skip for that surface, never a block.
   copy's wording only; the
   registry structure and the no-leak codec it names stay their owners' — don't touch them here.
 - **A skill** — a `skills/**/SKILL.md` or its supporting files → read
-  [`../author-skill/SKILL.md`](../author-skill/SKILL.md) and write in the house idiom (the frontmatter
+  [`..configured registration routeor-skill/SKILL.md`](..configured registration routeor-skill/SKILL.md) and write in the house idiom (the frontmatter
   `name`/`description` contract, the prose-first body, the imported writing-craft house rules) toward
   `review-skill`'s four rigor checks, so the gate passes on the first pass.
 
@@ -1320,7 +1325,7 @@ detail — the what-changed rundown, the `Fixes #N` seam, a `Flag:` line — ope
 with **2–3 plain sentences a reviewer or a passer-by can grasp on a skim**: what this PR
 changes and why it matters, in prose, no jargon. The summary **precedes, never replaces**,
 the technical body below it. This is the human-first-summary mandate from
-[<related work item>](<repository URL>) — the same wired-in writing-craft
+[documented repository precedent](repository-owned record URL) — the same wired-in writing-craft
 integration Step 4e authors to, so write the summary to
 [`../writing-clearly-and-concisely/SKILL.md`](../writing-clearly-and-concisely/SKILL.md)
 (clear, concrete, no AI tells).
@@ -1344,20 +1349,20 @@ gh api repos/$REPO/issues/<N> --jq '.body' \
 - **Any AC unmet by this diff → `Part of #N`** (the §9 partial-split token, below) — you delivered
   a subset and a sibling lane or a follow-up will finish the rest, so `#N` must stay **open** on
   merge. Do **not** reach for `Refs #N` / `See #N` / a bare `#N` for the partial case: `Refs`
-  arms **no** seam at all and jams `ship-it` Step 1 (<related work item>). The one sanctioned partial token is
+  arms **no** seam at all and jams `ship-it` Step 1 (documented repository precedent). The one sanctioned partial token is
   `Part of #N`, which links the PR without closing.
 
 This is the decision the recurring **over-claim defect** exists to force — a `Fixes #N` on a
 partial delivery silently closes an issue with ACs undelivered, and the deferred half vanishes
-from the tracker (PR <related work item> over-claimed `Fixes <related work item>` on the prose-only half; PR <related work item> over-claimed
-`Fixes <related work item>` with the mechanism inert). The `Part of #N` *tool* already existed; this gate is the
+from the tracker (PR documented repository precedent over-claimed `Fixes documented repository precedent` on the prose-only half; PR documented repository precedent over-claimed
+`Fixes documented repository precedent` with the mechanism inert). The `Part of #N` *tool* already existed; this gate is the
 *trigger* that makes you reach for it instead of over-claiming.
 
 **When you defer ACs, capture the deferred half — it must not silently drop.** A `Part of #N`
 keeps `#N` open, but the unmet ACs still need a home a successor can pick up: **file a follow-up
 issue** for them (via the [`report`](../report/SKILL.md) skill) **or** point at
 an existing sibling/child that already owns them, and **name that issue** in the PR body and your
-Step-6 progress comment. This is how <related work item> → <related work item> and <related work item> were reconciled *after* the fact —
+Step-6 progress comment. This is how documented repository precedent → documented repository precedent and documented repository precedent were reconciled *after* the fact —
 do it up front. (A purely **mechanical** guard — e.g. warning when a `Fixes`-armed PR's touched
 surface looks narrower than the issue's AC count — is **out of scope for this step**; noted as a
 possible follow-up, not built here. The gate here is the coder-side prose discipline.)
@@ -1379,7 +1384,7 @@ cross-reference that *looks* linked in the timeline but **closes nothing** — s
 never auto-closes on merge, and `ship-it` Step 1 (which resolves the linked issue from
 `Fixes|Closes #N`) sees a code-class PR with **no auto-close seam** and **refuses to merge**
 it: a verified, merge-ready PR stalls in the autonomous lane on one wrong token, with the
-linked issue left dangling even if force-merged (<related work item>; PR <related work item> shipped `Refs <related work item>` and
+linked issue left dangling even if force-merged (documented repository precedent; PR documented repository precedent shipped `Refs documented repository precedent` and
 jammed). The whole downstream merge stage depends on this exact token, so spell out `Fixes #N`
 verbatim and never substitute a near-synonym that GitHub doesn't treat as closing.
 
@@ -1389,7 +1394,7 @@ issue you name in the body — a sibling, a related issue, a "see also", a paren
 in prose — takes a **non-closing** form (`addresses #M`, `relates to #M`, `see #M`, or a bare
 `#M` with no preceding closing verb). GitHub parses a closing keyword + `#M` **anywhere** in
 the body as a close directive with no "first ref" or "same line" exception, so a sibling-ref
-`fixes #M` buried in prose silently auto-closes an issue the PR never touched (<related work item>). The
+`fixes #M` buried in prose silently auto-closes an issue the PR never touched (documented repository precedent). The
 canonical statement of this rule — both halves (arm the seam for the target / never arm it for
 any other ref) and the full case-insensitive landmine keyword set — lives in the contract's
 [§9 The PR-body closing-keyword seam](../gh-issue-intake-formats.md); read it there and don't
@@ -1404,8 +1409,8 @@ naming the exact issue number **instead of** a closing keyword — `Part of` is 
 closing keyword, so it links the PR to `#N` (a timeline cross-reference) without populating
 `closingIssuesReferences` and without auto-closing `#N` on merge, which is precisely the
 partial-split intent. `ship-it` Step 1 recognizes a literal `Part of #N` as a valid
-linked-but-non-closing reference and merges the PR without closing `#N` (the <related work item> consumer, PR
-<related work item>) — so this is the one producer token that gets a partial-split PR through the gate without a
+linked-but-non-closing reference and merges the PR without closing `#N` (the documented repository precedent consumer, PR
+documented repository precedent) — so this is the one producer token that gets a partial-split PR through the gate without a
 human hand-editing the body. The marker is defined once in the contract's
 [§9 The PR-body closing-keyword seam](../gh-issue-intake-formats.md) (its `Part of #N` subsection);
 cite §9, don't re-derive it here. This reconciles with **both** halves of the Step 5 self-check:
@@ -1431,9 +1436,9 @@ The exact shape matters: it must match ship-it Step 5b's `FLAG_IN_BODY` grep
 so the key is lowercase kebab-case and the line starts with a bare `Flag:` (or `Flag key:`) — **not**
 `## Flag:`, `- Flag:`, or `**Flag:**` (a `##`/`-` prefix breaks the leading-anchor match). This is
 the only signal that survives when the flag was declared in a **prior** PR, so without it that dark
-ship is invisible to Step 5b (<related work item>). **Conversely, an ungated PR — no Step-4b dark feature — emits
-NO `Flag:` line**, so Step 5b correctly no-ops and no phantom `status:awaiting-release` is queued (no
-regression of <related work item>/<related work item>). In the graceful-absence case (no `product-development-cycle.md` / no flag
+ship is invisible to Step 5b (documented repository precedent). **Conversely, an ungated PR — no Step-4b dark feature — emits
+NO `Flag:` line**, so Step 5b correctly no-ops and no phantom `$PIPELINE_STATUS` is queued (no
+regression of documented repository precedent/documented repository precedent). In the graceful-absence case (no `$PIPELINE_DEVELOPMENT_CYCLE_POLICY` / no flag
 substrate, the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository) Step 4b never fires, so there is no `FLAG_KEY` and no `Flag:` line — the PR
 ships normally.
 
@@ -1450,7 +1455,7 @@ claim_is_mine "<N>" || { echo "refusing to open a PR against #<N> — not my cla
 # The body carries `Fixes #N` always; ADD the `Flag: <FLAG_KEY>` line BELOW it ONLY when Step 4b
 # fired (a dark ship behind a flag — newly-declared OR prior-PR). Omit it entirely for an ungated PR.
 gh pr create \
-  --base main \
+  --base configured base branch \
   --title "<concise PR title>" \
   --body "$(cat <<'EOF'
 <2–3 plain-language sentences: what changed and why, for a human skimming — the human-first summary that leads the body, before any technical detail>
@@ -1461,7 +1466,7 @@ EOF
 )"
 ```
 
-> `gh pr edit` is unreliable in this org (Projects-classic). If you must edit a PR
+> `gh pr edit` is unreliable in this org (configured planning board). If you must edit a PR
 > after creation, patch via REST: `gh api -X PATCH repos/$REPO/pulls/<PR>
 > -f body="…"`. Get the PR body right at `create` time and you won't need it.
 
@@ -1492,7 +1497,7 @@ else
 fi
 # (c) the INVERSE GUARD, REST-only: NO closing keyword targets any issue OTHER than #N.
 #     The set {issue numbers preceded by a closing keyword in the body} must be exactly {N};
-#     a stray member is a sibling-ref directive that auto-closes an issue this PR never fixed (<related work item>).
+#     a stray member is a sibling-ref directive that auto-closes an issue this PR never fixed (documented repository precedent).
 STRAY=$(gh api repos/$REPO/pulls/<PR> --jq '.body' \
   | grep -ioE '\b(fix(e[sd])?|close[sd]?|resolve[sd]?)\s+#[0-9]+' \
   | grep -oE '[0-9]+' | sort -u | grep -vx '<N>')
@@ -1501,12 +1506,12 @@ STRAY=$(gh api repos/$REPO/pulls/<PR> --jq '.body' \
   || echo "STRAY CLOSE DIRECTIVE(S) on $(printf '#%s ' $STRAY)— rewrite these sibling refs to a non-closing form (addresses/relates to/see #M) before opening/patching the PR"
 # (d) DARK-SHIP GUARD, REST-only: IF Step 4b fired, the body MUST carry a `Flag:` line that
 #     matches ship-it Step 5b's FLAG_IN_BODY grep verbatim — else the prior-PR dark ship is dropped
-#     from the release queue (<related work item>). Run this check ONLY when Step 4b fired (FLAG_KEY is set).
+#     from the release queue (documented repository precedent). Run this check ONLY when Step 4b fired (FLAG_KEY is set).
 if [ -n "$FLAG_KEY" ]; then
   gh api repos/$REPO/pulls/<PR> --jq '.body' \
     | grep -Eiq '^[[:space:]]*\**[[:space:]]*flag([[:space:]]*key)?:[[:space:]]*\**[[:space:]]*[a-z0-9]+(-[a-z0-9]+)+' \
     && echo "dark-ship Flag: line present and matches ship-it Step 5b — release queue will fire" \
-    || echo "MISSING/MALFORMED Flag: line — Step 4b fired but the body has no matching plain 'Flag: <key>' line; patch it in before stopping (<related work item>)"
+    || echo "MISSING/MALFORMED Flag: line — Step 4b fired but the body has no matching plain 'Flag: <key>' line; patch it in before stopping (documented repository precedent)"
 fi
 ```
 
@@ -1515,21 +1520,21 @@ a `Part of #N` marker (a `Refs`/bare-`#N` slip): **fix it before stopping** — 
 gone, so patch the body via REST (`gh api -X PATCH repos/$REPO/pulls/<PR> -f body="…"`) with a
 real `Fixes #N` for a full close, **or** — for an intentional partial-split that must keep `#N`
 open — a `Part of #N` marker (§9), then re-check, since shipping the PR with a broken seam is
-exactly the <related work item> stall. **Do not** apply this remediation to a PR whose body already carries
+exactly the documented repository precedent stall. **Do not** apply this remediation to a PR whose body already carries
 `Part of #N`: `(b)` reports `partial-split seam armed` there, not a broken seam, so it does **not**
 need fixing — adding a `Fixes #N` to a `Part of #N`-only partial-split would auto-close on merge
 the very issue the split must keep open, re-introducing the premature-auto-close class. If (c) reports a **stray**
 close directive, a sibling/related `#M` carries a closing keyword that will wrongly auto-close
 `#M` on merge — patch the body the same way to downgrade each stray `#M` to its non-closing
 form (`addresses`/`relates to`/`see #M`) and re-run (c), since shipping it is exactly the
-<related work item> silent-auto-close. If (d) reports a missing/malformed `Flag:` line on a Step-4b dark ship,
+documented repository precedent silent-auto-close. If (d) reports a missing/malformed `Flag:` line on a Step-4b dark ship,
 patch the body via REST to add the plain `Flag: <FLAG_KEY>` line and re-run (d), since shipping it
-without the line silently drops the dark ship from ship-it's release queue (<related work item>).
+without the line silently drops the dark ship from ship-it's release queue (documented repository precedent).
 
-### Attach before/after composition captures (UI diffs only) — the <related work item> evidence-attach
+### Attach before/after composition captures (UI diffs only) — the documented repository precedent evidence-attach
 
 When Step 4d fired (a UI diff), attach **before/after** composed-surface captures to the PR via the
-evidence-attach capability (<related work item>, the `@kampus/design-capture`
+evidence-attach capability (documented repository precedent, the `repository adapter design-capture`
 `captureAndUpload`/`hostedUrls` leg): it takes a pre-edit baseline and post-edit result over the
 local build, uploads them, and emits **SHA-bound** PR-attachment markdown bound to the pushed PR
 head — the same convention `review-design`'s evidence path uses (the applicable safety invariant
@@ -1552,17 +1557,17 @@ Compose the comment into a file under `$RUN_SCRATCH` — the per-run scratchpad 
 ([`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) §SP) — never a fixed
 `/tmp/write-code-progress.md`. Several coder lanes drain concurrently by design, so a fixed
 leaf gets clobbered mid-run and reads back **the sibling lane's progress comment with no
-error**, posting another issue's ledger onto yours (<related work item>, the same silent-clobber class as
-<related work item>'s `branch.txt`):
+error**, posting another issue's ledger onto yours (documented repository precedent, the same silent-clobber class as
+documented repository precedent's `branch.txt`):
 
 ```bash
 # §SP: the per-run scratch namespace — deterministic + fail-closed, never a shared fallback.
 # Keyed on the session id, so if you compose progress.md in one Bash call and post it in the
 # next, this same line re-derives the SAME directory (a bare `mktemp -d` would hand the second
 # call a new EMPTY dir and post an empty body).
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (<related work item>)}/write-code-<N>"
+RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/write-code-<N>"
 mkdir -p "$RUN_SCRATCH" || {
-  echo "write-code: §SP could not create a per-run scratch dir — refusing to compose a comment through a shared path (<related work item>)." >&2; exit 1; }
+  echo "write-code: §SP could not create a per-run scratch dir — refusing to compose a comment through a shared path (documented repository precedent)." >&2; exit 1; }
 # …write the four-section comment to "$RUN_SCRATCH/progress.md", then:
 [ -s "$RUN_SCRATCH/progress.md" ] || { echo "write-code: progress.md is missing/empty — refusing to post an empty comment." >&2; exit 1; }
 BODY="$(cat "$RUN_SCRATCH/progress.md")"   # the four-section comment
@@ -1579,7 +1584,7 @@ it. Record decisions at the point you make them, not retroactively.
 > progress comment (Step R3). Unlike `curl`, `gh api -f`/`--raw-field` does **not** expand a
 > leading `@`: `-f body=@/some/path` posts the literal string `@/some/path` — the intended body
 > never renders *and* the local scratchpad path leaks into a public comment, which `leak-guard`
-> (committed-files only) does not catch (PR <related work item>). Always assemble the text into `$BODY` first
+> (committed-files only) does not catch (PR documented repository precedent). Always assemble the text into `$BODY` first
 > (`BODY="$(cat "$BODY_FILE")"`) and pass `-f body="$BODY"`, exactly as the snippets above do.
 > See [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) → **Posting a comment body**.
 
@@ -1626,12 +1631,12 @@ silently. A blocked handoff is a fail-loud condition, never a silent no-op.
 
 ```bash
 # compose under the per-run scratch namespace (§SP), never a fixed /tmp leaf — a concurrent
-# coder lane would clobber it and this posts ITS handoff onto your epic, silently (<related work item>).
+# coder lane would clobber it and this posts ITS handoff onto your epic, silently (documented repository precedent).
 # Deterministic (session-keyed), so writing handoff.md in one Bash call and posting it here in
 # the next resolves the SAME directory — re-running `mktemp -d` would yield an empty one.
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (<related work item>)}/write-code-<N>"
+RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/write-code-<N>"
 mkdir -p "$RUN_SCRATCH" || {
-  echo "write-code: §SP could not create a per-run scratch dir — refusing to compose a handoff through a shared path (<related work item>)." >&2; exit 1; }
+  echo "write-code: §SP could not create a per-run scratch dir — refusing to compose a handoff through a shared path (documented repository precedent)." >&2; exit 1; }
 # …write the handoff to "$RUN_SCRATCH/handoff.md" first, then:
 [ -s "$RUN_SCRATCH/handoff.md" ] || { echo "write-code: handoff.md is missing/empty — refusing to post an empty handoff." >&2; exit 1; }
 BODY="$(cat "$RUN_SCRATCH/handoff.md")"   # ### Handoff: #N — <title> + the three fields
@@ -1666,7 +1671,7 @@ done — full stop.** Do **not** continue into the review gate on the PR you jus
 - **Never post a `review-(code|doc|skill): PASS`/`FAIL` marker on your own output**, and never
   open/submit a native PR review (APPROVE/REQUEST_CHANGES) on it. Those are reviewer artifacts;
   emitting one from the implementer seat forges a verdict the gate's ACL author-check (the authorization rule that accepts privileged actions only from repository members)
-  is meant to keep honest, and races the dedicated reviewer (the <related work item> stale-verdict collision).
+  is meant to keep honest, and races the dedicated reviewer (the documented repository precedent stale-verdict collision).
 - **Do not self-assign a reviewer, re-trigger the gate, or merge.** The gate is **stateless and
   pull-driven** — opening the PR (and, in repair, pushing) is the *only* signal it needs; it
   re-runs on its own when a separate reviewer picks the PR up. `ship-it` owns PASS → merge, and
@@ -1674,7 +1679,7 @@ done — full stop.** Do **not** continue into the review gate on the PR you jus
 
 The split-role guarantee holds **without per-spawn babysitting**: this hard stop is the skill's
 own rule, not a hand-off line a spawner must remember to include (the omitted-clause failure that
-let implementers walk into the gate — <related work item>). You re-enter this skill **only** later, in
+let implementers walk into the gate — documented repository precedent). You re-enter this skill **only** later, in
 [Repair mode](#repair-mode--consume-a-gate-fail-verdict-fix-and-resubmit), when a *separate*
 reviewer has landed a FAIL on your PR — and even then you fix and resubmit, never review (Step R3).
 If you were spawned with a wider "review-and-ship this through" instruction, the structural rule
@@ -1708,7 +1713,7 @@ Do **not** act on the presence of any FAIL that ever existed. Resolve `review-co
 verdict** in each — the exact resolution `ship-it` Step 2 reads. That resolution (the authorization rule that accepts privileged actions only from repository members
 write+ author-gate so a self-authored or forged `review-(code|doc|skill): FAIL` is invisible, the
 latest-wins pick, and the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA SHA-staleness refusal) is owned by `pipeline-cli verdict read`,
-so R1 delegates to the verb rather than re-deriving it (<related work item>) — its unit tests are the contract.
+so R1 delegates to the verb rather than re-deriving it (documented repository precedent) — its unit tests are the contract.
 The native decisive review that folds into the code namespace is the one thing the verb does not
 resolve (it reads only marker comments); it needs no ACL gate — GitHub author-attributes reviews, so
 that path is unforgeable — so R1 keeps just that fold inline. The fold is **newest-wins by
@@ -1718,10 +1723,10 @@ standing forever.
 
 ```bash
 PR=<the PR number you were handed>
-# resolve the verdict CLI once — in-repo-first, published-fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic <related work item>).
+# resolve the verdict CLI once — in-repo-first, published-fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic documented repository precedent).
 # The per-(PR, gate) FAIL-bound-to-head resolution delegates to `pipeline-cli verdict read`: the
 # the authorization rule that accepts privileged actions only from repository members write+ author-gate, the latest-wins pick, and the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA SHA-staleness test folded into
-# one exit code (its unit tests are the contract, <related work item>) — the same resolution ship-it Step 2 reads.
+# one exit code (its unit tests are the contract, documented repository precedent) — the same resolution ship-it Step 2 reads.
 if [ -x .pipeline/toolkit/bin/pipeline ]; then
   VERDICT="pnpm pipeline cli verdict"   # the adopting repository-local: the in-repo consolidated bin
 else
@@ -1879,7 +1884,7 @@ alongside the `[FAIL]` table.
   check from R1); **or**
 - the **`copilot-pull-request-reviewer[bot]`** review bot, included **explicitly** by
   login. Review bots don't hold collaborator permissions, so the `write+` floor would
-  silently drop them — and Copilot is already the bot commenting on these PRs (<related work item>), so its
+  silently drop them — and Copilot is already the bot commenting on these PRs (documented repository precedent), so its
   line-level findings are exactly the signal this path exists to action. No other bot is
   in scope; widen the allow-list deliberately, never by default.
 
@@ -1903,7 +1908,7 @@ jq --argjson authorized "$authorized" --arg me "$ME" \
      | select(.line != null)                                  # non-null line ⇒ still anchored to current head (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA)
      | select(.user.login != $me)                             # skip self-authored thread replies
      | select((.user.login | IN($authorized[]))               # write+ collaborator (the authorization rule that accepts privileged actions only from repository members), or…
-              or .user.login == "copilot-pull-request-reviewer[bot]")  # …the explicitly-included review bot (<related work item>)
+              or .user.login == "copilot-pull-request-reviewer[bot]")  # …the explicitly-included review bot (documented repository precedent)
    ] | .[] | {id, path, line, body}' <<<"$inlineComments"
 ```
 
@@ -1924,11 +1929,11 @@ orphan the PR and the gate's history):
 ```bash
 git fetch origin
 # mis-attribution guard (Step 3.5): confirm the PR's linked issue #N is MINE before touching its
-# branch — so a mis-dispatched repair never pushes to another agent's live PR (the <related work item> class).
+# branch — so a mis-dispatched repair never pushes to another agent's live PR (the documented repository precedent class).
 # In orchestrated repair the original claim token is threaded as MY_CLAIM (the claim-ownership rule that gives work to the earliest authorized session-stamped claim §3 delegated own).
 claim_is_mine "$N" || { echo "refusing to repair PR #$PR — its linked issue #$N is not my claim (Step 3.5)"; exit 1; }
 wt_preflight && git switch <the PR's head branch>   # gate the branch switch ([per-mutation preflight]); gh api .../pulls/$PR --jq '.head.ref'
-wt_preflight && git rebase origin/main   # freshen the dispatch-time base FIRST — surface a textual conflict now, in-context (see below)
+wt_preflight && git rebase $PIPELINE_BASE_REF   # freshen the dispatch-time base FIRST — surface a textual conflict now, in-context (see below)
 # apply the fixes addressing exactly the enumerated findings
 ```
 
@@ -1936,21 +1941,21 @@ Repair mode runs in a worktree too, so re-run the Step-4 opening preflight (and 
 before this switch, then gate every later `git commit`/`git push` on `wt_preflight` exactly
 as the initial build does.
 
-**Freshen the base onto latest `origin/main` before you fix — surface a textual conflict at
+**Freshen the base onto latest `$PIPELINE_BASE_REF` before you fix — surface a textual conflict at
 code-time, not merge-time.** The repair branch still carries its **dispatch-time base**; if
-`main` moved while the PR sat in the gate (other PRs merged) and touched the same lines, the
+`configured base branch` moved while the PR sat in the gate (other PRs merged) and touched the same lines, the
 **textual merge conflict** doesn't surface until *merge* — when you (the coder) are long gone
-and can't resolve it in-context. The `git fetch origin` above already updated `origin/main`, so
-**`git rebase origin/main`** replays the branch onto the latest base **before** you apply the
+and can't resolve it in-context. The `git fetch origin` above already updated `$PIPELINE_BASE_REF`, so
+**`git rebase $PIPELINE_BASE_REF`** replays the branch onto the latest base **before** you apply the
 fixes. Two outcomes:
 
 - **Clean rebase** — the base was stale but non-conflicting; the branch is now current and you
-  proceed to fix exactly as before. (the applicable safety invariant's merge queue would catch a *behind-main* base at
+  proceed to fix exactly as before. (the applicable safety invariant's merge queue would catch a *behind-configured base branch* base at
   ship, but it does **not** auto-resolve a textual conflict — so freshening here is a genuine
   earlier catch, not a queue duplicate.)
-- **Rebase hits a conflict** — a `main`-side change overlaps your branch's lines. This is the
+- **Rebase hits a conflict** — a `configured base branch`-side change overlaps your branch's lines. This is the
   whole point: **resolve it now, in-context.** Reconcile each conflicted hunk (keeping both the
-  incoming `main` change and your branch's intent), `git add` the resolved files, `git rebase
+  incoming `configured base branch` change and your branch's intent), `git add` the resolved files, `git rebase
   --continue`, and only then apply the review findings on top. Do **not** `git rebase --abort`
   and push the stale base — that just re-buries the conflict until merge. Because a rebase moves
   the head, the eventual R3 push is a force-push (`git push --force-with-lease origin HEAD`), and
@@ -1962,7 +1967,7 @@ Ground the fixes the same way the initial build does — ADRs in `.decisions/` f
 patterns in `.patterns/` for *how the code is shaped* — and run the **pre-push typecheck**
 (`pnpm typecheck`, the exact CI command — never a hand-rolled `tsc`; see Step 4) / the test
 suite plus **`pnpm lint:worktree`** from Step 4 (never `pnpm lint` / `biome check .`,
-which self-no-ops from inside a worktree — <related work item>, <related work item>) before pushing, exactly as Step 4 requires.
+which self-no-ops from inside a worktree — documented repository precedent, documented repository precedent) before pushing, exactly as Step 4 requires.
 
 ### Step R3 — Push, post a progress comment, then stop (the gate re-runs)
 
@@ -1983,12 +1988,12 @@ makes the **stateless** gate re-run — you do **not** re-trigger or self-approv
 # reset can't move the claim, but the guard is MANDATED before every number-targeting mutation,
 # exactly as wt_preflight is before every git op; gate both the push and the progress comment.
 claim_is_mine "$N" || { echo "refusing to push/comment — PR #$PR linked issue #$N not my claim (Step 3.5)"; exit 1; }
-wt_preflight && git push --force-with-lease origin HEAD   # gate the push ([per-mutation preflight]); --force-with-lease because the R2 rebase onto origin/main moved the head
+wt_preflight && git push --force-with-lease origin HEAD   # gate the push ([per-mutation preflight]); --force-with-lease because the R2 rebase onto $PIPELINE_BASE_REF moved the head
 # compose the repair note under the §SP per-run scratch namespace, never a fixed /tmp leaf:
-# concurrent repair lanes clobber a shared name and this posts THEIR note onto your issue (<related work item>).
+# concurrent repair lanes clobber a shared name and this posts THEIR note onto your issue (documented repository precedent).
 # Session-keyed and deterministic, so the note you wrote in an earlier Bash call is still here.
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (<related work item>)}/write-code-$N"
-mkdir -p "$RUN_SCRATCH" || { echo "write-code: §SP could not create a per-run scratch dir (<related work item>)." >&2; exit 1; }
+RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/write-code-$N"
+mkdir -p "$RUN_SCRATCH" || { echo "write-code: §SP could not create a per-run scratch dir (documented repository precedent)." >&2; exit 1; }
 # …write the format-3 repair note to "$RUN_SCRATCH/repair-progress.md" first, then:
 [ -s "$RUN_SCRATCH/repair-progress.md" ] || { echo "write-code: repair-progress.md is missing/empty — refusing to post an empty comment." >&2; exit 1; }
 gh api repos/$REPO/issues/$N/comments -f body="$(cat "$RUN_SCRATCH/repair-progress.md")"
@@ -2005,7 +2010,7 @@ gh api -X POST "repos/$REPO/pulls/$PR/comments/$CID/replies" \
 ```
 
 A reply is the acknowledgement this skill performs. **Resolving** the thread (collapsing it)
-is a GraphQL-only mutation (`resolveReviewThread`), and the org's Projects-classic
+is a GraphQL-only mutation (`resolveReviewThread`), and the org's configured planning board
 integration breaks GraphQL (see the top-of-skill REST-only rule), so repair mode does **not**
 resolve threads — the reviewer (or `ship-it` on merge) resolves; the reply is what closes the
 loop on write-code's side.
@@ -2059,7 +2064,7 @@ FAIL), **stop fixing and escalate** instead of pushing again:
 # relabel), reachable as a fresh stateless repair's FIRST mutation when the PR is already at the
 # N=3 cap (write-code escalates INSTEAD OF running R2/R3, so the R2/R3 guards never fire). Gate it
 # fail-closed so a mis-dispatched repair never comments-on/relabels another agent's live issue (the
-# <related work item> class — the relabel is more disruptive than a comment).
+# documented repository precedent class — the relabel is more disruptive than a comment).
 claim_is_mine "$N" || { echo "refusing to escalate PR #$PR — its linked issue #$N is not my claim (Step 3.5)"; exit 1; }
 gh api repos/$REPO/issues/$N/comments -f body="$(cat <<'EOF'
 ### Repair escalation — PR #<PR> still FAILing after 3 rounds
@@ -2074,7 +2079,7 @@ revisiting).
 EOF
 )"
 # surface it for a human / re-triage rather than re-pushing
-gh api -X POST repos/$REPO/issues/$N/labels -f "labels[]=status:needs-triage"
+gh api -X POST repos/$REPO/issues/$N/labels -f "labels[]=$PIPELINE_STATUS_TRIAGE"
 ```
 
 Escalation **stops the loop** — name the still-failing criteria, hand the PR back to a
@@ -2082,7 +2087,7 @@ human, and surface the issue for re-triage. Do **not** push a 4th fix. Escalatio
 **not** flip the PR's latest verdict (it stays FAIL — only an independent re-review can
 PASS it), so the loop closes on the *picker* side: the pre-pick scan (Step 1) excludes any
 PR already at the cap (`ROUNDS >= 3`), so a future write-code run steps over this escalated
-PR and picks new `status:triaged` work instead of re-entering repair and re-escalating it
+PR and picks new `$PIPELINE_STATUS_CLASSIFIED` work instead of re-entering repair and re-escalating it
 forever. The cap thus terminates **both** the fix loop *and* the re-selection loop.
 
 ### Freeze-after-round-K — a review-appended AC at the cap escalates, never loops (the applicable safety invariant)
@@ -2119,7 +2124,7 @@ done
 ```
 
 If **any** `ac:review-*` row in the current FAIL table is frozen (`round >= 3`), take the
-**escalation path** (the same `### Repair escalation` comment + `status:needs-triage` label as
+**escalation path** (the same `### Repair escalation` comment + `$PIPELINE_STATUS_TRIAGE` label as
 the N=3 block — and therefore the **same `claim_is_mine "$N"` fail-closed gate** that block
 carries, MANDATED before its comment+relabel exactly as in the N=3 case: a frozen-AC escalation
 is just as reachable as a mis-dispatched repair's first mutation, so it must not comment-on or
@@ -2144,7 +2149,7 @@ indistinguishable from "still FAILing after the cap" to the picker, so the same 
   **stop** — you do **not** run `review-code`/`review-doc`/`review-skill` on the new head, post
   a `review-(code|doc|skill): PASS`/`FAIL` marker, or open a native PR review on it. The fix is
   re-gated by an **independent** reviewer; the bias firewall lives at the *review* step, and
-  write-code occupying both seats is exactly what defeats it (<related work item>). The push is the only
+  write-code occupying both seats is exactly what defeats it (documented repository precedent). The push is the only
   re-trigger; a separate reviewer judges the new head.
 - **Same branch, never a new one.** Fix on the PR's existing head branch so the PR and its
   gate history stay intact.
@@ -2152,7 +2157,7 @@ indistinguishable from "still FAILing after the cap" to the picker, so the same 
   Confirm the PR's linked issue `#N` carries **your own** claim (`claim_is_mine "$N"` — the
   orchestrator threads the original claim as `MY_CLAIM` for delegated repair, the claim-ownership rule that gives work to the earliest authorized session-stamped claim §3) before
   the R2 branch switch and the R3 push/comment, so a mis-dispatched repair never clobbers another
-  agent's live PR (the <related work item> class). Fail-closed: an absent or foreign claim refuses.
+  agent's live PR (the documented repository precedent class). Fail-closed: an absent or foreign claim refuses.
 - **Idempotent.** Re-running on an already-fixed / PASS PR (one with no latest FAIL, or one
   whose latest FAIL is bound to a now-stale head) is a clean no-op (Step R1).
 - **SHA-bound verdicts (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA).**
@@ -2189,18 +2194,18 @@ indistinguishable from "still FAILing after the cap" to the picker, so the same 
   cap-exclusion (`ROUNDS >= 3`) stops the re-selection loop, so an escalated PR never
   re-pulls a future run into repair (Step 1, Bounding).
 - **`gh api` REST / porcelain only**, never GraphQL (same reason as everywhere in this
-  skill — the org's Projects-classic integration breaks GraphQL).
+  skill — the org's configured planning board integration breaks GraphQL).
 
 ---
 
 ## Type routing
 
-Three of the six types are "implement and open a PR" work: `type:feature`,
-`type:chore`, `type:bug` follow Steps 4–7 as written. The other two settle
+Three of the six types are "implement and open a PR" work: `$PIPELINE_WORK_ITEM_TYPE`,
+`$PIPELINE_WORK_ITEM_TYPE`, `$PIPELINE_WORK_ITEM_TYPE` follow Steps 4–7 as written. The other two settle
 differently — there's no feature branch to merge, so the closing artifact is a record,
 not a PR.
 
-### `type:decision`
+### `$PIPELINE_WORK_ITEM_TYPE`
 
 A decision issue asks for a settled, recorded technical choice — not code. Resolve it,
 then **record it via the in-repo `/adr` skill** (at `../adr/SKILL.md` —
@@ -2222,9 +2227,9 @@ Then close the loop on the issue:
 
 A decision that's genuinely "just a convention" with no `.decisions/` weight is still
 recorded — the `/adr` skill's bar is "a meaningful technical preference future agents
-should respect," which a `type:decision` issue is by definition.
+should respect," which a `$PIPELINE_WORK_ITEM_TYPE` issue is by definition.
 
-### `type:investigation`
+### `$PIPELINE_WORK_ITEM_TYPE`
 
 An investigation issue asks "what's going on / is this real / what's the cause" — the
 deliverable is a **diagnosis**, and then *routing* its findings. Usually that routing is a
@@ -2272,7 +2277,7 @@ a **diagnosis** and the *routing* of its findings, not a feature branch:
 
    ```bash
    # closing #N is a number-targeting mutation — gate it on the mis-attribution guard (Step 3.5)
-   # so a mis-attributed number never closes another agent's live issue (the <related work item> class).
+   # so a mis-attributed number never closes another agent's live issue (the documented repository precedent class).
    claim_is_mine "<N>" || { echo "refusing to close #<N> — not my claim (Step 3.5)"; exit 1; }
    gh api repos/$REPO/issues/<N>/comments -f body="$DIAGNOSIS"
    gh api -X PATCH repos/$REPO/issues/<N> -f state=closed -f state_reason=completed
@@ -2284,7 +2289,7 @@ a **diagnosis** and the *routing* of its findings, not a feature branch:
 2. **File actionable residue as new issues via the [`report`](../report/SKILL.md)
    skill.** An investigation usually turns up follow-up work — a bug to fix, a refactor,
    a missing test. Each such item is a *new* report-style issue (the report skill's
-   5-section type-blind template + `status:needs-triage`), so it re-enters the pipeline
+   5-section type-blind template + `$PIPELINE_STATUS_TRIAGE`), so it re-enters the pipeline
    at intake and gets triaged on its own merits. Don't pre-type or pre-prioritize the
    residue — that's triage's call, same as any report. Cross-link: mention the
    investigation issue number in the report's Pointers section.
@@ -2338,8 +2343,8 @@ This skill is one of a suite (`report` → `triage` → `plan-epic` → `review-
 **`write-code`** → `review-code` → `ship-it`) that turns GitHub issues into an agent-operable
 pipeline. The shared label semantics and the body/comment/dependency formats live in
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md). Your input is the
-`status:triaged` issues that `triage` produced (standalone) or that `review-plan` flipped
-from `status:planned` after gating a `plan-epic` ledger (epic children — the applicable safety invariant); your output —
+`$PIPELINE_STATUS_CLASSIFIED` issues that `triage` produced (standalone) or that `review-plan` flipped
+from `$PIPELINE_STATUS` after gating a `plan-epic` ledger (epic children — the applicable safety invariant); your output —
 a claimed issue, a PR with `Fixes #N`, progress comments, and an epic handoff note — is
 exactly what `review-code`/`review-doc`/`review-skill` read to verify the work against its
 acceptance criteria before merge. The loop closes back on you: when a gate lands a **FAIL** marker
@@ -2347,5 +2352,5 @@ acceptance criteria before merge. The loop closes back on you: when a gate lands
 reads the findings, fixes, and re-submits for an independent re-gate, while `ship-it` stays
 the sole owner of PASS → merge. You also lean on two sibling skills inside type routing:
 `/adr`
-([`../adr/SKILL.md`](../adr/SKILL.md)) for `type:decision`, and [`report`](../report/SKILL.md) for an
+([`../adr/SKILL.md`](../adr/SKILL.md)) for `$PIPELINE_WORK_ITEM_TYPE`, and [`report`](../report/SKILL.md) for an
 investigation's actionable residue.

@@ -6,6 +6,11 @@ description: >-
 
 # heal-ci
 
+## Repository-owned policy boundary
+
+This workflow is part of the default generic payload and `pipeline init` links it into `.claude/skills`. Availability is not authority: before external GitHub operations, resolve the consumer repository root and read `.pipeline/agent-policy.json`. Read `.pipeline/optional-workflow-policy.json` for repository-specific integration settings. Do not infer a platform, product lifecycle, branch, organization, or approval actor from examples below. When policy does not authorize an action or required configuration is unset, preserve the workflow context, explain the missing configuration, and fail closed before an external mutation.
+
+
 You are a CI-failure **classifier and router**, not a self-healer. A run went red.
 Failures today only re-enter the pipeline if a human notices and hand-files a report —
 this skill closes that gap by turning a red run id into a single routed action:
@@ -38,7 +43,7 @@ These are the hard guardrails. heal-ci classifies **one** red run per invocation
 **one** routed action — nothing more.
 
 - **Never edit code.** You never touch a file, clean stray emit, or re-push a branch.
-  Tooling pains that once recurred (stray `.js` emit polluting `apps/web/src`, the
+  Tooling pains that once recurred (stray `.js` emit polluting `$PIPELINE_APPLICATION_PATH/src`, the
   turbo-cache-hidden typecheck, the readiness-poll hang, the suite non-zero-exit) have
   landed as **permanent structural fixes**; there is little left to auto-heal, and an
   agent that auto-cleans and re-pushes is a footgun. If a tooling signature recurs, you
@@ -124,13 +129,13 @@ rerun"). The flag overrides any flake match below.*
 
 - **Suite non-zero exit despite all tests passing** — log shows `All fibers interrupted
   without error` on suite exit, or "N passing" with a non-zero exit. (The keep-alive
-  fiber-interrupt class — issue <related work item>.) This is a teardown artifact, not a test failure.
+  fiber-interrupt class — issue documented repository precedent.) This is a teardown artifact, not a test failure.
 - **T3 readiness-poll / workerd startup stall** — the integration job hangs or times out
   during the alchemy sidecar readiness poll before any test runs. (The startup-race
-  class — issue <related work item>, bounded by <related work item>'s per-attempt timeout, but the underlying race can
+  class — issue documented repository precedent, bounded by documented repository precedent's per-attempt timeout, but the underlying race can
   still surface.)
 - **D1 network-loss transient** — `D1_ERROR: Network connection lost` or a fetch timeout
-  mid-suite against the real Cloudflare D1 the integration job uses.
+  mid-suite against the real configured release platform D1 the integration job uses.
 - **Seed bleed / isolation** — a test fails only when run with others (popular-sort and
   friends), passing in isolation.
 
@@ -196,8 +201,8 @@ Repair mode) fire off **different signals** — a red CI run here, a `review-(co
 marker there — so neither sees the other. The `report` dedup you delegate to searches **open
 issues**; it cannot see an in-flight repair, which lives as an **open PR + a FAIL marker**, not
 an issue. So before filing, check for that repair yourself and, if present, comment-and-stop
-instead of opening a fresh `status:needs-triage` defect for a failure `write-code` is already
-fixing (issue <related work item>).
+instead of opening a fresh `$PIPELINE_STATUS_TRIAGE` defect for a failure `write-code` is already
+fixing (issue documented repository precedent).
 
 An **active repair** is detectable from PR state alone — statelessly, the same way the
 already-rerun guard (Step 1) reads the run/PR state, and the **same verdict-resolution
@@ -212,7 +217,7 @@ failure on the floor. An active repair is an **open PR** whose **latest** gate v
 That per-(PR, gate) FAIL-bound-to-head resolution is exactly what
 `pipeline-cli verdict read --gate <g> --expect FAIL` owns — the authorization rule that accepts privileged actions only from repository members write+ author-gate, the
 latest-wins pick, and the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA SHA-staleness test folded into one exit code (its unit tests
-are the contract, <related work item>). So `heal-ci` reads each namespace **through the verb** rather than
+are the contract, documented repository precedent). So `heal-ci` reads each namespace **through the verb** rather than
 re-deriving the resolver write-code once hand-copied, and keeps only the two things the verb does
 **not** do — genuinely more than a single (PR, gate) resolution, so they stay here:
 
@@ -231,7 +236,7 @@ re-deriving the resolver write-code once hand-copied, and keeps only the two thi
 # is a write-code repair already in flight on this PR? (PR runs only) — resolve the verdict the
 # EXACT way write-code Step R1 does, by delegating each (PR, gate) FAIL-bound-to-head resolution to
 # `pipeline-cli verdict read` (ACL author-gate + latest-wins + SHA-staleness, the authorization rule that accepts privileged actions only from repository members). Resolve
-# the CLI once — in-repo-first, published-fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic <related work item>).
+# the CLI once — in-repo-first, published-fallback (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository; epic documented repository precedent).
 if [ -x .pipeline/toolkit/bin/pipeline ]; then
   VERDICT="pnpm pipeline cli verdict"   # the adopting repository-local: the in-repo consolidated bin
 else
@@ -326,7 +331,7 @@ repair) — fall through and file the defect exactly as below, unchanged.
 
 **Invoke the existing [`report`](../report/SKILL.md) skill — do not re-implement its
 dedup / `Filed by an agent` footer / needs-triage contract.** It already files a
-type-blind `status:needs-triage` issue with the privacy-scrubbed footer and the mandatory
+type-blind `$PIPELINE_STATUS_TRIAGE` issue with the privacy-scrubbed footer and the mandatory
 pre-filing re-query, which is exactly what you want. Feed it:
 
 - **What I observed:** the failure signature + a tight excerpt of the failed log (the

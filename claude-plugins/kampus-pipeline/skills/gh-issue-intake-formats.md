@@ -17,11 +17,11 @@ agent-operable work pipeline:
 7. The **issue-claim semantics** — self-assign as a detect-and-tiebreak (not a lock), the
    protocol `write-code`'s pick (Step 1) and claim (Step 3) implement.
 8. The **investigation→trivial-fix collapse rule** — the bounded exception (the applicable safety invariant) that
-   lets a `type:investigation` resolving into a trivial fix collapse into one `write-code`
+   lets a `$PIPELINE_WORK_ITEM_TYPE` resolving into a trivial fix collapse into one `write-code`
    PR; `write-code` and `triage` cite this one statement.
 
 `plan-epic` writes formats 1, 2, and 4. `review-plan` reads 1 and 2 (they are the
-structural floor it validates) and owns the `status:planned → status:triaged` flip that
+structural floor it validates) and owns the `$PIPELINE_STATUS → $PIPELINE_STATUS_CLASSIFIED` flip that
 makes a `plan-epic` child pickable. `write-code` reads 1, 2, and 4 and writes 3 and 4.
 `review-code` reads 2 (the acceptance-criteria checklist is its gate) and writes 5
 (PASS or FAIL). The `review-*` gates also **write** format 2 — but only its **reviewer-append
@@ -88,7 +88,7 @@ two are one loop: the emitter marks provenance honestly, the reader still re-gro
 **Why it binds a gate specifically.** A gate agent's output becomes issue bodies, labels, and
 routing decisions, so a false-but-confident claim in its return channel propagates into the
 pipeline. The failure mode this closes is the confabulated evidence chain that *happens to be
-right* — which trains the reader to trust the next one (the <related work item> near-miss: a long-resumed
+right* — which trains the reader to trust the next one (the documented repository precedent near-miss: a long-resumed
 triager returned a fabricated platform-verification "evidence chain" as observed fact and
 mis-attributed it to the orchestrator, caught only by independent downstream re-grounding).
 Marking un-run claims *unverified* costs a gate the transcript action of actually running any
@@ -99,7 +99,7 @@ check it wants to cite as verified — deliberately: the price of trustworthy ga
 ## Target repo resolution
 
 The suite is a **repo-agnostic** installable plugin: an adopter installs it into
-their own repo and the pipeline operates on *their* issues (epic <related work item>, the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository).
+their own repo and the pipeline operates on *their* issues (epic documented repository precedent, the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository).
 So a skill must never hardcode `<owner>/<repository>` in its `gh api` calls — it resolves
 the target `owner/name` once, at the top of its run, and uses it everywhere.
 
@@ -130,9 +130,9 @@ text reads as the adopting repository-only) is also de-pinned: the trigger descr
 (processing a GitHub triage queue, picking the next issue), not a specific repo.
 
 > **Carve-outs (the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository §3/§4).** Two classes of `<owner>/<repository>` reference are
-> **intentionally not** rewritten to `$REPO`: `review-plan`'s `@kampus/epic-ledger`
+> **intentionally not** rewritten to `$REPO`: `review-plan`'s `repository adapter epic-ledger`
 > invocation (the one acknowledged-pinned piece for v1, §3) and external doc-reference
-> URLs rewritten to stable `<repository URL> permalinks
+> URLs rewritten to stable `repository-owned record URL permalinks
 > (§4). Those are separate children's work; only `gh api` literals and trigger-text
 > repo names are the de-pin target here.
 
@@ -140,8 +140,8 @@ text reads as the adopting repository-only) is also de-pinned: the trigger descr
 
 ## Pipeline labels
 
-Every issue carries one `type:*`, one `p*`, and one `status:*` (plus, transiently, the
-`status:planning` epic-lock on a locked epic — a second `status:*` that sits *alongside* the
+Every issue carries one `$PIPELINE_WORK_ITEM_TYPE`, one `p*`, and one `status:*` (plus, transiently, the
+`$PIPELINE_STATUS_PLANNING` epic-lock on a locked epic — a second `status:*` that sits *alongside* the
 real one, never replacing it; see below). These three are the **mandatory** dimensions triage
 always sets. There is a fourth, **optional** dimension — `milestone` — that is *not* a label
 and not always present; it lives on its own GitHub surface and is documented in §Milestone. The
@@ -150,46 +150,46 @@ on. The canonical set:
 
 | Label | Meaning | Pickable by `write-code`? |
 |---|---|---|
-| `status:needs-triage` | Raw intake; not yet classified. Filed by `report`. | No |
-| `status:needs-info` | Parked — `triage` needs an answer before it can act. | No |
-| `status:planned` | A `plan-epic` child: planned and structurally complete, **not yet verified**. | **No** |
-| `status:triaged` | Cleared the gate before it — ready for `write-code` to pick. | **Yes** |
+| `$PIPELINE_STATUS_TRIAGE` | Raw intake; not yet classified. Filed by `report`. | No |
+| `$PIPELINE_STATUS` | Parked — `triage` needs an answer before it can act. | No |
+| `$PIPELINE_STATUS` | A `plan-epic` child: planned and structurally complete, **not yet verified**. | **No** |
+| `$PIPELINE_STATUS_CLASSIFIED` | Cleared the gate before it — ready for `write-code` to pick. | **Yes** |
 
-One label on the table is **not** a pipeline state — `status:planning` is a **transient
+One label on the table is **not** a pipeline state — `$PIPELINE_STATUS_PLANNING` is a **transient
 epic-lock** (below), held on an *epic* while one of `{plan-epic, review-plan}` mutates its
 children. It sits *alongside* the epic's real `status:*`, never replacing it, and does not
 change what `write-code` picks.
 
 | Label | Meaning | Pickable by `write-code`? |
 |---|---|---|
-| `status:planning` | **Transient epic-lock** — a `plan-epic`/`review-plan` run is mutating this epic's children; a second mutator backs off. Released to PASS-or-park. Not a pipeline state (the planning lock that gives one active planner ownership and releases on completion or expiry). | n/a (lock, not state) |
+| `$PIPELINE_STATUS_PLANNING` | **Transient epic-lock** — a `plan-epic`/`review-plan` run is mutating this epic's children; a second mutator backs off. Released to PASS-or-park. Not a pipeline state (the planning lock that gives one active planner ownership and releases on completion or expiry). | n/a (lock, not state) |
 
-`status:triaged` is the one pickable state. It is reached two ways, and **only** these
+`$PIPELINE_STATUS_CLASSIFIED` is the one pickable state. It is reached two ways, and **only** these
 two: a standalone issue gets it from `triage` (the human-judgment gate at intake); a
 `plan-epic` **child** gets it from `review-plan` (the deterministic gate at the plan
 layer — the applicable safety invariant). Either way,
-`status:triaged` is a **post-gate** state, never the immediate output of `plan-epic`.
+`$PIPELINE_STATUS_CLASSIFIED` is a **post-gate** state, never the immediate output of `plan-epic`.
 
-### The `wayfinder:map` / `wayfinder:backlog` ideation-layer markers — not pipeline states, not `type:*`
+### The `wayfinder:map` / `wayfinder:backlog` ideation-layer markers — not pipeline states, not `$PIPELINE_WORK_ITEM_TYPE`
 
 Two labels sit in this table's neighborhood but are **neither a `status:*` pipeline state
-nor a `type:*`** — the ideation-layer marker set. **`wayfinder:map`** is an **issue-shape
-marker** (epic <related work item>). It marks an issue as a **wayfinder map** — the ideation-layer front
+nor a `$PIPELINE_WORK_ITEM_TYPE`** — the ideation-layer marker set. **`wayfinder:map`** is an **issue-shape
+marker** (epic documented repository precedent). It marks an issue as a **wayfinder map** — the ideation-layer front
 door that sits *upstream* of this execution pipeline (chart a fuzzy destination, work its open
 frontier of investigation/decision tickets, then hand a concrete plan to `triage` /
 `plan-epic`). It **reuses the existing issue infrastructure** rather than minting a new
-`type:*`, so it ripples no intake floor: the `write-code` pick predicate keys on
-`status:triaged` and is untouched by it.
+`$PIPELINE_WORK_ITEM_TYPE`, so it ripples no intake floor: the `write-code` pick predicate keys on
+`$PIPELINE_STATUS_CLASSIFIED` and is untouched by it.
 
 **`wayfinder:backlog`** is its upstream sibling — the **cartographer's backlog**. It marks an
 issue as a **destination queued for a wayfinding chart**: a fuzzy end-state named but not yet
 charted into a map. Like `wayfinder:map` it reuses the existing issue infrastructure and mints
-no new `type:*`, and like it, it is an **ideation-queue marker**, not a buildable status — it
+no new `$PIPELINE_WORK_ITEM_TYPE`, and like it, it is an **ideation-queue marker**, not a buildable status — it
 sits one step further upstream still, before charting even begins.
 
 | Label | Meaning | Pickable by `write-code`? |
 |---|---|---|
-| `wayfinder:map` | **Issue-shape marker** (not a state, not a type) — this issue is a **wayfinder map**: the ideation-layer map whose body carries the four-section map shape (`## Destination` / `## Decisions-so-far` / `## Open frontier` / `## Graduated fog`) the `wayfinder` skill's chart/work modes and the wayfinder CLI read and write. Upstream of the pipeline (<related work item>). | No (an ideation surface, not pickable execution work) |
+| `wayfinder:map` | **Issue-shape marker** (not a state, not a type) — this issue is a **wayfinder map**: the ideation-layer map whose body carries the four-section map shape (`## Destination` / `## Decisions-so-far` / `## Open frontier` / `## Graduated fog`) the `wayfinder` skill's chart/work modes and the wayfinder CLI read and write. Upstream of the pipeline (documented repository precedent). | No (an ideation surface, not pickable execution work) |
 | `wayfinder:backlog` | **Ideation-queue marker** (not a state, not a type) — this issue is a **destination queued for a wayfinding chart**: the cartographer's backlog of fuzzy end-states named but not yet charted. Sits upstream of triage, one step further up than `wayfinder:map`. | No (an ideation surface, not pickable execution work) |
 
 The **body shape** a `wayfinder:map` issue carries is defined below in
@@ -203,44 +203,44 @@ cleared frontier into that emitted factory work), so a charted destination drops
 
 ### The `planned → triaged` flip
 
-`plan-epic` mints its children **`status:planned`**, *not* `status:triaged` — a planned
+`plan-epic` mints its children **`$PIPELINE_STATUS`**, *not* `$PIPELINE_STATUS_CLASSIFIED` — a planned
 child is unpickable by construction (`write-code`'s pick predicate selects only
-`status:triaged`). A child becomes pickable only when **`review-plan`** validates the
+`$PIPELINE_STATUS_CLASSIFIED`). A child becomes pickable only when **`review-plan`** validates the
 epic ledger against the deterministic structural floor (an empty hard-defect set) and
-flips that one child's `status:planned → status:triaged`. `review-plan` **owns this
+flips that one child's `$PIPELINE_STATUS → $PIPELINE_STATUS_CLASSIFIED`. `review-plan` **owns this
 flip** and nothing else does it; it is the symmetric twin of `review-code`'s
 PR → merge gate, one stage earlier (plan → `write-code`).
 
 This is why the flip *is* the enforcement: because `write-code` already keys on
-`status:triaged` and nothing else, an unverified-but-pickable child cannot exist —
-`status:planned` makes the unverified state unrepresentable to the picker, with **no
+`$PIPELINE_STATUS_CLASSIFIED` and nothing else, an unverified-but-pickable child cannot exist —
+`$PIPELINE_STATUS` makes the unverified state unrepresentable to the picker, with **no
 change to `write-code`'s predicate**. See the applicable safety invariant for the full gate architecture.
 
-### The `status:planning` epic-lock — one mutator at a time over an epic's children
+### The `$PIPELINE_STATUS_PLANNING` epic-lock — one mutator at a time over an epic's children
 
-`status:planned` (the child label) and `status:planning` (the **epic-lock**) are different
+`$PIPELINE_STATUS` (the child label) and `$PIPELINE_STATUS_PLANNING` (the **epic-lock**) are different
 things: the first is a child's pipeline state, the second is a transient lock on the *epic*.
 
 Two stages mutate an epic's children and nothing else serializes them — `review-plan` owns
 the `planned → triaged` flip, `plan-epic` owns supersede/unlink/close on re-plan. Run
 concurrently on one epic they interleave: a re-plan supersedes child C at the same instant
-the gate flips C `triaged` (pickable), and `write-code` picks a dropped story (<related work item>). The
-`status:planning` label serializes them:
+the gate flips C `triaged` (pickable), and `write-code` picks a dropped story (documented repository precedent). The
+`$PIPELINE_STATUS_PLANNING` label serializes them:
 
 The lock is **two layers**, exactly mirroring the issue-claim of §7 one level up over the
 whole child set — a coarse availability label gated by a fine, agent-distinguishable claim
-comment (the agent-distinguishable claim marker, the claim-ownership rule that gives work to the earliest authorized session-stamped claim, <related work item>):
+comment (the agent-distinguishable claim marker, the claim-ownership rule that gives work to the earliest authorized session-stamped claim, documented repository precedent):
 
-- **Coarse availability gate — the `status:planning` label.** A mutator (`plan-epic` on any
+- **Coarse availability gate — the `$PIPELINE_STATUS_PLANNING` label.** A mutator (`plan-epic` on any
   run; `review-plan` before its gate flip or its first `rePlan`) re-reads the epic's labels: if
-  `status:planning` is **present, back off** (don't mutate — defer to a holder already there,
+  `$PIPELINE_STATUS_PLANNING` is **present, back off** (don't mutate — defer to a holder already there,
   the §7 Rule-0 "a fresh arrival never evicts an owner that was there before it"); if **absent,
   `POST` it**. The label is the cheap, list-visible "is this epic being planned **at all**?"
   signal — but because `POST .../labels` is **additive, not compare-and-swap** (no `If-Match`),
   two runs that both read it absent in the same window both `POST` the same single shared label,
-  and under the one shared `<shared-automation-login>` login the label's author cannot tell them apart. So the label
+  and under the one shared `configured automation identity` login the label's author cannot tell them apart. So the label
   **alone** says only *whether* the epic is being planned, never *which* run holds the lock — the
-  same post-`/labels` TOCTOU that double-planned <related work item> (stray child <related work item>).
+  same post-`/labels` TOCTOU that double-planned documented repository precedent (stray child documented repository precedent).
 
 - **Fine, agent-distinguishable resolution — the planning-claim comment (the claim-ownership rule that gives work to the earliest authorized session-stamped claim).** Right
   after `POST`ing the label, the mutator posts the §7 claim-comment primitive **on the epic** —
@@ -258,7 +258,7 @@ comment (the agent-distinguishable claim marker, the claim-ownership rule that g
   its own planning-claim comment** — via the **comment-scoped** endpoint
   `DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}` (no issue number; the
   issue-scoped `issues/{n}/comments/{id}` form **404s** and leaks the claim, wedging the epic —
-  <related work item>) — and backs off — it does **not** `DELETE` the `status:planning`
+  documented repository precedent) — and backs off — it does **not** `DELETE` the `$PIPELINE_STATUS_PLANNING`
   label, which the **winner still holds**. Unlike §7's per-login assignees (where each agent
   removes *its own* assignee), the label is a **single shared token both runs `POST`ed**, so
   deleting it would unlock the winner and reopen the double-plan. The release-on-every-exit
@@ -272,16 +272,16 @@ earliest-claim-wins, **Rule 0 (defer to a holder) and the tiebreak are the same 
 pre-existing planner *is* the minimum, the claim-ownership rule that gives work to the earliest authorized session-stamped claim §2). It remains **detect-and-serialize, not a
 mutex** — neither the label nor the comment API offers a conditional write, so the residual
 co-acquire window (both posting in the same instant) is narrowed and resolved, not eliminated;
-it stays backstopped by the epic-body **splice + recheck** (§1 "Updating it safely", <related work item>) and
+it stays backstopped by the epic-body **splice + recheck** (§1 "Updating it safely", documented repository precedent) and
 the convergence loop's signature checkpoint. Don't claim a lock guarantee the API can't give —
 claim "of any set of co-acquirers, exactly one plans; every loser self-retracts and backs off."
 See the planning lock that gives one active planner ownership and releases on completion or expiry
 (the lock) and the claim-ownership rule that gives work to the earliest authorized session-stamped claim
-(the agent-distinguishable claim, <related work item>).
+(the agent-distinguishable claim, documented repository precedent).
 
 ## Milestone — the one *optional* intake dimension
 
-`type:*`, `p*`, and `status:*` are **mandatory** dimensions: every issue carries exactly one of
+`$PIPELINE_WORK_ITEM_TYPE`, `p*`, and `status:*` are **mandatory** dimensions: every issue carries exactly one of
 each, and an issue missing any of them is malformed. **Milestone is the exception** — it is an
 **optional** fourth intake dimension that sits alongside the three labels, and **most issues
 carry none**. An issue with no milestone is **well-formed by default**; absence is the norm, not
@@ -292,7 +292,7 @@ This section is the **single source of truth** the three behavioral skills cite 
 pick-order). It defines what a milestone *is* and the mechanical surface it lives on; the
 per-skill *behavior* (the assign rules, the inherit logic, the pick-order) lives in those three
 skills and **cites this section**, so the dimension can't drift across them (epic
-[<related work item>](<repository URL>)) — exactly as the rest of this contract is
+[documented repository precedent](repository-owned record URL)) — exactly as the rest of this contract is
 cited by the labels and markers it defines. The *why* — what a milestone means and how the set is
 curated — is the applicable safety invariant;
 read it for the rationale, this section for the contract.
@@ -305,7 +305,7 @@ milestone is the cross-cutting *commitment* an epic can't be. A GitHub issue is 
 milestone, which is why a milestone is a commitment and not a tag.
 
 **Two milestone kinds.** *Surface* milestones key off an issue's product surface and are
-**mechanical** to assign (a sözlük bug → the sözlük surface milestone). *Strategic* milestones
+**mechanical** to assign (a configured content feature bug → the configured content feature surface milestone). *Strategic* milestones
 require **judgment** ("is this broken-vs-missing? pipeline-critical?"). The distinction is why
 `triage`'s milestone assignment is human-judgment-shaped for the strategic kind and near-rote for
 the surface kind (the applicable safety invariant §2).
@@ -367,7 +367,7 @@ each skill.
 ### The REST surface — the one mechanical reference
 
 Milestone is the issue's native `milestone` field, not a label, so it fits the `gh api` REST path
-the whole pipeline already relies on (the org's Projects-classic breaks GraphQL; milestones
+the whole pipeline already relies on (the org's configured planning board breaks GraphQL; milestones
 sidestep it — the applicable safety invariant, **never GraphQL**). Every skill that reads, writes, or inherits it shares
 **this** one mechanical reference:
 
@@ -414,12 +414,12 @@ marker** — so the dimension can't drift across skills (the exact single-source
 §CP control-plane set and the §Milestone section already enforce). The per-skill *behavior*
 (plan-epic stamps, write-code ships dark, review-code verifies the gating) lives in those
 skills and **cites this section**. The repository-specific cycle *content* — what the cycle
-actually mandates — lives in the repo-root `product-development-cycle.md`, **not** here: this
+actually mandates — lives in the repo-root `$PIPELINE_DEVELOPMENT_CYCLE_POLICY`, **not** here: this
 section defines the generic hook and marker, that doc fills them in.
 
 ### 1. The cycle-doc consult hook + graceful-absence contract
 
-The well-known repo path the cycle-aware skills consult is **`product-development-cycle.md`
+The well-known repo path the cycle-aware skills consult is **`$PIPELINE_DEVELOPMENT_CYCLE_POLICY`
 at the repo root** (alongside `README.md` / `CLAUDE.md`, for the same discoverability). A
 cycle-step **probes for the doc first**; if it is **absent**, the step **no-ops** — it stamps
 no marker, enforces no dark-ship, surfaces no release queue. This is the **graceful-absence
@@ -431,7 +431,7 @@ branch (no second copy in any skill):
 
 ```bash
 # probe the well-known cycle doc; absent ⇒ the cycle-step no-ops (graceful absence, the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository)
-if gh api "repos/$REPO/contents/product-development-cycle.md" --jq '.path' >/dev/null 2>&1; then
+if gh api "repos/$REPO/contents/$PIPELINE_DEVELOPMENT_CYCLE_POLICY" --jq '.path' >/dev/null 2>&1; then
   CYCLE_DOC=present   # consult it for the containment policy
 else
   CYCLE_DOC=absent    # no-op: no marker, no dark-ship, no release queue
@@ -440,7 +440,7 @@ fi
 
 A skill operating on a **local working tree** rather than the GitHub API (e.g. an offline
 build step) may substitute the equivalent working-tree check — `test -f
-product-development-cycle.md` at the repo root — for the `gh api` content read; the two are
+$PIPELINE_DEVELOPMENT_CYCLE_POLICY` at the repo root — for the `gh api` content read; the two are
 the same probe against the same well-known path, and both must treat **absent ⇒ no-op**.
 
 The probe is the **only** gate on every cycle-step: a step never assumes the doc exists, never
@@ -459,7 +459,7 @@ values**:
 |---|---|
 | `flag (default-off)` | A **user-facing** change → it must **ship dark** behind a default-off flag. |
 | `exempt (<reason>)` | A change with **no behavior to hold dark** — an **internal / refactor / infra / docs** change with no user-facing surface, **or** a **client-only presentational** change whose entire user-facing effect is *which pixels render* (the applicable safety invariant). The `<reason>` names which (e.g. `exempt (internal refactor)`, `exempt (docs)`, `exempt (client-only presentational)`). See the [exempt-vs-not-exempt boundary](#the-exempt-boundary-behavior--access--state-delta-the rule that exempts only changes with no behavior, access, or state delta) below. |
-| `none (no cycle doc)` | The **graceful-absence** value: the repo has no `product-development-cycle.md`, so no containment is required. This is what a foreign install's children carry. |
+| `none (no cycle doc)` | The **graceful-absence** value: the repo has no `$PIPELINE_DEVELOPMENT_CYCLE_POLICY`, so no containment is required. This is what a foreign install's children carry. |
 
 **The tolerant-read rule:** a **missing `**Containment:**` line reads as `none`** — treated as
 "no containment required," identical to `none (no cycle doc)`. This is the [§Reading stance](#reading-stance-convention-not-parser-spec)
@@ -527,22 +527,22 @@ the field's grammar stays defined exactly once. See the rule that repository-spe
 for the why (agents deploy / humans release) and the repository-resolution rule that uses an explicit override or the current checkout, never a hardcoded repository
 for the portability guarantee the graceful-absence contract delivers.
 
-## The PR `area:*` signal — a join-free product/infra tag for the ship digest
+## The PR `$PIPELINE_AREA` signal — a join-free product/infra tag for the ship digest
 
 The **product-vs-infra split** is the top level of the founder-facing `ship-digest` readout
 (`pipeline-cli ship-digest`) — did this shipped work touch a kamp.us **product** surface, or the
 pipeline / infra **substrate**? That split lives naturally on the **issue** (via its milestone /
 campaign), but a **merged PR carries no milestone** — milestones live on issues only. So the digest
 would have to recover the split by a fragile **PR→issue→milestone join** on every readout. The
-`area:*` **PR label** is the cheap tag that makes the split **join-free**: stamp the merged work's
+`$PIPELINE_AREA` **PR label** is the cheap tag that makes the split **join-free**: stamp the merged work's
 section directly on the PR, and the digest reads it without touching the issue graph.
 
 **The convention.** A merged PR may carry **exactly one** of two labels:
 
 | Label | Meaning |
 |---|---|
-| `area:product` | The work touches a **kamp.us user-facing product** surface (sözlük / pano / the web app). |
-| `area:infra` | The work touches the **pipeline / infra / platform substrate** — no user-facing surface. |
+| `$PIPELINE_AREA` | The work touches a **kamp.us user-facing product** surface (configured content feature / pano / the web app). |
+| `$PIPELINE_AREA` | The work touches the **pipeline / infra / platform substrate** — no user-facing surface. |
 
 **Who applies it.** `ship-it` stamps it **at merge**, echoing the section the PR's linked
 `Fixes #N` issue already implies (its milestone / product surface) — the merge authority is the one
@@ -552,7 +552,7 @@ later readouts. A **human** may set it earlier (on the PR at open) when the sect
 enforced by any gate (retrofitting it onto historical PRs, and any enforcement guard, are
 explicitly out of scope — a later chore if wanted).
 
-**The absent-default (tolerant read).** The label is **optional**: a PR without an `area:*` label
+**The absent-default (tolerant read).** The label is **optional**: a PR without an `$PIPELINE_AREA` label
 is well-formed, not a defect (the same tolerant-read stance as a missing `milestone`). When it is
 absent the `ship-digest` gather falls back to the **PR→issue→milestone join** to recover the
 section, and when *that* yields nothing the digest defaults the entry to **`Product`** (the
@@ -561,7 +561,7 @@ cheaper*; its absence degrades cleanly to the pre-convention join behaviour, nev
 
 **Who reads it.** `ship-digest` is the consumer. Its pure core resolves each entry's section with a
 **PR-signal-preferred precedence** (`resolveSection` in
-`packages/pipeline-cli/src/tools/ship-digest/digest.ts`): the entry's `area` (the PR `area:*`
+`packages/pipeline-cli/src/tools/ship-digest/digest.ts`): the entry's `area` (the PR `$PIPELINE_AREA`
 signal, join-free) wins; when absent the gather-supplied `joinedArea` (the PR→issue→milestone join
 fallback) is consulted; when neither is present it defaults to `Product`. The `/what-shipped`
 gather is what populates `area` from the PR label (join-free) and `joinedArea` from the join when
@@ -598,7 +598,7 @@ shared issue state. An epic that names topology and nothing else is correct.
 
 Blockedness is **derived, never stored**: an issue is unblocked when its phase
 predecessors are closed and every issue named in its `requires:` is closed.
-There is no `status:blocked` label — `write-code` recomputes eligibility from
+There is no `$PIPELINE_STATUS` label — `write-code` recomputes eligibility from
 this section on every pick.
 
 ### Shape
@@ -607,15 +607,15 @@ this section on every pick.
 ## Dependencies
 
 ### Phase 1
-- <related work item> — label schema bootstrap
-- <related work item> — formats contract doc
+- documented repository precedent — label schema bootstrap
+- documented repository precedent — formats contract doc
 
 ### Phase 2
-- <related work item> — report skill
-- <related work item> — triage skill (requires: <related work item>)
+- documented repository precedent — report skill
+- documented repository precedent — triage skill (requires: documented repository precedent)
 
 ### Phase 3
-- <related work item> — plan-epic skill (requires: <related work item>, <related work item>)
+- documented repository precedent — plan-epic skill (requires: documented repository precedent, documented repository precedent)
 ```
 
 References are GitHub issue numbers (`#NNN`); the trailing text after `—` is a
@@ -632,23 +632,23 @@ child rather than the whole phase:
 ## Dependencies
 
 ### Phase 1
-- <related work item> — define the wire schema
-- <related work item> — write the migration script
+- documented repository precedent — define the wire schema
+- documented repository precedent — write the migration script
 
 ### Phase 2
-- <related work item> — implement the encoder (requires: <related work item>)
-- <related work item> — end-to-end smoke test
+- documented repository precedent — implement the encoder (requires: documented repository precedent)
+- documented repository precedent — end-to-end smoke test
 ```
 
 Reading this:
 
-- **Parallel group:** `<related work item>` and `<related work item>` are both in Phase 1 with no `requires:`
+- **Parallel group:** `documented repository precedent` and `documented repository precedent` are both in Phase 1 with no `requires:`
   between them, so they may be worked simultaneously.
-- **Sequential gate:** `<related work item>` carries `requires: <related work item>` — it is eligible only
-  once `<related work item>` closes, even though `<related work item>` (its phase-1 sibling) may still be open.
-  It does *not* wait on `<related work item>`.
-- `<related work item>` is in Phase 2 with no `requires:`, so it waits on **all** of Phase 1
-  (the default phase-boundary gate), then runs alongside `<related work item>`.
+- **Sequential gate:** `documented repository precedent` carries `requires: documented repository precedent` — it is eligible only
+  once `documented repository precedent` closes, even though `documented repository precedent` (its phase-1 sibling) may still be open.
+  It does *not* wait on `documented repository precedent`.
+- `documented repository precedent` is in Phase 2 with no `requires:`, so it waits on **all** of Phase 1
+  (the default phase-boundary gate), then runs alongside `documented repository precedent`.
 
 ### Updating it safely — surgical splice + optimistic recheck, never a blind overwrite
 
@@ -656,9 +656,9 @@ The `## Dependencies` block is **load-bearing shared state**: `write-code` reads
 what's pickable, and `plan-epic`/`review-plan`/a re-plan loop can edit the epic body
 concurrently. A whole-body `PATCH` reassembled from one writer's in-memory plan silently
 **clobbers** a racing edit — a lost update on the topology (a reverted phase, an orphaned
-`requires:`) that mis-sequences autonomous work, surfaced by no error (issue <related work item>; same
-last-write-wins family as the issue-claim race §7 (issue <related work item>) and the SHA-bound verdict
-contract, the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA (issue <related work item>)).
+`requires:`) that mis-sequences autonomous work, surfaced by no error (issue documented repository precedent; same
+last-write-wins family as the issue-claim race §7 (issue documented repository precedent) and the SHA-bound verdict
+contract, the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA (issue documented repository precedent)).
 
 So `plan-epic`'s body write is a **guarded read-modify-write**, not a blind overwrite (see
 plan-epic/SKILL.md Step 5):
@@ -707,7 +707,7 @@ tempting adjacent thing not to do.>
 
 - **Stories** — **required** back-references to the originating epic's `### User stories`
   section (by number). A child names the stories it implements, or — for a
-  `type:decision`/`type:investigation`/pure-infra child — the stories it unblocks. This is
+  `$PIPELINE_WORK_ITEM_TYPE`/`$PIPELINE_WORK_ITEM_TYPE`/pure-infra child — the stories it unblocks. This is
   one half of plan-epic's **story-coverage invariant**: every story is covered by ≥ 1 child,
   and every child traces to ≥ 1 story. The rare child that genuinely serves no single story
   (pure infra) carries the explicit marker `none (pure infra — see What to build)` and
@@ -794,7 +794,7 @@ a missing tag as upstream-authored.
 
 This section **defines** the four fences; they are **enforced mechanically at the append site**
 by the `review-*` gates' shared
-[four-fences-enforced append procedure](review-code/SKILL.md#performing-the-append--the-four-fences-enforced-at-this-site-the specialist-fan-out rule that routes expert concerns without duplicating the main review)
+[four-fences-enforced append procedure](review-code/SKILL.md#performing-the-append--the-four-fences-enforced-at-this-site-the specialist-fan-out rule that routes expert concerns without duplicating the configured base branch review)
 (the applicable safety invariant) — fail-closed ACL self-check, round-K freeze-then-escalate, and append-only body
 reconstruction — so an invalid append is unrepresentable, not merely discouraged. The drain
 side of fence 4 (a frozen `ac:review-*` row escalating instead of looping) is enforced
@@ -868,33 +868,33 @@ answer.
 
 ```markdown
 ## Destination
-kamp.us has a working invite (kefil) flow: an existing yazar can vouch a new person in, and
-that person lands as a çaylak with a clear first-run path — no founder in the loop.
+kamp.us has a working invite (kefil) flow: an existing earned contributor state can configured approval action a new person in, and
+that person lands as a initial contributor state with a clear first-run path — no founder in the loop.
 
 ## Decisions-so-far
-- The çaylak → yazar path is vouch-gated (kefil), not open signup — a founder given brought in at
-  charting. — from <related work item> (@founder)
-- Invites are karma-gated, not seat-gated — a yazar spends no quota, the çaylak's own karma
-  ramp is the throttle. — from <related work item>
-- The invite artifact is a single-use signed link, not an in-app request/approve handshake. — from <related work item>
+- The initial contributor state → earned contributor state path is configured approval action-gated (kefil), not open signup — a founder given brought in at
+  charting. — from documented repository precedent (@founder)
+- Invites are configured reputation score-gated, not seat-gated — a earned contributor state spends no quota, the initial contributor state's own configured reputation score
+  ramp is the throttle. — from documented repository precedent
+- The invite artifact is a single-use signed link, not an in-app request/approve handshake. — from documented repository precedent
 
 ## Open frontier
-- <related work item> — Investigation: does better-auth's session model let us mint a single-use invite token
+- documented repository precedent — Investigation: does better-auth's session model let us mint a single-use invite token
   without a new table, or do we need an `invite` store of record?
-- <related work item> — Decision (founder-decision-fork): should an invited çaylak start at 0 karma or inherit
-  a small vouch-backed starting balance? (options + trade-offs surfaced; awaiting founder)
+- documented repository precedent — Decision (founder-decision-fork): should an invited initial contributor state start at 0 configured reputation score or inherit
+  a small configured approval action-backed starting balance? (options + trade-offs surfaced; awaiting founder)
 
 ## Graduated fog
-- <related work item> — Decided invites are karma-gated. → spawned <related work item> (starting-balance question)
-- <related work item> — Decided the artifact is a signed link. → spawned <related work item> (token storage investigation)
+- documented repository precedent — Decided invites are configured reputation score-gated. → spawned documented repository precedent (starting-balance question)
+- documented repository precedent — Decided the artifact is a signed link. → spawned documented repository precedent (token storage investigation)
 ```
 
-The map here is `<related work item>`. Its first `## Decisions-so-far` entry is a **CHART-time seed** — a
-founder given with no frontier ticket to cite — so it is attributed `— from <related work item>`, the map's own
-number (with `(@founder)` naming the *who*). `<related work item>`/`<related work item>` have graduated (their answers are in
+The map here is `documented repository precedent`. Its first `## Decisions-so-far` entry is a **CHART-time seed** — a
+founder given with no frontier ticket to cite — so it is attributed `— from documented repository precedent`, the map's own
+number (with `(@founder)` naming the *who*). `documented repository precedent`/`documented repository precedent` have graduated (their answers are in
 `## Decisions-so-far`, they sit in `## Graduated fog`, and each spawned the next frontier ticket,
-so those two entries cite their **frontier tickets**), `<related work item>` is an answerable investigation
-`work` mode can clear, and `<related work item>` is a **founder-decision-fork** `wayfinder` surfaces and stops
+so those two entries cite their **frontier tickets**), `documented repository precedent` is an answerable investigation
+`work` mode can clear, and `documented repository precedent` is a **founder-decision-fork** `wayfinder` surfaces and stops
 on — never auto-resolves.
 
 ### Field notes
@@ -903,7 +903,7 @@ on — never auto-resolves.
   slightly differently, or carries an extra note under a section, still means what it means;
   emit the four canonical section headings.
 - **The sub-issue infra is reused, not reinvented.** Frontier tickets are ordinary GitHub
-  sub-issues of the map — they carry their own `type:*`/`status:*` as any issue does once they
+  sub-issues of the map — they carry their own `$PIPELINE_WORK_ITEM_TYPE`/`status:*` as any issue does once they
   graduate into the execution pipeline; on the map they are referenced by number, not copied.
 - **The map is not `write-code`-pickable.** Only the concrete work a map *graduates* into
   `triage` / `plan-epic` becomes pickable execution issues; the map itself is worked by
@@ -941,7 +941,7 @@ silently leaks a local path into a **public** comment:
   GitHub comment**, violating the no-local-paths-in-shared-artifacts invariant (`CLAUDE.md`). The
   `leak-guard` CI gate scans **committed files**, not comment bodies posted at runtime, so nothing
   catches this after the fact — the leak lives in the public comment until a human spots it (the
-  manually-patched comment on PR <related work item>). If you find yourself reaching for the curl-style `@file`
+  manually-patched comment on PR documented repository precedent). If you find yourself reaching for the curl-style `@file`
   idiom, stop and use the `BODY="$(cat …)"` → `-f body="$BODY"` form above.
 
   (Only `-F`/`--field` — the *typed* flag — reads a file via `@`, per `gh api --help`. Do not
@@ -954,7 +954,7 @@ The by-value form above (`-f body="$BODY"`) is the *source* idiom; it prevents a
 leak **at the call site**. But a source idiom cannot catch a **runtime deviation** — an agent that
 hand-assembles the wrong `$BODY` (the literal temp path as the marker body, a body missing its
 `Reviewed-head:` anchor, or a silently no-opped post) still lands a broken marker the by-value form
-happily transmits. That is the <related work item> class: the posted verdict comment's entire body was a local
+happily transmits. That is the documented repository precedent class: the posted verdict comment's entire body was a local
 temp path (`@/var/folders/…`), so no SHA-bound verdict existed for `ship-it` / the §CP merger to
 bind to (a **missing** gate verdict), **and** it leaked a machine-local path into a public comment.
 The source idiom alone can't see it; only a **post-write read-back** can.
@@ -977,7 +977,7 @@ verdict_readback_guard() {
     echo "verdict_readback_guard FAILED: cannot re-read comment $cid — treat the verdict as UNLANDED." >&2; return 1; }
 
   # (0) the body is non-empty. An empty/whitespace-only body carries no marker at all — the degenerate
-  #     case of a garbled post (<related work item>); reject it up front so the failure names the real cause rather
+  #     case of a garbled post (documented repository precedent); reject it up front so the failure names the real cause rather
   #     than falling through to (1)'s "no marker".
   if [ -z "$(printf '%s' "$got" | tr -d '[:space:]')" ]; then
     echo "verdict_readback_guard FAILED: comment $cid is empty/whitespace — no verdict landed; the PR is UNGATED." >&2; return 1
@@ -990,13 +990,13 @@ verdict_readback_guard() {
     || printf '%s' "$got" | grep -Eiq "^[[:space:]]*\**[[:space:]]*${gate}:[[:space:]]*advisory" \
     || { echo "verdict_readback_guard FAILED: no canonical '${gate}:' marker (PASS/FAIL @ ${sha:0:7} or advisory) in comment $cid — the body is malformed; the PR is UNGATED." >&2; return 1; }
 
-  # (2) Head binding — SHA-SOURCE-AWARE (<related work item>), and every verdict body binds the reviewed head:
+  # (2) Head binding — SHA-SOURCE-AWARE (documented repository precedent), and every verdict body binds the reviewed head:
   #     - a bindable first line (`<gate>: PASS|FAIL @ <sha>`) carries the binding inline — (1) already
   #       validated it against ${sha:0:7}, so a non-blocking binding PASS/FAIL needs no separate line
-  #       (this is the branch that keeps a legitimate non-blocking PASS from false-failing; <related work item>).
+  #       (this is the branch that keeps a legitimate non-blocking PASS from false-failing; documented repository precedent).
   #     - a SHA-less advisory first line (`<gate>: advisory`, ALL FOUR gates INCL review-code) MUST
   #       carry the canonical body `Reviewed-head: @ <sha>` line (§6.6 / the rule that records a control-plane advisory reviewed head in its body without making it a merge verdict) — absence is FATAL.
-  #       (<related work item>: the prior "review-code's §CP advisory carries NONE by design → accept its absence"
+  #       (documented repository precedent: the prior "review-code's §CP advisory carries NONE by design → accept its absence"
   #       carve-out contradicted §6.6's own MUST and blinded the read-back to a drifted
   #       `**Reviewed head:**` variant — bold, space-not-hyphen, backticked SHA — that does NOT match
   #       `^Reviewed-head:` and that ship-it's §6.6 enqueue matcher then rejects, leaving a genuinely
@@ -1016,13 +1016,13 @@ verdict_readback_guard() {
       || { echo "verdict_readback_guard FAILED: 'Reviewed-head:' line in comment $cid is bound to the wrong head (not @ ${sha:0:7}) — a stale/mis-bound head binding." >&2; return 1; }
   fi
 
-  # (3) NO local filesystem path leaked into the public body (the <related work item>/<related work item> leak). Reject a
+  # (3) NO local filesystem path leaked into the public body (the documented repository precedent/documented repository precedent leak). Reject a
   #     machine-local scratch/home path or a leading `@<path>` marker-as-path. Match by absolute ROOT
   #     (`/Users`, `/var`, `/tmp`, `/private`) — the roots a `mktemp`/scratchpad path lands under —
-  #     not just `/var/folders/`, so a leaked path under any of them cannot read green (<related work item>). Patterns
+  #     not just `/var/folders/`, so a leaked path under any of them cannot read green (documented repository precedent). Patterns
   #     are placeholders, not real paths — this doc stays leak-clean.
   if printf '%s' "$got" | grep -Eq '(/var/|/Users/|/tmp[/.]|/private/|(^|[[:space:]])~/|(^|[[:space:]])@/)'; then
-    echo "verdict_readback_guard FAILED: comment $cid leaks a local filesystem path in its body — a <related work item>/<related work item> marker-as-path leak; refuse and re-post the real verdict." >&2; return 1
+    echo "verdict_readback_guard FAILED: comment $cid leaks a local filesystem path in its body — a documented repository precedent/documented repository precedent marker-as-path leak; refuse and re-post the real verdict." >&2; return 1
   fi
 
   echo "verdict_readback_guard OK: ${gate} verdict @ ${sha:0:7} landed on comment $cid — marker + head binding valid, no local-path leak."
@@ -1039,7 +1039,7 @@ never loosen the match to paper over a moved head. (In practice a gate never cal
 a hand-carried id — it calls the unconditional `verdict_post_verify` wrapper below, which resolves the
 landed comment id by re-scanning PR state and passes it here.)
 
-Check (2) is **SHA-source-aware** (<related work item>): the read-back fires on every verdict type without
+Check (2) is **SHA-source-aware** (documented repository precedent): the read-back fires on every verdict type without
 false-failing a legitimate non-blocking PASS. The bindable PASS/FAIL first line satisfies (1) via its
 `@ <sha>` — that SHA **is** the head binding, so (2) requires no separate `Reviewed-head:` line (the
 non-blocking binding templates carry the SHA only on the first line; this is the branch that keeps a
@@ -1047,18 +1047,18 @@ clean non-blocking doc/skill PASS from false-failing under the unconditional `ve
 || exit 1`). The advisory blocking-set path carries no first-line `@ <sha>` by design (the rule that keeps advisory control-plane evidence separate from merge-authorizing verdicts),
 which is why (1) accepts the `<gate>: advisory` first line; it binds the head **in the body** via the
 canonical `Reviewed-head: @ <sha>` line, which §6.6/the rule that records a control-plane advisory reviewed head in its body without making it a merge verdict mandates on **all four gates'** advisories
-— **review-code included** (<related work item>: the earlier "review-code's §CP advisory carries NONE by design →
+— **review-code included** (documented repository precedent: the earlier "review-code's §CP advisory carries NONE by design →
 accept its absence" carve-out contradicted §6.6's MUST and blinded (2) to a drifted `**Reviewed head:**`
 variant, which ship-it's §6.6 enqueue matcher then rejects; the carve-out is removed, so a missing or
 drifted advisory head-binding fails **loud at emission** rather than surfacing as a ship-it refusal on
 an approved PR). Any `Reviewed-head:` line present but bound to the wrong sha is always fatal. The
 canonical-marker check (1) and the leak check (3) are **unconditional** on every verdict type — the
-<related work item>/<related work item> path-leak protection is never relaxed.
+documented repository precedent/documented repository precedent path-leak protection is never relaxed.
 
 ### Make the read-back UNCONDITIONAL — resolve the landed verdict from PR state, never a carried id (`verdict_post_verify`)
 
 `verdict_readback_guard` above is correct but only fires **if it is reached with the right comment
-id**. The <related work item> recurrence (after <related work item>/<related work item> already "fixed" the leak) proves that condition is the
+id**. The documented repository precedent recurrence (after documented repository precedent/documented repository precedent already "fixed" the leak) proves that condition is the
 real gap: the guard was invoked as `verdict_readback_guard "$MINE" …`, and `$MINE` is populated on
 **one** posting branch only (the APPROVE-failed comment-upsert `else` fallback). A verdict that lands
 by any **other** path — the native `APPROVE`, a first-verdict `POST` on a branch that didn't set
@@ -1083,7 +1083,7 @@ verdict_post_verify() {
   me="$(gh api user --jq .login)"
   # (A) resolve MY landed marker COMMENT id for this gate — the SHA-bound `<gate>: PASS|FAIL @ <sha>`
   #     first line OR the SHA-less `<gate>: advisory` line — re-scanned from PR state, NOT a carried id.
-  #     A whole-body-path leak (<related work item>) has NO `<gate>:` first line, so it resolves empty here → caught in (C).
+  #     A whole-body-path leak (documented repository precedent) has NO `<gate>:` first line, so it resolves empty here → caught in (C).
   cid=$(gh api "repos/$REPO/issues/$PR/comments?per_page=100" \
     | jq -r --arg me "$me" --arg g "$gate" --arg sha "${sha:0:7}" '
         [ .[] | select(.user.login==$me)
@@ -1098,7 +1098,7 @@ verdict_post_verify() {
   echo "verdict_post_verify: PR #$PR ${gate} @ ${sha:0:7} -> comment=${cid:-none} native-approve=${approved:-0}"
 
   # (C) FATAL: nothing bound to this head landed — the post no-opped, OR the body carries no marker
-  #     line at all (the <related work item> whole-body-path leak leaves no `<gate>:` first line). The PR is UNGATED.
+  #     line at all (the documented repository precedent whole-body-path leak leaves no `<gate>:` first line). The PR is UNGATED.
   if [ -z "$cid" ] && [ "${approved:-0}" -eq 0 ]; then
     echo "verdict_post_verify FAILED (fatal): no ${gate} verdict bound to head ${sha:0:7} landed on PR #$PR — the post no-opped or the marker's first line is absent (a whole-body local-path leak leaves no marker). Re-post the real by-value verdict; if it still cannot land, report a POSTING FAILURE — the PR is ungated." >&2
     return 1
@@ -1130,7 +1130,7 @@ verdict_post_verify() {
 }
 ```
 
-**Why this closes the <related work item> recurrence — the post-path enumeration.** Every way a gate can land a
+**Why this closes the documented repository precedent recurrence — the post-path enumeration.** Every way a gate can land a
 verdict now routes through the same unconditional read-back, because `verdict_post_verify` resolves
 the landed surface from PR state instead of from a branch-local variable:
 
@@ -1159,7 +1159,7 @@ on a marker that landed broken or leaking. But a read-back cannot police a post 
 agent that **hand-posts** the verdict marker with a raw `gh api …/comments` or `gh pr comment` call
 bypasses the verdict lib entirely, so `emissionDefect` never fires — and, worse, the marker often
 never resolves through `verdict_post_verify`'s re-scan either, so nothing catches it. That is the
-**emit-side hole** the recurrences rode: <related work item> (the whole body was an `@filepath`), <related work item> / <related work item> (a
+**emit-side hole** the recurrences rode: documented repository precedent (the whole body was an `@filepath`), documented repository precedent / documented repository precedent (a
 `/var/folders` mktemp path glued into the `@ <sha>` field) — each leaked because the marker was
 hand-posted off the verdict lib, not because the lib's guard was wrong. Code cannot force a hand-post
 through a guard the reviewer never invokes; the **emit path itself** must be mandated, not just
@@ -1169,8 +1169,8 @@ So for **all four PR gates** — `review-code`, `review-doc`, `review-skill`, `r
 every verdict-marker post through the guarded path is a **hard invariant, not a suggestion**:
 
 - **MUST** post every verdict marker through `pipeline-cli verdict post` — the single marker-emit
-  choke point that runs `emissionDefect` (the body-wide machine-local-path scan added by <related work item>, plus
-  the 40-hex `@ <sha>` field guards, <related work item>) and **refuses fail-closed** on a leaking or malformed
+  choke point that runs `emissionDefect` (the body-wide machine-local-path scan added by documented repository precedent, plus
+  the 40-hex `@ <sha>` field guards, documented repository precedent) and **refuses fail-closed** on a leaking or malformed
   body. For the native `APPROVE` review body (which `verdict post` cannot emit), run the **same** gate
   as an explicit read-back assertion — `verdict validate` — **before** the `APPROVE`, so a
   malformed/leaking marker fails loud rather than landing in a public review body.
@@ -1178,15 +1178,15 @@ every verdict-marker post through the guarded path is a **hard invariant, not a 
   the guard. The guarded tool is the **only** sanctioned emit path; a free-form raw post is a bypass,
   never an equivalent — a reviewer must not free-form the marker even when the body "looks clean."
 - **The one escape hatch, itself guarded:** if a raw post is genuinely unavoidable, the body **MUST**
-  first pass `pipeline-cli leak-guard scan-comment` (the standalone pre-post net <related work item> added — reads
+  first pass `pipeline-cli leak-guard scan-comment` (the standalone pre-post net documented repository precedent added — reads
   the body on stdin / `--body-file`, exits non-zero on a machine-local path) **before** the post. A
   raw post whose body was never scanned is the forbidden case; a scanned one is the escape hatch.
 
-This is the **enforcement complement** to <related work item>: <related work item> hardened the guard *code* (`emissionDefect`'s
+This is the **enforcement complement** to documented repository precedent: documented repository precedent hardened the guard *code* (`emissionDefect`'s
 body-wide scan + the `leak-guard scan-comment` CLI); this mandate closes the emit-side hole by
-forbidding the reviewer from routing around it — the two together are what actually close <related work item>. Each
+forbidding the reviewer from routing around it — the two together are what actually close documented repository precedent. Each
 review gate **references this rule as the single source** (it does not re-derive the *why* per skill).
-Per <related work item> the guard stays generic path-shape patterns, never a named-path deny-list.
+Per documented repository precedent the guard stays generic path-shape patterns, never a named-path deny-list.
 
 ---
 
@@ -1276,9 +1276,9 @@ owns; that judgment needs a reliable filing-provenance signal, and this section 
 (the applicable safety invariant).
 
 **GitHub issue authorship is NOT the signal.** Every issue filed through the `report` →
-`triage` skills goes through the shared `<shared-automation-login>` gh token, so **an agent-filed issue and a
-hand-typed one both show `author: <shared-automation-login>`** — the same shared-login degeneracy §7 / the claim-ownership rule that gives work to the earliest authorized session-stamped claim removes for the claim marker. Keying off authorship over-protects the whole board
-(everything reads as `<shared-automation-login>`) or silently bypasses the protection; it is unusable either
+`triage` skills goes through the shared `configured automation identity` gh token, so **an agent-filed issue and a
+hand-typed one both show `author: configured automation identity`** — the same shared-login degeneracy §7 / the claim-ownership rule that gives work to the earliest authorized session-stamped claim removes for the claim marker. Keying off authorship over-protects the whole board
+(everything reads as `configured automation identity`) or silently bypasses the protection; it is unusable either
 way. **Never consult authorship for this judgment.**
 
 **The signal is the report footer.** The `report` skill emits a
@@ -1319,11 +1319,11 @@ Three gates and the merge actor all need to answer the *same* question — **doe
 touch the control plane?** — and they answered it with **three independently hard-coded
 copies** of the path set (`ship-it` Step 0's `grep -Eq`, `review-code`/`review-doc`'s jq
 `test(...)`). They agreed by luck, but the set has grown before (the rule that makes gate-critical skill changes control-plane changes added the
-gate-critical skills) and will again — and the <related work item> → <related work item> thread *is* that drift story: the
+gate-critical skills) and will again — and the documented repository precedent → documented repository precedent thread *is* that drift story: the
 copies were primed to diverge the next time the set changed. This section is the **single
 source of the set**, so every consumer cites *one* definition and the copies can't drift
 again (the skill-review rule that gives skills their own behavioral gate §6,
-closing the <related work item> drift class).
+closing the documented repository precedent drift class).
 
 **The control-plane / blocking set is, exactly:**
 
@@ -1339,18 +1339,18 @@ closing the <related work item> drift class).
   - `claude-plugins/kampus-pipeline/skills/review-plan/**`
   - `claude-plugins/kampus-pipeline/skills/review-trivial/**` — the trivial-diff gate emits
     SHA-bound, merge-consumed verdicts, so it is gate-critical exactly like the other reviewers;
-    its omission was a live fail-**open** §CP-bypass (the applicable safety invariant, <related work item>).
+    its omission was a live fail-**open** §CP-bypass (the applicable safety invariant, documented repository precedent).
   - `claude-plugins/kampus-pipeline/skills/triage/**`
   - `claude-plugins/kampus-pipeline/skills/write-code/**`
   - `claude-plugins/kampus-pipeline/skills/plan-epic/**`
-  - `claude-plugins/kampus-pipeline/skills/release/**` — the release machinery (the applicable safety invariant, <related work item>).
+  - `claude-plugins/kampus-pipeline/skills/release/**` — the release machinery (the applicable safety invariant, documented repository precedent).
   - `claude-plugins/kampus-pipeline/skills/**/*.sh` — every skill shell helper, at **any depth**
     under `skills/`: the bare gate-critical guard scripts directly under `skills/`
     (`validate-gate-path-drift.sh`, `validate-skills.sh`, `validate-cycle-*.sh`) **and** a helper
     nested in a skill subdir (`report/footer.sh` — its `Filed by an agent` provenance marker feeds
     triage's the rule that only complete, eligible work may auto-close auto-close eligibility; `doctor/doctor.sh`): executable enforcement that
     feeds or runs the gates, control-plane *by nature* like the guard packages. The
-    `^claude-plugins/kampus-pipeline/skills/([^/]+/)*[^/]+\.sh$` branch classifies them (the applicable safety invariant, <related work item>/<related work item>);
+    `^claude-plugins/kampus-pipeline/skills/([^/]+/)*[^/]+\.sh$` branch classifies them (the applicable safety invariant, documented repository precedent/documented repository precedent);
     the leaf `[^/]+\.sh$` matches a `.sh` filename and `([^/]+/)*` the intervening dirs, so it owns
     a shell helper wherever it sits without reaching the non-`.sh` files in the skill *dirs* above.
   - `claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md` (this file)
@@ -1366,14 +1366,14 @@ closing the <related work item> drift class).
   and **no** routing probe, so `ship-it` would have enqueued it with no human merge and no gate —
   a gate/merge agent auto-shipping a weakening of its own instructions, the exact
   self-modification-of-guardrails risk §CP exists to prevent (the skill-review rule that includes plugin manifests and declared skill surfaces,
-  <related work item>; same the rule that makes gate-critical skill changes control-plane changes rationale that makes the gate-critical skills blocking). Agent defs are
+  documented repository precedent; same the rule that makes gate-critical skill changes control-plane changes rationale that makes the gate-critical skills blocking). Agent defs are
   behavioral artifacts like skills → **`review-skill`-routed for the verdict**, **blocking for merge**.
 - the **plugin hook surface** — `claude-plugins/kampus-pipeline/hooks/**` (the `install.sh`
   that drops the installed `pipeline-cli` and the `guard.sh` fail-open dispatch wrapper) plus
   `claude-plugins/kampus-pipeline/hooks.json` (the foreign-repo hook manifest). These are
   self-weakening by nature — they wire the guard dispatch + the CLI install the `.claude/settings.json`
   hooks depend on (the rule that makes enforcement guard code control-plane code wherever it lives,
-  <related work item>). The `^claude-plugins/kampus-pipeline/hooks(/|\.json$)` clause covers the dir + the manifest.
+  documented repository precedent). The `^claude-plugins/kampus-pipeline/hooks(/|\.json$)` clause covers the dir + the manifest.
 - the **enforcement-guard packages** — the executable guardrails that gate agent tooling,
   control-plane *by nature* the same way the gate-critical skills are (the rule that makes gate-critical skill changes control-plane changes),
   even though they live under `packages/` rather than `.claude`/skills (the applicable safety invariant):
@@ -1382,7 +1382,7 @@ closing the <related work item> drift class).
   - `packages/pipeline-cli/**` — the consolidated guard machinery (the rule that makes enforcement guard code control-plane code wherever it lives),
     now the single home for every guard the standalone `*-guard` packages used to carry
     (`spawn-guard`, `worktree-guard`, `structured-output-guard`, `leak-guard`),
-    those packages deleted by Phase-4 (<related work item>). The whole package matches (`^packages/pipeline-cli/`),
+    those packages deleted by Phase-4 (documented repository precedent). The whole package matches (`^packages/pipeline-cli/`),
     not a `src/guards/` sub-prefix: the shared guard-dispatch infra — `registry.ts` (the
     `registeredTools[]` array that wires every guard in), `router.ts`/`bin.ts` — lives at the
     **package root**, so an edit there could disable or bypass every guard. The whole package is
@@ -1399,11 +1399,11 @@ through the consolidated `^packages/pipeline-cli/` package per the rule that mak
 the **pipeline agent definitions** (`claude-plugins/kampus-pipeline/agents/**`) added by the skill-review rule that includes plugin manifests and declared skill surfaces,
 since a gate/merge agent's own instructions are a self-weakening surface; the **bare gate-critical
 `.sh` guards** under `skills/` and the **`release`/`review-trivial` skill dirs** added by the applicable safety invariant
-(<related work item>/<related work item>), since a guard script and a SHA-bound-verdict gate are self-weakening surfaces that
+(documented repository precedent/documented repository precedent), since a guard script and a SHA-bound-verdict gate are self-weakening surfaces that
 were escaping the boundary; the **lint/GritQL governance config** — `biome.jsonc` and
 `biome-plugins/**` — added by the applicable safety invariant,
-since an ungated path to weaken a lint rule is a guard-relaxing vector). Everything else — `apps/**`,
-**non**-guard `packages/**`, `.decisions/**` (**except a guard-touching ADR** — see the content
+since an ungated path to weaken a lint rule is a guard-relaxing vector). Everything else — `$PIPELINE_CODE_PATHS`,
+**non**-guard `$PIPELINE_CODE_PATHS`, `.decisions/**` (**except a guard-touching ADR** — see the content
 clause below), `.patterns/**`, every prose doc `*.md` (the
 §DOC class), and every **non**-gate-critical `skills/**` — is **non-blocking** and
 auto-merges through its matching gate on a PASS. (This set governs *who merges*, not *which gate verifies* — a
@@ -1419,36 +1419,36 @@ code-root `*.md` is non-blocking here yet rides `review-code`, not `review-doc`,
 
 Every consumer matches the set with this **one** anchored regex (POSIX ERE; the jq/`grep`
 form below). The regex is **single-sourced** in the `CONTROL_PLANE_RE` const at
-[`packages/pipeline-cli/src/tools/control-plane-paths/control-plane-re.ts`](<repository URL>)
-(issue <related work item>) — run `pipeline-cli control-plane-paths` to print it (or `--paths` for the expanded
+[`packages/pipeline-cli/src/tools/control-plane-paths/control-plane-re.ts`](repository-owned record URL)
+(issue documented repository precedent) — run `pipeline-cli control-plane-paths` to print it (or `--paths` for the expanded
 §CP path set). Cite it; do **not** re-hard-code the path list. The one machine-readable
 `CONTROL_PLANE_RE=` copy below is kept **byte-in-sync with that const** — guarded by `codeowners-cp`
 and `validate-gate-path-drift.sh`, both of which fail closed on any divergence — and is retained
-**only** because the live merge-deciding gates re-resolve it from THIS file on `origin/main` (<related work item>);
-that origin/main read is the anti-self-authorization property (a boundary-editing PR is classified
-against MAIN's boundary, not its own edit) and must not move to an in-tree import.
+**only** because the live merge-deciding gates re-resolve it from THIS file on `$PIPELINE_BASE_REF` (documented repository precedent);
+that $PIPELINE_BASE_REF read is the anti-self-authorization property (a boundary-editing PR is classified
+against configured base branch's boundary, not its own edit) and must not move to an in-tree import.
 
 ```bash
 # the single probe ship-it Step 0, review-code Step 2, review-doc Step 0, and review-skill
-# Step 0 all use — kept byte-in-sync with the pipeline-cli const (issue <related work item>); the live gates
-# re-resolve THIS line from origin/main (<related work item>), so it stays here as the one un-importable copy:
+# Step 0 all use — kept byte-in-sync with the pipeline-cli const (issue documented repository precedent); the live gates
+# re-resolve THIS line from $PIPELINE_BASE_REF (documented repository precedent), so it stays here as the one un-importable copy:
 CONTROL_PLANE_RE='^(\.claude|\.github)/|^claude-plugins/kampus-pipeline/skills/(ship-it|review-code|review-doc|review-skill|review-design|review-plan|triage|write-code|plan-epic|release|review-trivial)/|^claude-plugins/kampus-pipeline/skills/([^/]+/)*[^/]+\.sh$|^claude-plugins/kampus-pipeline/agents/|^claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats\.md$|^claude-plugins/kampus-pipeline/hooks(/|\.json$)|^packages/ci-required/|^packages/pipeline-cli/|^biome\.jsonc$|^biome-plugins/'
 # --paginate + a STREAMING --jq ('.[].filename', one line per file) is the canonical pattern: gh
 # concatenates the per-page element streams, so grep aggregates §CP matches across ALL pages. The
 # API caps per_page at 100 regardless of the value, so a single non-paginated call truncates a
 # >100-file PR — hiding a control-plane file in the tail. Never pair --paginate with an AGGREGATE
-# --jq (`[ … ]` / `length` / `add`): gh runs the filter PER PAGE and emits one result each (<related work item>).
+# --jq (`[ … ]` / `length` / `add`): gh runs the filter PER PAGE and emits one result each (documented repository precedent).
 gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename' \
   | grep -Eq "$CONTROL_PLANE_RE" && echo "BLOCKING — control plane (manual merge)"
 ```
 
-**The §CP-deciding consumers resolve this line from `origin/main` at run time, not from the
+**The §CP-deciding consumers resolve this line from `$PIPELINE_BASE_REF` at run time, not from the
 copy embedded in their own skill body.** A skill runs against the **snapshot injected into the
-agent's context at invoke time**, which can lag `origin/main` even when the on-disk copy in the
+agent's context at invoke time**, which can lag `$PIPELINE_BASE_REF` even when the on-disk copy in the
 same worktree is current — so an agent on a pre-amendment snapshot once auto-merged a
-now-control-plane PR the *current* boundary marks human-merge-only (<related work item>). The fix makes the
+now-control-plane PR the *current* boundary marks human-merge-only (documented repository precedent). The fix makes the
 single source authoritative **at run time**: `ship-it` Step 0 and `review-code` Step 2 read the
-`CONTROL_PLANE_RE` line from this file on `origin/main` (REST raw, `?ref=main`) and classify
+`CONTROL_PLANE_RE` line from this file on `$PIPELINE_BASE_REF` (REST raw, `?ref=$PIPELINE_BASE_REF`) and classify
 against *that*, **failing closed** — every path treated as control-plane, so the gate refuses —
 if the read can't be made, never falling back to the possibly-stale snapshot. The embedded copy
 each consumer still carries is the fail-closed reference and the `validate-gate-path-drift`
@@ -1468,7 +1468,7 @@ The path matcher above is **necessary but not sufficient**: a `.decisions/**` AD
 ratification), yet its **path** is indistinguishable from an ordinary ADR's. `.decisions/**` is
 otherwise non-blocking (it auto-merges on a `review-doc` PASS), so a guard-relaxing ADR would
 auto-ship past founder ratification with no mechanical hold — a control-plane fail-open (the applicable safety invariant,
-<related work item>).
+documented repository precedent).
 
 So §CP membership has a **second, content-inferred clause** for `.decisions/**` files, alongside
 the path `CONTROL_PLANE_RE`: a touched `.decisions/**` ADR whose **content cites or amends a
@@ -1491,11 +1491,11 @@ GUARD_ADR_RE='guard|invariant|fail-closed|fail-open|fail closed|fail open|contai
 
 ```bash
 # §CP content clause (the applicable safety invariant): a touched .decisions/** ADR whose CONTENT matches GUARD_ADR_RE is
-# §CP. Resolve GUARD_ADR_RE from origin/main at run time (like CONTROL_PLANE_RE, <related work item>); read each
+# §CP. Resolve GUARD_ADR_RE from $PIPELINE_BASE_REF at run time (like CONTROL_PLANE_RE, documented repository precedent); read each
 # ADR's body at the PR head. FAIL CLOSED: an unreadable boundary ⇒ match-everything; an unreadable
 # ADR (delete/404) ⇒ §CP — never auto-ship an ADR that could not be read and proven guard-free.
 GUARD_ADR_RE='guard|invariant|fail-closed|fail-open|fail closed|fail open|containment|control-plane|control plane|§cp|self-weakening|blocking set|adversarial review|must never|hard-gate|hard gate|enforcement|\bgat(e|es|ing|ed)\b|relax|loosen|weaken|soften|widen|broaden|waive|bypass|exempt|carve[ -]?out|opt[ -]?out'
-GA_LIVE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=main" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep '^GUARD_ADR_RE=' | head -n1 || true)"
+GA_LIVE="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null | grep '^GUARD_ADR_RE=' | head -n1 || true)"
 if [ -n "$GA_LIVE" ]; then GUARD_ADR_RE="$(printf '%s' "$GA_LIVE" | sed "s/^GUARD_ADR_RE='//; s/'$//")"; else GUARD_ADR_RE='.'; fi   # FAIL CLOSED: '.' ⇒ every ADR word matches ⇒ every touched ADR is §CP
 HEAD_SHA="$(gh api "repos/$REPO/pulls/$PR" --jq '.head.sha')"
 echo "$FILES" | grep -E '^\.decisions/.*\.md$' | while IFS= read -r adr; do
@@ -1507,7 +1507,7 @@ done
 ```
 
 A guard-touching ADR classifies **§CP for merge-authority** exactly like a path-§CP file:
-`ship-it` STOPS at `awaiting control-plane approval` until a current-head `<configured-control-plane-team>`
+`ship-it` STOPS at `awaiting control-plane approval` until a current-head `configured approval authority`
 approval is present (per POLICY, the founder's; the control-plane rule that requires non-author approval of the current head before the pipeline enqueues). Its **verdict routing is unchanged** —
 it is still doc-class, `review-doc`-verified (this set governs *who merges*, not *which gate
 verifies*); the content clause adds only the merge-authority hold.
@@ -1520,10 +1520,10 @@ verifies*); the content clause adds only the merge-authority hold.
 marker prose) all need the *same* answer to a second question — **is this `*.md` a doc
 artifact, or code-adjacent markdown that rides `review-code`?** The doc class was once
 described loosely as "prose `*.md` outside `.claude/`/`.github/`", which over-matched a
-**code-root** `*.md` (a `packages/**`/`apps/**` README) into the doc class even though no
-doc gate ever runs on it — the <related work item>/<related work item> deadlock, where `ship-it` demanded a
-`review-doc: PASS` that can never exist because `review-doc` routes the whole `apps/**`/
-`packages/**` tree (README included) to `review-code` (PR <related work item>). This section is the
+**code-root** `*.md` (a `$PIPELINE_CODE_PATHS`/`$PIPELINE_CODE_PATHS` README) into the doc class even though no
+doc gate ever runs on it — the documented repository precedent/documented repository precedent deadlock, where `ship-it` demanded a
+`review-doc: PASS` that can never exist because `review-doc` routes the whole `$PIPELINE_CODE_PATHS`/
+`$PIPELINE_CODE_PATHS` tree (README included) to `review-code` (PR documented repository precedent). This section is the
 **single source of the doc class**, so every consumer cites *one* definition and the
 loose phrasing can't re-seed that over-match (mirroring §CP's single-sourcing of the
 control-plane set).
@@ -1540,39 +1540,39 @@ that is:**
 - **`skills/**` and `agents/**`** — behavioral artifacts, `review-skill`'s class, carved out
   *before* the `.md` test (the skill-review rule that gives skills their own behavioral gate;
   agents added by the skill-review rule that includes plugin manifests and declared skill surfaces);
-- the **code roots `apps/**`, `packages/**`, and `infra/**`** — a code/app-internal `*.md` (a
+- the **code roots `$PIPELINE_CODE_PATHS`, `$PIPELINE_CODE_PATHS`, and `$PIPELINE_CODE_PATHS`** — a code/app-internal `*.md` (a
   package or app README, CHANGELOG, …) rides the `review-code` PASS its tree already needs, and is
-  **never** the doc class. `infra/**` is a real standalone-stack code root (the applicable safety invariant), so a
-  package README under an `infra/**` stack rides its code artifact exactly as an `apps`/`packages`
+  **never** the doc class. `$PIPELINE_CODE_PATHS` is a real standalone-stack code root (the applicable safety invariant), so a
+  package README under an `$PIPELINE_CODE_PATHS` stack rides its code artifact exactly as an `apps`/`packages`
   README does.
 - **`.glossary/**`** — the repo-owned domain vocabulary (`.glossary/TERMS.md`, `LANGUAGE.md`;
   a 4th committed doc surface, the applicable safety invariant).
   `review-code` Step 3c **reads + enforces** this contract (a new-surface code PR must touch
-  `.glossary/TERMS.md` — the [<related work item>](<repository URL>) freshness gate),
+  `.glossary/TERMS.md` — the [documented repository precedent](repository-owned record URL) freshness gate),
   so the gate that owns the glossary is `review-code`, not `review-doc` — the glossary rides the
-  `review-code` PASS, exactly the <related work item> package-README precedent. Were it left in the doc class,
-  <related work item>'s mandatory `.glossary/TERMS.md` touch would make every new-surface **code** PR mixed
-  code+doc and demand a `review-doc` PASS that the pipeline never routes (the <related work item> deadlock).
+  `review-code` PASS, exactly the documented repository precedent package-README precedent. Were it left in the doc class,
+  documented repository precedent's mandatory `.glossary/TERMS.md` touch would make every new-surface **code** PR mixed
+  code+doc and demand a `review-doc` PASS that the pipeline never routes (the documented repository precedent deadlock).
 
 This is **exactly `review-doc`'s verification surface**: a present doc class therefore
 always has a *reachable* gate. The code-class carve-out names the roots **`apps`,
 `packages`**, plus **`.glossary`** and **`infra`** — and `ship-it` Step 0's has-code probe
 (`^(apps|packages|\.glossary|infra)/`) names the **same** roots as the docs-exclusion
 (`grep -Ev '^(claude-plugins|apps|packages|\.glossary|infra)/'`), so a `.glossary/**` or
-`infra/**` path classes **has-code** (riding the `review-code` PASS) and is dropped from docs **in
-lockstep** — prose and both probes name one boundary and can't drift (the <related work item>
-has-code/docs-exclusion agreement invariant, extended to `.glossary/**` by <related work item> and to `infra/**`
-standalone stacks (the applicable safety invariant) by <related work item>).
+`$PIPELINE_CODE_PATHS` path classes **has-code** (riding the `review-code` PASS) and is dropped from docs **in
+lockstep** — prose and both probes name one boundary and can't drift (the documented repository precedent
+has-code/docs-exclusion agreement invariant, extended to `.glossary/**` by documented repository precedent and to `$PIPELINE_CODE_PATHS`
+standalone stacks (the applicable safety invariant) by documented repository precedent).
 
 The canonical probe both `ship-it` Step 0 and `review-doc` Step 0 run — carve out
-control-plane, then `skills/**`, then the code roots + `.glossary/**` + `infra/**`, *then* test for a doc path.
+control-plane, then `skills/**`, then the code roots + `.glossary/**` + `$PIPELINE_CODE_PATHS`, *then* test for a doc path.
 The two regexes it uses — the carve-out `HAS_DOCS_EXCLUDE_RE` and the doc-path `HAS_DOCS_RE` — are
 single-sourced as canonical named `_RE=` lines in [§CLASS](#class-the-artifact-class-probes--one-canonical-definition)
-below (alongside `HAS_CODE_RE`/`HAS_SKILLS_RE`), re-resolved from `origin/main`:
+below (alongside `HAS_CODE_RE`/`HAS_SKILLS_RE`), re-resolved from `$PIPELINE_BASE_REF`:
 
 ```bash
 # docs class = review-doc's surface: a .md/knowledge file outside control-plane, skills/**,
-# the code roots apps/**/packages/**/infra/**, AND .glossary/** (<related work item>/<related work item>/<related work item>/<related work item>/<related work item>). Cite this; don't re-derive it loosely.
+# the code roots $PIPELINE_CODE_PATHS/$PIPELINE_CODE_PATHS/$PIPELINE_CODE_PATHS, AND .glossary/** (documented repository precedent/documented repository precedent/documented repository precedent/documented repository precedent/documented repository precedent). Cite this; don't re-derive it loosely.
 echo "$FILES" | grep -Ev "$HAS_DOCS_EXCLUDE_RE" | grep -Eq "$HAS_DOCS_RE" && echo "has-docs"   # HAS_DOCS_* single-sourced in §CLASS
 ```
 
@@ -1589,12 +1589,12 @@ gate(s) to dispatch in a review pass) both classify a PR's changed-file set into
 **artifact classes** — **has-code / has-docs / has-skills**. Both must reach the *same*
 answer, or the review stage gates one class while `ship-it` demands another: the multi-class
 gap where a PR carrying one class's PASS reaches `ship-it` and fail-closes on an ungated
-sibling class, a late stall (<related work item>; PR <related work item> touched docs+skills+code, reached `ship-it` with
+sibling class, a late stall (documented repository precedent; PR documented repository precedent touched docs+skills+code, reached `ship-it` with
 only `review-doc: PASS`).
 
 So these probes are **single-sourced here** as canonical named `_RE=` lines — the same
 discipline that single-sources `CONTROL_PLANE_RE`/`GUARD_ADR_RE` (§CP) and `UI_RE`
-(`ship-it/SKILL.md`). A third inline copy in `reviewer.md` is the exact drift `<related work item>`/`<related work item>`/`<related work item>`
+(`ship-it/SKILL.md`). A third inline copy in `reviewer.md` is the exact drift `documented repository precedent`/`documented repository precedent`/`documented repository precedent`
 fought — the class probes were previously inline grep literals in `ship-it` Step 0 *only*, with
 no reusable line for the reviewer to consume:
 
@@ -1606,15 +1606,15 @@ HAS_DOCS_RE='^(\.decisions|\.patterns)/|\.md$'
 ```
 
 The boundary each line draws is **not re-derived here** — it is §DOC's, above: `HAS_CODE_RE`
-names the code roots (`apps`/`packages`/`.glossary`/`infra`, the <related work item>/<related work item>/<related work item> has-code set),
+names the code roots (`apps`/`packages`/`.glossary`/`infra`, the documented repository precedent/documented repository precedent/documented repository precedent has-code set),
 `HAS_SKILLS_RE` the plugin behavioral-artifact surface — **any** plugin's `skills/**`/`agents/**`
 (the plugin-name is `[^/]+`, not the `kampus-pipeline` literal) **plus the `.claude-plugin/**`
-plugin/marketplace manifest** that declares that surface (the skill-review rule that gives skills their own behavioral gate; <related work item>) — and the
+plugin/marketplace manifest** that declares that surface (the skill-review rule that gives skills their own behavioral gate; documented repository precedent) — and the
 two `HAS_DOCS_*` lines are the carve-then-test docs probe. `HAS_CODE_RE` and `HAS_DOCS_EXCLUDE_RE`
 name the **same** code roots (the has-code/docs-exclusion agreement invariant) and must move in
 lockstep — keep them adjacent so a root added to one is added to the other.
 
-`HAS_SKILLS_RE`'s two additions close the **<related work item> neither-class gap** for the plugin surface (<related work item>):
+`HAS_SKILLS_RE`'s two additions close the **documented repository precedent neither-class gap** for the plugin surface (documented repository precedent):
 a PR touching only a **non-`kampus-pipeline`** plugin's `agents/**`/`skills/**` (e.g. the
 `pipeline-crew` crew defs) or only the `.claude-plugin/**` manifest (`plugin.json`,
 `marketplace.json`) previously matched **no** class — so `ship-it` Step 0 demanded no gate and it
@@ -1623,12 +1623,12 @@ manifest surface *declares* the plugin's skill/agent artifacts (and is the drift
 `validate-gate-path-drift.sh` locks), so it belongs to the same behavioral-artifact class and gate
 as the artifacts it manifests — no new class or gate is invented. This is **only** the review-class
 axis: `CONTROL_PLANE_RE` (§CP, who-merges) is a **separate** regex and is **untouched**, so a crew
-plugin's `agents/**` gains a `review-skill` gate yet still **auto-ships** on PASS (the founder <related work item>
+plugin's `agents/**` gains a `review-skill` gate yet still **auto-ships** on PASS (the founder documented repository precedent
 ruling — extras don't block — is preserved; the class fix and the §CP ruling compose).
 
-**Both consumers re-resolve these lines from `origin/main` at run time** (REST raw, `?ref=main`
-— the <related work item> idiom, generalized from `CONTROL_PLANE_RE`/`UI_RE` to the class probes), never trusting
-the injected skill snapshot, which can lag `origin/main` even when the on-disk copy is current.
+**Both consumers re-resolve these lines from `$PIPELINE_BASE_REF` at run time** (REST raw, `?ref=$PIPELINE_BASE_REF`
+— the documented repository precedent idiom, generalized from `CONTROL_PLANE_RE`/`UI_RE` to the class probes), never trusting
+the injected skill snapshot, which can lag `$PIPELINE_BASE_REF` even when the on-disk copy is current.
 The re-resolution is **fail-closed**: an unreadable source ⇒ **dispatch the gate** (never silently
 skip a class) — `HAS_CODE_RE`/`HAS_SKILLS_RE`/`HAS_DOCS_RE` default to `.` (every path matches),
 `HAS_DOCS_EXCLUDE_RE` defaults to a never-match sentinel (`$^`, so the carve-out excludes nothing
@@ -1636,9 +1636,9 @@ and every path falls through to the doc test). This is the same stance as §CP's
 `CONTROL_PLANE_RE='.'` and `UI_RE`'s fail-closed `has-ui`:
 
 ```bash
-# Re-resolve a canonical _RE= line from gh-issue-intake-formats.md@main (<related work item> ?ref=main idiom).
+# Re-resolve a canonical _RE= line from gh-issue-intake-formats.md@configured base branch (documented repository precedent ?ref=$PIPELINE_BASE_REF idiom).
 # Prints the live value, or the fail-closed default $2 when the line is unreadable.
-FORMATS_RAW="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=main" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
+FORMATS_RAW="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
 reresolve_re() {   # $1=var name, $2=fail-closed default
   live="$(printf '%s\n' "$FORMATS_RAW" | grep "^$1=" | head -n1 || true)"
   if [ -n "$live" ]; then printf '%s' "$live" | sed "s/^$1='//; s/'\$//"; else printf '%s' "$2"; fi
@@ -1649,16 +1649,16 @@ HAS_DOCS_EXCLUDE_RE="$(reresolve_re HAS_DOCS_EXCLUDE_RE '\$^')"   # fail-closed:
 HAS_DOCS_RE="$(reresolve_re HAS_DOCS_RE '.')"                     # fail-closed: every path is a doc
 ```
 
-**No-class fail-closed — a non-empty diff can never require zero gates (<related work item>).** A changed file
+**No-class fail-closed — a non-empty diff can never require zero gates (documented repository precedent).** A changed file
 that matches **none** of the three class probes above — root-level executable build/lint tooling
 outside the code roots (`biome-plugins/**`, `biome.jsonc`, `turbo.json`, `pnpm-workspace.yaml`, a
 root `tsconfig`) — used to leave the diff spanning **no** class, so `ship-it` required **zero**
-review verdicts and the PR could merge un-gated (PR <related work item>'s GritQL biome plugins shipped safe only
+review verdicts and the PR could merge un-gated (PR documented repository precedent's GritQL biome plugins shipped safe only
 by carrying an *unrequired* `review-code` PASS). That is a fail-**open** in the gate itself. The
 fix is the same the applicable safety invariant fail-closed idiom the `reresolve_re` defaults use: **any unclassified
 changed file rides `has-code` → `review-code`** (the general logic gate), so a non-empty diff always
 requires at least one gate. This is **not** a fourth class or a widened `HAS_CODE_RE` (single-sourcing
-the whole regex is the separate <related work item>) — it is the fail-closed *default* of the existing classes,
+the whole regex is the separate documented repository precedent) — it is the fail-closed *default* of the existing classes,
 implemented once in the shared core (`pipeline-cli class-probe`, which `ship-it` Step 0 and the
 reviewer fan both run) so `required == dispatched` holds. An **empty** diff still spans no class —
 the default fires only on a real unclassified file, never on nothing. Note the §CP interaction (which
@@ -1671,7 +1671,7 @@ via `CONTROL_PLANE_RE`; this closes the gap for the no-class PR that is **not** 
 verdict classes. `pipeline-cli class-probe classify` folds the additive gate in — it parses `UI_RE`
 from that same single source and appends `has-ui` (`--namespaces`: `review-design`) — so the reviewer
 fan dispatches review-design off the same deterministic probe, never an eyeball that skips a non-visual
-`apps/web/src/*.ts` and deadlocks ship-it on a phantom-empty `review-design` namespace (<related work item>/<related work item>).
+`$PIPELINE_APPLICATION_PATH/src/*.ts` and deadlocks ship-it on a phantom-empty `review-design` namespace (documented repository precedent/documented repository precedent).
 
 ---
 
@@ -1716,7 +1716,7 @@ defaulting green.
 
 ---
 
-## RO. Read-only on git working state — the gate-never-mutates invariant (<related work item>)
+## RO. Read-only on git working state — the gate-never-mutates invariant (documented repository precedent)
 
 Every review/ship gate runs in a checkout it does **not** own — often the owner's **live,
 running dev-server checkout** — so a working-tree mutation there can silently destroy
@@ -1724,7 +1724,7 @@ uncommitted work, exactly the data loss a verification step must never cause (a 
 agent once ran `git stash pop` then `git reset --hard HEAD` in the primary checkout; no harm
 that time, pure luck). This section states the rule **once** so every gate cites *one*
 definition rather than re-deriving the prohibition in five verbatim copies — the §CP/§DOC/§ZS
-single-sourcing discipline, applied to working-tree safety (closing the <related work item>-class copy drift
+single-sourcing discipline, applied to working-tree safety (closing the documented repository precedent-class copy drift
 those copies would otherwise re-seed).
 
 **The invariant — a review/ship run MUST never mutate the launched/shared checkout's git
@@ -1751,16 +1751,16 @@ throwaway-worktree mechanism above; it never reaches for the launched checkout.
 
 The §RO throwaway-worktree/per-run-ref materialization is safe **only** when the gate's git
 ops land somewhere other than the shared **primary** checkout's working state. The
-[<related work item>](<repository URL>)/[<related work item>](<repository URL>)
+[documented repository precedent](repository-owned record URL)/[documented repository precedent](repository-owned record URL)
 detach proved the residual hole: a review/ship gate spawned `isolation:worktree` but dropped —
-by the [<related work item>](<repository URL>) harness no-op — into the primary
+by the [documented repository precedent](repository-owned record URL) harness no-op — into the primary
 checkout with `$WORKTREE_ROOT` unset ran its head-materialization there. That no-op *also*
 disarms the entire `$WORKTREE_ROOT`-keyed repo-side `worktree-guard`
 (`packages/pipeline-cli/src/tools/worktree-guard/`), so nothing loudly refused.
 
 `iso_preflight <surface>` is the **single-sourced** reviewer/shipper sibling of `write-code`'s
 Step-4 `wt_preflight` (the applicable safety invariant,
-<related work item>/<related work item>): the **same** `git-dir == common-dir` primary-checkout detection and the **same**
+documented repository precedent/documented repository precedent): the **same** `git-dir == common-dir` primary-checkout detection and the **same**
 isolation-expected fork, defined **once here** so the three head-materializing gates
 (`review-code`, `review-trivial`, `ship-it`) share one contract rather than drifting three
 copies apart. Each gate runs it — `iso_preflight <surface> || exit 1` — **before** its first
@@ -1783,7 +1783,7 @@ iso_preflight() {
   # from the harness-set $CLAUDE_CODE_AGENT (stable across an agent's Bash calls, unlike a shell
   # export), corroborated by a set $WORKTREE_ROOT. A genuine standalone run (a human /review-code,
   # /ship-it) matches NEITHER. Critically the LOUD refusal fires on the AGENT-TYPE ALONE and does
-  # NOT key on $WORKTREE_ROOT being set — so the <related work item> no-op (isolation requested, $WORKTREE_ROOT
+  # NOT key on $WORKTREE_ROOT being set — so the documented repository precedent no-op (isolation requested, $WORKTREE_ROOT
   # unset, which also disarms the $WORKTREE_ROOT-keyed worktree-guard) still trips this preflight;
   # it is then the sole surviving layer, exactly as in write-code (the applicable safety invariant).
   case "$CLAUDE_CODE_AGENT" in coder|*coder*|reviewer|*reviewer*|shipper|*shipper*) iso=1 ;; esac
@@ -1792,9 +1792,9 @@ iso_preflight() {
   if [ "$gitdir" = "$common" ]; then
     if [ "$iso" = 1 ]; then
       echo "$surface iso_preflight FAILED (fail-closed, LOUD): worktree isolation was EXPECTED (agent=${CLAUDE_CODE_AGENT:-?}, worktree-root=${WORKTREE_ROOT:+set}) but this run is on the PRIMARY checkout (git-dir == common-dir) and \$WORKTREE_ROOT is unset." >&2
-      echo "  Refusing to fetch / \`git worktree add\` the PR head here — the <related work item> harness no-op left this $surface spawn in the shared primary checkout, and a head-materialization run there is the <related work item>/<related work item> primary-checkout-detach surface. The \$WORKTREE_ROOT-keyed repo-side worktree-guard is disarmed by the same no-op, so THIS preflight is the only surviving layer." >&2
-      echo "  Do NOT self-provision a worktree to route around it — that hides the harness failure and leaves the primary-corruption defense collapsed to one, invisibly (<related work item>)." >&2
-      echo "  ROUTED BLOCKER — surface UP to the operator/EM: 'harness worktree provisioning no-op'd for a $surface spawn (isolation expected, \$WORKTREE_ROOT unset); the out-of-repo harness half (<related work item>) needs attention. Do NOT blindly retry the same spawn.'" >&2
+      echo "  Refusing to fetch / \`git worktree add\` the PR head here — the documented repository precedent harness no-op left this $surface spawn in the shared primary checkout, and a head-materialization run there is the documented repository precedent/documented repository precedent primary-checkout-detach surface. The \$WORKTREE_ROOT-keyed repo-side worktree-guard is disarmed by the same no-op, so THIS preflight is the only surviving layer." >&2
+      echo "  Do NOT self-provision a worktree to route around it — that hides the harness failure and leaves the primary-corruption defense collapsed to one, invisibly (documented repository precedent)." >&2
+      echo "  ROUTED BLOCKER — surface UP to the operator/EM: 'harness worktree provisioning no-op'd for a $surface spawn (isolation expected, \$WORKTREE_ROOT unset); the out-of-repo harness half (documented repository precedent) needs attention. Do NOT blindly retry the same spawn.'" >&2
       return 1
     fi
     # isolation NOT expected ⇒ a genuine standalone run on the owner's primary checkout. This gate
@@ -1809,14 +1809,14 @@ The fork is what keeps this **non-breaking for a legitimate standalone gate**: �
 runs a gate "in a checkout it does not own — often the owner's live checkout," and that
 standalone-on-primary mode stays allowed (the gate's materialization is throwaway-only). The
 LOUD stop fires **only** for an isolation-expected pipeline spawn that mis-landed on the primary
-checkout — the exact <related work item>/<related work item> condition. `write-code`'s Step-4 `wt_preflight` is the stricter
+checkout — the exact documented repository precedent/documented repository precedent condition. `write-code`'s Step-4 `wt_preflight` is the stricter
 sibling (it *always* expects isolation and additionally must branch the session tree, so it also
 refuses the standalone-on-primary case via its Non-isolated fallback); it is a deliberate,
 documented specialization of this same contract, not a fourth drifting copy.
 
 ---
 
-## SP. The per-run scratchpad namespace — one canonical definition (<related work item>)
+## SP. The per-run scratchpad namespace — one canonical definition (documented repository precedent)
 
 The pipeline runs several agents concurrently by design (the WIP cap is the whole point), and
 they share one `/tmp`. So an intermediate file written under a **fixed or work-item-keyed**
@@ -1866,7 +1866,7 @@ it backwards re-creates the empty-directory bug it exists to prevent:
 # `rm -rf` clears leftovers from an EARLIER run of this same slug in this same session, so a
 # re-run never reads its predecessor's files.
 [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || {
-  echo "§SP: CLAUDE_CODE_SESSION_ID unset — refusing to write run state to a shared scratch path (<related work item>)." >&2; exit 1; }
+  echo "§SP: CLAUDE_CODE_SESSION_ID unset — refusing to write run state to a shared scratch path (documented repository precedent)." >&2; exit 1; }
 RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/$CLAUDE_CODE_SESSION_ID/<slug>"
 rm -rf "$RUN_SCRATCH" && mkdir -p "$RUN_SCRATCH" || {
   echo "§SP: could not create the per-run scratch dir $RUN_SCRATCH." >&2; exit 1; }
@@ -1874,7 +1874,7 @@ rm -rf "$RUN_SCRATCH" && mkdir -p "$RUN_SCRATCH" || {
 # RE-DERIVE — every LATER Bash call. Same recipe ⇒ same directory ⇒ the files are still there.
 # NO `rm -rf` here: that is the open step's job, and repeating it would delete the very state
 # this call came to read. Assert what you expect to find, rather than reading a silent absence.
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (<related work item>)}/<slug>"
+RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/<slug>"
 [ -s "$RUN_SCRATCH/<file>" ] || { echo "§SP: $RUN_SCRATCH/<file> did not survive — re-run the opening step in THIS session." >&2; exit 1; }
 ```
 
@@ -1887,8 +1887,8 @@ splice guard is the live instance), so absence fails loud instead of waving work
 ### The rules, in preference order
 
 1. **Prefer no file at all.** Pass the value in-process. `report` streams the issue body over
-   stdin rather than round-tripping a temp path (<related work item>), and `write-code` re-derives the branch
-   live from the worktree instead of caching it (<related work item>) — both satisfy §SP outright, with no
+   stdin rather than round-tripping a temp path (documented repository precedent), and `write-code` re-derives the branch
+   live from the worktree instead of caching it (documented repository precedent) — both satisfy §SP outright, with no
    path to collide on and nothing to leak.
 2. **When a file is genuinely needed, derive its path from `$RUN_SCRATCH`.** Allocate it
    fail-closed per the recipe above — never a bare `/tmp/<name>`, and never a path keyed only
@@ -1918,20 +1918,20 @@ splice guard is the live instance), so absence fails loud instead of waving work
 
 `$RUN_SCRATCH` expands to a machine-local absolute path. Quoting one into an issue body, PR
 body, comment, or commit message leaks the operator's filesystem layout — the leak `leak-guard`
-enforces against (<related work item>), and the reason a body is posted **by value** (`-f body="$(cat …)"`)
-rather than by `gh api -f body=@<path>` (<related work item> / <related work item>). Compose *through* the scratch file;
+enforces against (documented repository precedent), and the reason a body is posted **by value** (`-f body="$(cat …)"`)
+rather than by `gh api -f body=@<path>` (documented repository precedent / documented repository precedent). Compose *through* the scratch file;
 never mention it in what you post.
 
 ---
 
-## HEAD. Review the PR head, never the launched checkout's working copy (<related work item>)
+## HEAD. Review the PR head, never the launched checkout's working copy (documented repository precedent)
 
 A review gate is frequently spawned with `isolation:worktree`, which lands it in a **fresh
-worktree on a branch cut from `origin/main` (the base)** — *not* the PR branch. So the gate's
+worktree on a branch cut from `$PIPELINE_BASE_REF` (the base)** — *not* the PR branch. So the gate's
 **current working directory is the BASE version of every file.** A plain full-file `Read` (or
 `cat`, `grep` in CWD) then resolves against the **pre-PR base**, and the reviewer reviews the
 wrong code while binding its verdict to the correct head SHA — the silent gate-integrity bug
-this section closes (issue [<related work item>](<repository URL>)). The
+this section closes (issue [documented repository precedent](repository-owned record URL)). The
 dangerous case is the **false PASS**: a worktree reviewer reading base code green-lights a PR
 whose actual changes are broken, and `ship-it` merges on that PASS — a review that reads the
 wrong file version is a gate that doesn't gate. This is orthogonal to §RO (which keeps the
@@ -1945,7 +1945,7 @@ ad hoc.
 assert it did:**
 
 1. **Resolve + materialize the head via the shared `pipeline-cli review-head` verb — never
-   re-derive it inline** (<related work item> / <related work item> / <related work item>; `packages/pipeline-cli/src/tools/review-head/`).
+   re-derive it inline** (documented repository precedent / documented repository precedent / documented repository precedent; `packages/pipeline-cli/src/tools/review-head/`).
    The verb owns the deterministic mechanism this section used to spell out inline: it resolves the
    live head SHA up front via REST (never GraphQL — the SHA the verdict binds to, §5/the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA),
    fetches the head into a per-run ref (never the launched checkout — the §RO read-only path), and
@@ -1959,8 +1959,8 @@ assert it did:**
    ```
    `pull/<pr>/head` resolves same-repo AND cross-fork, and the checkout is always DETACHED onto the
    per-run ref — never `gh pr checkout` / `git checkout` / `git switch`, which would land the head in
-   the shared PRIMARY the harness resets a subagent's cwd to and detach the human's `main`
-   (<related work item>/<related work item>; the verb refuses this outright). Run `iso_preflight` (§RO-iso) BEFORE the verb.
+   the shared PRIMARY the harness resets a subagent's cwd to and detach the human's `configured base branch`
+   (documented repository precedent/documented repository precedent; the verb refuses this outright). Run `iso_preflight` (§RO-iso) BEFORE the verb.
 2. **(owned by the verb, step 1)** — the per-run-ref fetch + the fetched-ref-IS-the-head assertion
    are the verb's, not a step each gate re-derives; `review-design` reviews a preview URL rather than
    a tree, so it uses the lighter `pipeline-cli review-head resolve --pr "$PR"` (the head SHA only).
@@ -2017,7 +2017,7 @@ it is for the human and the implementer.
 The `@ <sha>` is **load-bearing, not decoration**: `ship-it` and `write-code`-repair refuse a
 verdict whose `@ <sha>` does not match the PR's *current* head, and refuse a SHA-less marker
 outright — this is what closes the stale-PASS-masks-a-FAIL and head-moved-under-the-verdict
-races (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA, issue <related work item>). A marker
+races (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA, issue documented repository precedent). A marker
 with no `@ <sha>` is a *pre-0058 legacy* shape and resolves to `unverified`, not PASS.
 
 ### Upsert, not append — one verdict per (PR, gate-namespace) (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA)
@@ -2034,7 +2034,7 @@ millisecond decides. See the verdict rule that upserts one verdict per gate and 
 The marker line may carry **leading Markdown emphasis** — `review-code` historically emits
 it bolded (`**review-code: PASS @ <sha> — merge-ready**`), `review-doc` emits it bare. To stop
 the emitter and the matcher from drifting apart (the bolded marker once read as "no verdict"
-and stalled every code-lane merge — <related work item>), this contract pins **one** rule both sides cite:
+and stalled every code-lane merge — documented repository precedent), this contract pins **one** rule both sides cite:
 
 - **Canonical emit shape** (what an emitter SHOULD write): the bare, unbolded first line —
   `review-code: PASS @ <sha> — merge-ready`. New/converging emitters write this.
@@ -2045,7 +2045,7 @@ and stalled every code-lane merge — <related work item>), this contract pins *
   it captures the SHA only when `@ <sha>` directly follows the polarity, so a marker that
   pushes `@ <sha>` *past* `merge-ready` captures `sha=null` → the consumer resolves it
   `unverified` and refuses a correct, current-head PASS (the token-order drift that silently
-  stalled <related work item>'s merge — <related work item>). The fix is to **emit the canonical order**, not to loosen the
+  stalled documented repository precedent's merge — documented repository precedent). The fix is to **emit the canonical order**, not to loosen the
   matcher to chase a trailing SHA (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA forbids weakening the SHA-binding). §6/§6.5 inherit
   this order for `review-doc` / `review-skill` via the same matcher contract.
 - **Matcher obligation** (what every scanner MUST accept): an **optional leading `**`** before
@@ -2061,7 +2061,7 @@ and stalled every code-lane merge — <related work item>), this contract pins *
 - **Forbidden emit forms** (what an emitter MUST NOT write): the matcher above is anchored, so
   an emitter that freelances any of the shapes below produces a verdict **no consumer can read**
   — `ship-it` resolves the PR to `unverified` and silently refuses to merge a genuine,
-  current-head PASS (the <related work item> stall: a real PASS posted as `<!-- review-code: PASS sha:… -->`
+  current-head PASS (the documented repository precedent stall: a real PASS posted as `<!-- review-code: PASS sha:… -->`
   sat unmerged). The emit contract is the mirror of the matcher — emit the canonical first line
   and **none** of these:
   - **HTML-comment-wrapped** — `<!-- review-code: PASS @ <sha> — merge-ready -->`. The `<!--`
@@ -2084,7 +2084,7 @@ and stalled every code-lane merge — <related work item>), this contract pins *
     anchor pins its marker to the first line of **its own comment**, so stacking a second
     namespace's marker on line 2 of the first's comment leaves that second marker un-anchored:
     it never matches, its namespace resolves **empty**, and `ship-it` fail-closes a
-    substantively-PASS PR (the live PR <related work item> stall — both reviews PASSed, but the stacked
+    substantively-PASS PR (the live PR documented repository precedent stall — both reviews PASSed, but the stacked
     `review-skill` marker was unmatchable and recovery needed a manual re-emit). **Emit each
     fanned namespace's verdict as its OWN separate PR comment, its `<namespace>: PASS|FAIL @
     <sha>` marker on that comment's literal first line — one comment per namespace, never two
@@ -2122,7 +2122,7 @@ and stalled every code-lane merge — <related work item>), this contract pins *
 
 `review-doc` is the **doc-class twin of `review-code`** — it gates a doc/knowledge PR
 (the **§DOC doc class**: `.decisions/**`, `.patterns/**`, `docs/**`, or a root/top-level
-prose `*.md` — explicitly **not** a code-root `*.md` under `apps/**`/`packages/**`, which
+prose `*.md` — explicitly **not** a code-root `*.md` under `$PIPELINE_CODE_PATHS`/`$PIPELINE_CODE_PATHS`, which
 rides `review-code`) against its
 linked issue's acceptance criteria *plus* a doc-hygiene checklist. It lands its verdict as a
 **comment whose first line is a recognizable, SHA-bound marker** — and **only** that comment,
@@ -2151,12 +2151,12 @@ carries **no `@ <sha>`** by design: it authorizes nothing, so there is nothing t
 The rest of the body carries the per-criterion + per-hygiene-check evidence table. What's
 load-bearing for the scanner is the namespace, the polarity, **and the `@ <sha>`** — the same
 staleness contract as §5: `ship-it`/`write-code`-repair refuse a `review-doc` verdict whose
-`@ <sha>` is not the PR's current head, and refuse a SHA-less one (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA, issue <related work item>).
+`@ <sha>` is not the PR's current head, and refuse a SHA-less one (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA, issue documented repository precedent).
 
 ### Comment-only — the APPROVE/comment duality is resolved (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA)
 
 `review-doc` emits its verdict **only** as the SHA-bound `review-doc:` comment, **never** a
-native `APPROVE`/`REQUEST_CHANGES` review. This resolves the duality <related work item> flagged: a native
+native `APPROVE`/`REQUEST_CHANGES` review. This resolves the duality documented repository precedent flagged: a native
 GitHub review cannot carry the `@ <sha>` in the comment shape this contract controls (it
 records `commit_id` in a *different* record type), so leaving `review-doc` free to post either
 would force `ship-it` to compare a review against a comment for the doc lane — two
@@ -2236,7 +2236,7 @@ nothing to bind.
 The rest of the body carries the per-criterion + per-rigor-check evidence table. What's
 load-bearing for the scanner is the namespace, the polarity, **and the `@ <sha>`** — the
 same staleness contract as §5/§6: `ship-it`/`write-code`-repair refuse a `review-skill`
-verdict whose `@ <sha>` is not the PR's current head, and refuse a SHA-less one (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA, issue <related work item>).
+verdict whose `@ <sha>` is not the PR's current head, and refuse a SHA-less one (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA, issue documented repository precedent).
 
 ### Comment-only (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA)
 
@@ -2316,7 +2316,7 @@ the verdict is *recorded* (for the human or delegated merge actor to read), it j
 nothing on its first line**. The advisory **first line** **carries no `@ <sha>`** on purpose: it
 does not enter any `ship-it` `PASS @ <sha> — merge-ready` namespace, so a §CP PR is never
 auto-mergeable off it (the control-plane rule that requires human approval for changes to automation, CI, or merge safeguards). A human merges it, **or** — under the control-plane rule that requires non-author approval of the current head before the pipeline enqueues's approve-then-enqueue —
-`ship-it` enqueues it once a `<configured-control-plane-team>` approval is present at head (the control-plane rule that requires human approval for changes to automation, CI, or merge safeguards/the related safeguards).
+`ship-it` enqueues it once a `configured approval authority` approval is present at head (the control-plane rule that requires human approval for changes to automation, CI, or merge safeguards/the related safeguards).
 
 **The advisory body MUST carry the canonical `Reviewed-head` line (the rule that records a control-plane advisory reviewed head in its body without making it a merge verdict).** Immediately after
 the advisory's first-line marker + framing prose, the body carries **exactly one** line recording
@@ -2328,7 +2328,7 @@ Reviewed-head: @ <HEAD_SHA>
 
 This is the single canonical binding for a §CP advisory — it replaces the free-prose "reviewed head"
 phrasings (which spelled the SHA half a dozen incompatible ways and made the §CP enqueue
-nondeterministic; <related work item>/<related work item>). It is a **body** line with a **distinct `Reviewed-head:` token**, so
+nondeterministic; documented repository precedent/documented repository precedent). It is a **body** line with a **distinct `Reviewed-head:` token**, so
 it is never matched by the first-line `review-(code|doc|skill): PASS @ <sha>` PASS-namespace matcher —
 the advisory stays out of `ship-it`'s auto-merge namespace exactly as the rule that keeps advisory control-plane evidence separate from merge-authorizing verdicts requires. Both a human
 delegated merge actor and `ship-it`'s the control-plane rule that requires non-author approval of the current head before the pipeline enqueues approval-aware §CP enqueue read the reviewed head from
@@ -2349,7 +2349,7 @@ invariant is preserved; the reviewer marker contract is not widened).
 This is why the advisory form is namespace-uniform but binding-free: it keeps each gate's
 verdict **out** of `ship-it`'s merge path for the control plane while still leaving a
 visible, evidence-bearing verdict on the PR. (`review-code`'s historical binding-PASS +
-caveat shape is the one being retired in favor of this; the reconciliation is part of <related work item>'s
+caveat shape is the one being retired in favor of this; the reconciliation is part of documented repository precedent's
 build.)
 
 **The first-line `@ <sha>` is omitted by design — the SHA is bound in the body's canonical
@@ -2362,7 +2362,7 @@ recorded in the verdict **body** on the canonical `Reviewed-head: @ <sha>` line 
 table, per the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA. So a **delegated** control-plane merge actor — an operator hand-merging a banked
 §CP PR, or `ship-it`'s the control-plane rule that requires non-author approval of the current head before the pipeline enqueues approval-aware enqueue acting on the maintainer's current-head
 APPROVE — must **not** try to bind the first-line marker (it will read as `unverified`, the
-SHA-less-by-design form <related work item> hit). It confirms the verdict by **reading the body**: the
+SHA-less-by-design form documented repository precedent hit). It confirms the verdict by **reading the body**: the
 `Reviewed-head` `@ <sha>` against the PR's current head + every AC marked PASS, then applies
 `ship-it`'s just-in-time guards (head freshness, mergeable, no failing required check) and
 merges/enqueues. A namespace-isolated bindable *first-line* SHA was rejected (it would invite
@@ -2381,7 +2381,7 @@ PR** by driving Playwright over the PR's preview deploy, capturing the changed U
 and judging the rendered screenshots multimodally against the **four-pillars design law**
 (the applicable safety invariant;
 the gate itself is the rule that requires independent visual review for UI-affecting changes,
-skill landed via <related work item>). It hard-FAILs **only** on the six enumerable, objective the visual-quality rule that prohibits the six objective UI failures
+skill landed via documented repository precedent). It hard-FAILs **only** on the six enumerable, objective the visual-quality rule that prohibits the six objective UI failures
 prohibitions; all holistic/taste judgment rides as advisory (non-blocking) notes in the same
 verdict comment. It lands its verdict as a **comment whose first line is a recognizable,
 SHA-bound marker** — and **only** that comment, never a native review (like `review-doc` /
@@ -2417,7 +2417,7 @@ rows too), an **Advisory (non-blocking)** section, and an **Evidence** section e
 GitHub-hosted screenshot URLs so a human can see what was judged. What's load-bearing for the
 scanner is the namespace, the polarity, **and the `@ <sha>`** — the same staleness contract as
 §5/§6/§6.5: `ship-it`/`write-code`-repair refuse a `review-design` verdict whose `@ <sha>` is
-not the PR's current head, and refuse a SHA-less one (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA, issue <related work item>).
+not the PR's current head, and refuse a SHA-less one (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA, issue documented repository precedent).
 
 ### Comment-only (the verdict rule that upserts one verdict per gate and accepts it only when bound to the PR current head SHA)
 
@@ -2491,17 +2491,17 @@ actor (and `ship-it`'s the control-plane rule that requires non-author approval 
 ## 7. Issue-claim semantics — a session-id-stamped claim comment (the agent-distinguishable claim marker, the claim-ownership rule that gives work to the earliest authorized session-stamped claim)
 
 This section is the **single source** of the agent-distinguishable claim primitive (the claim-ownership rule that gives work to the earliest authorized session-stamped claim,
-<related work item>): the canonical claim-comment grammar, the `CLAIM_RE` matcher, and the
+documented repository precedent): the canonical claim-comment grammar, the `CLAIM_RE` matcher, and the
 earliest-authorized-claim tiebreak. **Three lock surfaces adopt it verbatim and none
 re-derive it** — `write-code`'s issue claim (Step 3), the orchestrator's pre-spawn claim
-(`.claude/workflows/drive-issue.js`), and the `status:planning` epic-lock's planning-claim
-comment (§The `status:planning` epic-lock; `plan-epic`/`review-plan`). The
-mis-attribution guard (`write-code` <related work item>) reads this same surface to prove a target is its
+(`.claude/workflows/drive-issue.js`), and the `$PIPELINE_STATUS_PLANNING` epic-lock's planning-claim
+comment (§The `$PIPELINE_STATUS_PLANNING` epic-lock; `plan-epic`/`review-plan`). The
+mis-attribution guard (`write-code` documented repository precedent) reads this same surface to prove a target is its
 own before mutating it. Every consumer cites the `CLAIM_RE` and tiebreak defined **here**.
 
 The **resolution** side of this contract — resolve one owner by the earliest authorized
 claim and decide "is it mine?", default-deny — is implemented once as the shared verb
-`pipeline-cli claim is-mine --issue <N>` (<related work item>, reusing the epic-lock `resolveClaim` core);
+`pipeline-cli claim is-mine --issue <N>` (documented repository precedent, reusing the epic-lock `resolveClaim` core);
 a consumer runs the verb rather than hand-rolling the resolution `jq`, exactly as §5/§6 route
 every marker emit through `pipeline-cli verdict post`. The bash resolution shown below is the
 canonical *reference* the verb implements — read it to understand the tiebreak, run the verb
@@ -2512,11 +2512,11 @@ to make the decision.
 `write-code` claims by **self-assigning** and the picker's "skip assigned issues" rule
 (Step 1) reads it — but the assignee is **last-write-wins, not compare-and-swap**. GitHub's
 `POST /issues/{N}/assignees` is **additive** (it co-assigns, never displaces, with no
-`If-Match`), so two agents that both saw #N unassigned co-assign `[A, B]` (<related work item>). Worse,
-**every draining agent in this pipeline pushes as the single git identity `<shared-automation-login>`** —
-`ME=$(gh api user --jq '.login')` is always `<shared-automation-login>` — so the previous design's
+`If-Match`), so two agents that both saw #N unassigned co-assign `[A, B]` (documented repository precedent). Worse,
+**every draining agent in this pipeline pushes as the single git identity `configured automation identity`** —
+`ME=$(gh api user --jq '.login')` is always `configured automation identity` — so the previous design's
 `lexicographic-min(login)` tiebreak **degenerates to a no-op**: two co-racers both compute
-`min == <shared-automation-login> == me` and both proceed (the <related work item> double-implement root cause, the claim-ownership rule that gives work to the earliest authorized session-stamped claim
+`min == configured automation identity == me` and both proceed (the documented repository precedent double-implement root cause, the claim-ownership rule that gives work to the earliest authorized session-stamped claim
 §Context). The login is **agent-indistinguishable**; the fix is a per-agent identifier the
 runtime already exposes.
 
@@ -2531,7 +2531,7 @@ The claim is **two layers** (the claim-ownership rule that gives work to the ear
 - **Fine, agent-distinguishable resolution — the claim comment (the resolver).** A
   structured issue comment carrying the claiming agent's `CLAUDE_CODE_SESSION_ID` — the
   per-session UUID Claude Code exposes in every (sub)agent's environment (read today by
-  `report`'s footer; the claim-ownership rule that gives work to the earliest authorized session-stamped claim §Grounding). Two concurrent subagents under the same `<shared-automation-login>`
+  `report`'s footer; the claim-ownership rule that gives work to the earliest authorized session-stamped claim §Grounding). Two concurrent subagents under the same `configured automation identity`
   login carry two distinct session UUIDs, so the comment **is** the distinguishing key the
   login is not.
 
@@ -2677,16 +2677,16 @@ a future policy would key on, so the marker is forward-compatible without commit
 
 ## 8. Investigation→trivial-fix collapse — the bounded exception (the applicable safety invariant)
 
-The single source of the collapse rule every skill cites. A `type:investigation` issue
+The single source of the collapse rule every skill cites. A `$PIPELINE_WORK_ITEM_TYPE` issue
 normally settles as a **diagnosis** — `write-code` posts the closing comment, closes
 `completed`, and files actionable residue as fresh `report` issues (the residue path, in
-`write-code`'s `type:investigation` routing). That contract has one terminal case it does
+`write-code`'s `$PIPELINE_WORK_ITEM_TYPE` routing). That contract has one terminal case it does
 not serve cleanly: **an investigation whose answer *is* a known, trivial, unambiguous
 fix**, which under the letter would have to walk `report → triage → write-code` again —
 three hops and three issues for one line. the applicable safety invariant
 closes that seam: such a fix **collapses** into one `write-code` PR.
 
-**The rule.** When a `type:investigation` issue resolves into a fix, `write-code` MAY
+**The rule.** When a `$PIPELINE_WORK_ITEM_TYPE` issue resolves into a fix, `write-code` MAY
 implement it and open a PR with `Fixes #N` in the **same run** — *if and only if* the fix
 clears **every** bound below. The four bounds are a **hard, AND-ed gate**: if the fix fails
 **any one** of them, `write-code` falls back to the diagnosis-and-`report`-residue path
@@ -2719,11 +2719,11 @@ unchanged.
 there, the agent holds the context, and keeping the rule there avoids the cross-stage
 ping-pong of routing the re-type through `triage` (the applicable safety invariant rejected that option). So:
 
-- `write-code`'s `type:investigation` routing carries the **collapse branch** (the
+- `write-code`'s `$PIPELINE_WORK_ITEM_TYPE` routing carries the **collapse branch** (the
   AND-ed gate above, with the residue fallback) and cross-references this section.
 - `triage` **does not** gain an investigation-re-type step — the investigation stays
-  `type:investigation` and the collapse happens at `write-code`. `triage`'s
-  `type:investigation` classification cross-references this section so the boundary is
+  `$PIPELINE_WORK_ITEM_TYPE` and the collapse happens at `write-code`. `triage`'s
+  `$PIPELINE_WORK_ITEM_TYPE` classification cross-references this section so the boundary is
   visible at classification time, but adds no re-type behavior.
 
 ---
@@ -2747,8 +2747,8 @@ closing keywords are, case-insensitive:
   mention (`Refs #N`, `Re: #N`, `See #N`, a bare `#N`) renders a timeline cross-reference
   that **closes nothing** and populates **no** `closingIssuesReferences`, so the issue never
   auto-closes on merge and `ship-it` Step 1 finds a code-class PR with no auto-close seam and
-  **refuses to merge** it — a verified, merge-ready PR stalls on one wrong token (<related work item>; PR
-  <related work item> shipped `Refs <related work item>` and jammed).
+  **refuses to merge** it — a verified, merge-ready PR stalls on one wrong token (documented repository precedent; PR
+  documented repository precedent shipped `Refs documented repository precedent` and jammed).
 
 - **Arm it for *nothing else* (the one-close-keyword-per-PR discipline).** A closing keyword
   is a **targeted** directive, emitted for that single target and **nothing else**. *Every
@@ -2761,11 +2761,11 @@ closing keywords are, case-insensitive:
 **anywhere** in the body — any line, mid-sentence, any repo the PR can close — as a close
 directive; there is **no** "first ref only" or "same line only" exception. So a sibling-ref
 `fixes #M` buried in prose **silently auto-closes `#M` on merge** even though the PR never
-touched it. This already bit once: PR <related work item> (which fixed <related work item> and touched only one CSS file)
-carried a "Sibling **fixes** <related work item>…" sentence, GitHub closed the *unfixed* <related work item> on merge, and
-it was caught only when the next agent went to pick <related work item> up and found the work never landed —
+touched it. This already bit once: PR documented repository precedent (which fixed documented repository precedent and touched only one CSS file)
+carried a "Sibling **fixes** documented repository precedent…" sentence, GitHub closed the *unfixed* documented repository precedent on merge, and
+it was caught only when the next agent went to pick documented repository precedent up and found the work never landed —
 the exact silent state corruption that derails lane coordination in an autonomous multi-agent
-pipeline (<related work item>; <related work item> was manually reopened).
+pipeline (documented repository precedent; documented repository precedent was manually reopened).
 
 **Who writes vs reads.** `write-code` Step 5 authors the body to satisfy both halves and runs
 the operational pre-push self-check (its `(a)` cross-reference / `(b)` target-seam-armed /
@@ -2789,7 +2789,7 @@ it fits: a PR that closes nothing on its target carries `Part of #N` instead of 
   PR that intentionally closes nothing would trip Step 1's "no linked issue" refusal (the seam it
   uses to reject a code-class PR with no auto-close directive). Step 1's relaxed code-class path
   treats a literal `Part of #N` as a legitimate intentional partial-split — merge the PR, leave
-  `#N` open — instead of refusing it (the <related work item> consumer, landed in PR <related work item>).
+  `#N` open — instead of refusing it (the documented repository precedent consumer, landed in PR documented repository precedent).
 
 **Single-sourced — producer + consumer + contract, no re-definition.** This marker mirrors the
 closing-keyword seam's own single-sourcing: `write-code` Step 5 (the **producer** — emits
@@ -2827,12 +2827,12 @@ not a lock), so it has no body shape the other rows describe. Two skills use the
 **different claim lifetimes**: `write-code`'s claim is **durable** (it persists across the build
 so the picker skips the in-progress issue), while `triage`'s claim is a **sweep-scoped mutex** it
 **must release** when the issue reaches its outcome (triage Step 6) — an unreleased triage claim
-would leave a `status:triaged` issue non-null-assigned, which `write-code`'s picker skips, making
+would leave a `$PIPELINE_STATUS_CLASSIFIED` issue non-null-assigned, which `write-code`'s picker skips, making
 it triaged-but-unpickable. Same detect-and-tiebreak mechanism, opposite lifetimes.
 
 `review-plan` reads the first two formats as its structural floor (the `## Dependencies`
 topology and each sub-issue's acceptance-criteria + `**Stories:**` invariants) and, on a
-clean ledger, flips each child `status:planned → status:triaged` — the gate that makes the
+clean ledger, flips each child `$PIPELINE_STATUS → $PIPELINE_STATUS_CLASSIFIED` — the gate that makes the
 child pickable at all (§Pipeline labels, the applicable safety invariant).
 
 The sub-issue's acceptance-criteria checklist (format 2) is the spine of

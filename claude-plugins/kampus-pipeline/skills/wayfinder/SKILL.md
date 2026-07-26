@@ -1,15 +1,23 @@
 ---
 name: wayfinder
 description: >-
-  The ideation-layer front door that sits UPSTREAM of the execution pipeline — chart a fuzzy destination into a living map issue, then work its open frontier of investigation/decision tickets until the fog clears enough to hand a concrete plan to plan-epic → write-code. Two modes, disambiguated by what you're given. CHART mode (no map yet, or a named destination) opens/rewrites a `wayfinder:map` issue: names the destination, seeds the decisions-so-far log, and lays out the open frontier as native sub-issues. WORK mode (a map issue number) advances one frontier ticket — resolving an investigation or a decision, recording the answer into decisions-so-far, graduating the answered ticket into the fog, and spawning any new frontier its answer reveals. Trigger CHART on "chart a map for X", "start a wayfinder map", "map out X", "/wayfinder chart"; trigger WORK on "work the wayfinder map #N", "advance map #N", "clear the next frontier on #N", "/wayfinder work". The one human seam is preserved end to end — a founder-decision-fork is never auto-resolved; wayfinder surfaces the fork and stops. This is the pre-triage ideation stage: it produces the clarified plan that report → triage → plan-epic consumes; it never writes code, never merges, and never resolves a founder decision on its own authority.
+  The ideation-layer front door that sits UPSTREAM of the execution pipeline — chart a fuzzy destination into a living map issue, then work its open frontier of investigation/decision tickets until the fog clears enough to hand a concrete plan to plan-epic → write-code. Two modes, disambiguated by what you're given. CHART mode (no map yet, or a named destination) opens/rewrites a `wayfinder:map` issue: names the destination, seeds the decisions-so-far log, and lays out the open frontier as native sub-issues. WORK mode (a map issue number) advances one frontier ticket — resolving an investigation or a decision, recording the answer into decisions-so-far, graduating the answered ticket into the fog, and spawning any new frontier its answer reveals. Trigger CHART on "chart a map for X", "start a wayfinder map", "map out X", "/wayfinder chart"; trigger WORK on "work the wayfinder map #N", "advance map #N", "clear the next frontier on #N", "/wayfinder work". The one human seam is preserved end to end — a decision-owner-fork is never auto-resolved; wayfinder surfaces the fork and stops. This is the pre-triage ideation stage: it produces the clarified plan that report → triage → plan-epic consumes; it never writes code, never merges, and never resolves a decision owned by a designated human on its own authority.
 ---
 
 # wayfinder
 
+## Repository-owned policy boundary
+
+This workflow is part of the default generic payload and `pipeline init` links it into
+`.claude/skills`. Availability is not authority. Before creating or changing issues, labels,
+milestones, sub-issues, or roadmap records, read `.pipeline/agent-policy.json` and the
+repository's workflow configuration. If the policy does not authorize the operation, preserve the
+full map procedure below as a proposed artifact and identify the human action needed to persist it.
+
 You are the **cartographer** of the ideation layer. The execution pipeline
 (`report → triage → plan-epic → review-* → ship-it`) turns *already-decided* work into
 merged code. wayfinder sits **one stage upstream of all of it**: it takes a fuzzy
-destination — a direction the founder wants to go that is not yet decided, sequenced, or
+destination — a direction the delegated decision owner wants to go that is not yet decided, sequenced, or
 even fully understood — and turns it into a **living map** the pipeline can eventually
 consume. Where the pipeline drains a settled backlog, wayfinder is where the backlog is
 *discovered*: it charts the unknowns, works them down one at a time, and accretes the
@@ -21,7 +29,7 @@ sections `## Destination`, `## Decisions-so-far`, `## Open frontier`, and
 `## Graduated fog` — is defined once in the formats contract:
 [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md) (the wayfinder:map issue
 shape). Read that section before you touch a map; this skill is a **consumer** of that
-contract, never a re-derivation of it. The same section is what the future wayfinder CLI
+contract, never a re-derivation of it. The same section is what the future configured wayfinder adapter
 tool reads and writes, so the map issue is the one durable seam between the modes.
 
 ## Two modes, one preserved human seam
@@ -43,35 +51,32 @@ way `write-code` splits on an issue vs. a PR number:
   unknown routinely uncovers the next one — that fog-graduation is the map's forward motion).
   The full walk is [WORK mode](#work-mode--resolve-one-frontier-ticket-graduate-its-fog) below.
 
-**The one preserved human seam — the founder-decision-fork.** wayfinder clears *investigation*
-fog autonomously, but it **never auto-resolves a founder decision**. When a frontier ticket is
-a **founder-decision-fork** — a product/direction choice that is the founder's to make, not an
+**The one preserved human seam — the decision-owner-fork.** wayfinder clears *investigation*
+fog autonomously, but it **never auto-resolves a designated human's decision**. When a frontier ticket is
+a **decision-owner-fork** — a product/direction choice that is belongs to a designated decision owner, not an
 answerable question of fact — wayfinder **surfaces the fork and stops**: it presents the
 options and their trade-offs on the map and hands the choice to the human, rather than picking
 one on its own authority. This is the deliberate human-in-the-loop seam the whole ideation
 layer is built to preserve (the same product-driven-decision boundary the pipeline honors
 elsewhere): wayfinder does the legwork that *frames* a decision, never the deciding. The routing
-mechanics — how a fork is framed for the founder, what the map records, and how the agent blocks
-on the answer — are the [founder-decision-fork seam](#the-founder-decision-fork-seam--routing-the-fork-to-the-founder).
+mechanics — how a fork is framed for the delegated decision owner, what the map records, and how the agent blocks
+on the answer — are the [decision-owner-fork seam](#the-decision-owner-fork-seam--routing-the-fork-to-the-decision-owner).
 
-**The distributable-plugin-only artifact rule — every repo artifact names the crew as the
-distributable plugin, never the operator-local defs.** Every repo-side artifact wayfinder composes —
-the `wayfinder:map` issue, each frontier ticket, an emitted epic, a PR, a comment, ADR framing —
-references **only** the distributable plugin (`claude-plugins/pipeline-crew/`) as the crew
-definition. The operator's local/personal crew definitions are out of repo scope **entirely — not
-even as a concept**: never carry personal-cleanup framing (e.g. "operator-local defs are deleted
-afterward" / "ported from the operator-local def") into a repo artifact. **Suppress it at
-composition time**, at the source — not as a downstream hand-scrub, which is the recurring
-<related work item>–<related work item> / the roster rule that keeps unique-seam bridges singleton while seam-free engines may scale leak this rule exists to end. **Boundary — do not over-apply:** the
-distributable plugin's own *configuration* surface is legitimately in-repo — operator-*configured*
-transport, session gh-identity routing, and similar. The rule targets the operator's personal crew
-**definitions**, not the word "operator"; a fix that strips every "operator" mention overshoots.
+**The repository-owned artifact rule — every repository artifact names repository-owned
+definitions, never personal local setup.** Every repository-side artifact wayfinder composes —
+the `wayfinder:map` issue, each frontier ticket, an emitted epic, a PR, a comment, or decision
+framing — references only repository-owned plugins, agents, and configuration. Personal local
+definitions are out of repository scope entirely: never carry private-path, cleanup, or migration
+framing into a repository artifact. **Suppress it at composition time**, at the source — not as a
+downstream hand-scrub. **Boundary — do not over-apply:** repository-owned configuration is
+legitimately in scope; the rule targets personal local definitions, not ordinary operator or
+configuration terminology.
 
 ## What wayfinder is not
 
 - It **does not write code, open a PR, or merge** — its output is a *clarified map/plan*, the
   input `triage` / `plan-epic` consume, not a diff.
-- It **does not resolve a founder-decision-fork** — that is the preserved human seam above.
+- It **does not resolve a decision-owner-fork** — that is the preserved human seam above.
 - It is **not part of the linear execution flow** — it is the pre-triage ideation stage that
   runs *before* the pipeline picks anything up.
 
@@ -102,7 +107,7 @@ deliverable is the failure mode:** reject it and re-frame it as the decision und
 it is already settled, record it in `## Decisions-so-far` instead; if it is downstream build
 work, it is not fog and does not belong on the map at all.
 
-### The given-grounding law — behavioral givens ground in source, design-history givens ground in the founder
+### The given-grounding law — behavioral givens ground in source, design-history givens ground in the delegated decision owner
 
 CHART's other hard constraint governs what may enter `## Decisions-so-far` (step 3 of the walk).
 A given carries an implicit ground-truth claim, and **two kinds ground differently:**
@@ -114,58 +119,59 @@ A given carries an implicit ground-truth claim, and **two kinds ground different
 - **A design-history given** — *why a prior design was abandoned* ("X was retired **because** Y",
   "we do it this way **because** Z failed"). An artifact's narration of why a prior design died is
   **not** ground truth: it is written after the fact, and can be a post-hoc rationalization that no
-  longer matches what actually happened. Ground it in the **founder**, never in the artifact's own
+  longer matches what actually happened. Ground it in the **delegated decision owner**, never in the artifact's own
   prose (an agent def, an ADR's narration, a README).
 
 **The hard rule: a design-history given may not enter `## Decisions-so-far` from an artifact's
-prose alone.** It is either **founder-verified** — confirmed with the human before it is seeded —
-or it stays on the frontier as an **open question** (a `type:decision` founder-decision-fork, or a
-`type:investigation` where the history is checkable) until the founder confirms it. Seeding
+prose alone.** It is either **decision-owner-verified** — confirmed with the human before it is seeded —
+or it stays on the frontier as an **open question** (a `type:decision` decision-owner-fork, or a
+`type:investigation` where the history is checkable) until the delegated decision owner confirms it. Seeding
 "design X died because Y" straight from a def or README treats reconstructed rationale as
 established fact, and a wrong one is worse than an unknown: a false history seeds a veto against
 the very design it was written to rationalize, then propagates into the next artifact that cites
-it — self-reinforcing. This is the near-miss that forced the rule (the roster rule that keeps unique-seam bridges singleton while seam-free engines may scale):
-while charting wayfinder:map <related work item> the cartographer read the `junior-engineer`/`engineering-manager`
+it — self-reinforcing. This is the near-miss that forced the rule (ADR
+repository decision record):
+while charting wayfinder:map a prior map the cartographer read the `junior-engineer`/`engineering-manager`
 defs' claim that the asymmetric-lane model "supersedes the retired two-agent-pipeline", seeded "two
 symmetric conductors collided → the asymmetric partition was the fix" as a given, and nearly vetoed
-a proposed engine-pool design as "re-proposing a killed model." The founder's actual reason was a
+a proposed engine-pool design as "re-proposing a killed model." The delegated decision owner's actual reason was a
 **role need** — a third agent that could just *talk* (→ the EA/chief-of-staff), not a falsified
 collision; the collision story was post-hoc rationalization written into the defs and cited back as
-evidence for the design it rationalized. the roster rule that keeps unique-seam bridges singleton while seam-free engines may scale records the corrected retirement rationale.
+evidence for the design it rationalized. repository decision record records the corrected retirement rationale.
 
 **Provenance — carry the *who* alongside the seed's `— from #<MAP>` ref, never instead of it.**
 A seeded `## Decisions-so-far` entry always carries its resolvable `— from #<MAP>` origin (step 3);
 for a history-shaped given, name the *who* in a trailing parenthetical so a later reader can tell a
 confirmed reason from an unverified one at a glance without re-litigating its ground truth: a
-founder-confirmed reason reads `— from #<MAP> (@founder)`, and a still-unverified doc-scraped one is
+delegated decision owner-confirmed reason reads `— from #<MAP> (@delegated decision owner)`, and a still-unverified doc-scraped one is
 **not seeded at all** — it belongs on the frontier as an open question (`from <artifact>` provenance
 in the ticket, not a settled entry). Keeping the `#<MAP>` ref is what keeps the entry auditable and
 past the validator; the parenthetical *who* rides on top of it.
 
 ### The ticket-type translation table — reuse existing types, invent no new machinery
 
-CHART decomposes fog by classifying each unknown against wayfinder's **Pocock→kampus**
+CHART decomposes fog by classifying each unknown against wayfinder's **Pocock→pipeline**
 translation. Pocock's wayfinder is **human-in-the-loop by design** (its Grilling/Prototype types
-forbid the agent standing in for the human voice); kampus-pipeline is **agent-automation**, so
+forbid the agent standing in for the human voice); pipeline is **agent-automation**, so
 each HITL discipline maps to its automation analog — preserving exactly **one** human seam, the
-founder-decision-fork. **No new `type:*` or label is invented:** the frontier reuses the
+decision-owner-fork. **No new `type:*` or label is invented:** the frontier reuses the
 pipeline's existing `type:investigation` and `type:decision` types, so charting ripples no intake
 floor (the same reuse-issue-infra choice the `wayfinder:map` label itself makes).
 
-| Pocock ticket type (HITL) | kampus frontier ticket (agent-automation) | Filed as |
+| Pocock ticket type (HITL) | pipeline frontier ticket (agent-automation) | Filed as |
 |---|---|---|
 | **Research** (AFK) | an investigation / deep-research subagent clears it autonomously | `type:investigation` |
-| **Grilling** (human voice) | route to the **founder** as a decision-fork — the one preserved human seam | `type:decision`, flagged founder-decision-fork |
-| **Prototype** (HITL) | a spike/tracer coder produces a rough artifact for founder reaction | `type:investigation` (spike), surfaced to the founder |
+| **Grilling** (human voice) | route to the **delegated decision owner** as a decision-fork — the one preserved human seam | `type:decision`, flagged decision-owner-fork |
+| **Prototype** (HITL) | a spike/tracer coder produces a rough artifact for delegated decision owner reaction | `type:investigation` (spike), surfaced to the delegated decision owner |
 | **Task** | a normal pipeline task — but this is **build work, not frontier**: it never enters the map; it waits for the cleared map to emit it into the pipeline | *(not a frontier ticket)* |
 
 The table and the plan-don't-do law are the **same rule seen twice**: the frontier holds
 Research / Grilling / Prototype (decisions and unknowns), never Task (deliverables). The two
 autonomous rows file `type:investigation` tickets WORK mode clears on its own; the Grilling row
-files a `type:decision` ticket flagged a **founder-decision-fork**, which WORK mode *surfaces and
+files a `type:decision` ticket flagged a **decision-owner-fork**, which WORK mode *surfaces and
 stops on* rather than resolving — the fork-routing mechanics themselves live in the
-[founder-decision-fork seam](#the-founder-decision-fork-seam--routing-the-fork-to-the-founder)
-below. CHART's job for a fork is only to *recognize* the unknown as a founder call, file it as
+[decision-owner-fork seam](#the-decision-owner-fork-seam--routing-the-fork-to-the-decision-owner)
+below. CHART's job for a fork is only to *recognize* the unknown as a delegated decision owner call, file it as
 `type:decision`, and mark it a fork on the map. The
 **Task** row is deliberately not a frontier ticket: it is the deliverable side of the
 plan-don't-do line, so it enters the pipeline only via emission, never as fog.
@@ -189,21 +195,21 @@ plan-don't-do line, so it enters the pipeline only via emission, never as fog.
 
 2. **Name the `## Destination`.** State *where we want to be* in one or two sentences, concrete
    enough to tell "arrived" from "not yet." This is the fixed star the map steers by; it is the
-   only section CHART sets authoritatively (WORK never rewrites it). If the founder's idea is too
+   only section CHART sets authoritatively (WORK never rewrites it). If the delegated decision owner's idea is too
    fuzzy to name a destination at all, that fuzziness is itself the first thing to resolve —
    name the sharpest destination you can and file the ambiguity as a frontier ticket.
 
 3. **Seed `## Decisions-so-far`.** Record what is *already settled* about the idea — the facts and
-   decisions the founder brought in, each a one-line entry. An empty log is fine for a truly
+   decisions the delegated decision owner brought in, each a one-line entry. An empty log is fine for a truly
    green-field idea; more often a foggy idea carries a few givens, and naming them up front keeps
    the frontier focused on what is genuinely open. Ground each given per the given-grounding law
    above — behavioral claims in source, design-history claims ("X was retired *because* Y") in the
-   founder, never seeded from an artifact's own prose — and tag history-shaped givens with the
+   delegated decision owner, never seeded from an artifact's own prose — and tag history-shaped givens with the
    *who* (below). **Attribute every seed `— from #<MAP>`** — the map's own issue number — per the
    [map-shape contract's `## Decisions-so-far` rule](../gh-issue-intake-formats.md#the-four-sections):
-   a CHART-time given (and an in-session founder ruling) has no frontier ticket to cite, so its
+   a CHART-time given (and an in-session delegated decision owner ruling) has no frontier ticket to cite, so its
    honest, resolvable origin is the chart act that created the map. This is the form that passes
-   the wayfinder CLI validator on the first write — an entry with no `— from #N` origin trips
+   the configured wayfinder adapter validator on the first write — an entry with no `— from #N` origin trips
    `MALFORMED_DECISION_ENTRY`, and `— from #<MAP>` is the sanctioned seed attribution (distinct
    from a WORK-mode append's `— from #<frontier-ticket>`).
 
@@ -212,7 +218,7 @@ plan-don't-do line, so it enters the pipeline only via emission, never as fog.
    plan-don't-do law to every candidate: keep it only if it resolves a decision or an unknown;
    drop or re-frame any candidate that names a deliverable. Classify each survivor against the
    translation table above — Research/Prototype → `type:investigation`, Grilling → `type:decision`
-   (founder-decision-fork).
+   (decision-owner-fork).
 
 5. **File each frontier ticket as a native sub-issue under `## Open frontier`.** Create a real
    GitHub issue for each — carrying its `type:investigation` or `type:decision` label and a body
@@ -232,11 +238,11 @@ plan-don't-do line, so it enters the pipeline only via emission, never as fog.
    `status:triaged`, so the execution pipeline's picker steps over them; only the concrete epics a
    cleared map later *emits* enter triage. Then write each ticket's line into the map's
    `## Open frontier` section, referencing its number and stating the open question, marking a
-   `type:decision` fork as `(founder-decision-fork)`.
+   `type:decision` fork as `(decision-owner-fork)`.
 
    Compose every ticket body (and the map body itself) per §the distributable-plugin-only artifact
    rule: reference the distributable plugin `claude-plugins/pipeline-crew/` as the sole crew
-   definition, and suppress any operator-local / personal crew-def framing at the source.
+   definition, and suppress any personal local framing at the source.
 
 6. **Leave `## Graduated fog` empty.** Nothing has cleared yet — a freshly charted map has an open
    frontier and no motion to record. WORK mode is what moves tickets from `## Open frontier` into
@@ -244,7 +250,7 @@ plan-don't-do line, so it enters the pipeline only via emission, never as fog.
 
 The map is now charted: a named destination, the givens logged, and a frontier of
 investigation/decision sub-issues WORK mode can resolve one at a time. CHART stops here — it does
-not resolve a ticket, and it never resolves a founder-decision-fork.
+not resolve a ticket, and it never resolves a decision-owner-fork.
 
 ## WORK mode — resolve one frontier ticket, graduate its fog
 
@@ -274,7 +280,7 @@ ticket in the same session.
 
 Every map-state read and mutation WORK performs — reading `## Open frontier` to pick the next
 ticket, appending a `## Decisions-so-far` entry, moving a ticket into `## Graduated fog` — goes
-through the `wayfinder-map` CLI (the pipeline-cli tool, <related work item>), **not** hand-rolled markdown
+through the `wayfinder-map` CLI (the configured pipeline tool, the adapter implementation), **not** hand-rolled markdown
 slicing of the issue body. Prose-guessing section boundaries with `sed`/regex is exactly the
 brittle parsing the structured contract exists to remove: a stray heading, a reordered section, or
 an extra note under a section silently corrupts a hand-edit, whereas the CLI reads and rewrites the
@@ -289,16 +295,16 @@ shaped for and the durable seam between runs — WORK mutates the map only throu
    graduation-readiness signal, see [Emission](#emission--the-cleared-map-emits-triaged-epics-into-the-pipeline));
    if so, this map has nothing left to resolve and WORK hands off to emission rather than picking a
    ticket. Otherwise pick the **next resolvable** ticket deterministically (oldest sub-issue
-   first). A ticket already flagged **founder-decision-fork** and awaiting the founder is **not
+   first). A ticket already flagged **decision-owner-fork** and awaiting the delegated decision owner is **not
    resolvable by the agent** — skip it (see the seam below) and take the next investigation ticket.
    A fork-only map (no answerable ticket left) is already caught by the emission-readiness check
    above, which routes it into emission's graceful-block-on-human handling — so it never reaches
    this pick step.
 
-2. **Classify the picked ticket — investigation (AFK) or founder-decision-fork.** An investigation
+2. **Classify the picked ticket — investigation (AFK) or decision-owner-fork.** An investigation
    ticket (`type:investigation`, the AFK/Research + Prototype-spike rows of CHART's translation
    table) is one the agent clears autonomously. A `type:decision` ticket flagged a
-   founder-decision-fork is **not** — it routes to the preserved human seam (below), never to a
+   decision-owner-fork is **not** — it routes to the preserved human seam (below), never to a
    subagent.
 
 3. **Resolve the one investigation ticket via a subagent.** Spawn an investigation / deep-research
@@ -320,61 +326,62 @@ shaped for and the durable seam between runs — WORK mutates the map only throu
    deliverable) — and note them on the graduated line (`→ spawned #M`). A resolved unknown
    routinely reveals the next one; that spawn is the map's forward motion, not a failure to finish.
    Compose each new ticket body and the recorded decision line per §the distributable-plugin-only
-   artifact rule — the distributable plugin is the sole crew definition, no operator-local framing.
+   artifact rule — repository-owned configuration only; no personal local framing.
 
 6. **Stop — exactly one ticket resolved.** One frontier ticket is now answered, recorded, and
    graduated, with any newly-revealed fog laid down for a future run. Do **not** pick a second
    ticket; the next WORK run resumes cold from the map's updated state.
 
-### The founder-decision-fork seam — surfaced, never resolved by WORK
+### The decision-owner-fork seam — surfaced, never resolved by WORK
 
-WORK clears investigation fog autonomously, but it **never auto-resolves a founder-decision-fork**
+WORK clears investigation fog autonomously, but it **never auto-resolves a decision-owner-fork**
 — the one preserved human seam (see [Two modes, one preserved human seam](#two-modes-one-preserved-human-seam)
 for the *why*). When the ticket WORK would pick is a fork, it does **not** hand it to a subagent
 and does **not** pick an option: it leaves the fork on `## Open frontier`, surfaces that the map is
-awaiting a founder call, and stops. The mechanics of *routing* a fork to the founder — framing the
-decision-request, recording the awaiting-founder state, and blocking on the founder's answer —
-are the [founder-decision-fork seam](#the-founder-decision-fork-seam--routing-the-fork-to-the-founder)
+awaiting a delegated decision owner call, and stops. The mechanics of *routing* a fork to the delegated decision owner — framing the
+decision-request, recording the awaiting-decision-owner state, and blocking on the delegated decision owner's answer —
+are the [decision-owner-fork seam](#the-decision-owner-fork-seam--routing-the-fork-to-the-decision-owner)
 below, which this step calls into; WORK's obligation here is only to **recognize the fork and
 refuse to resolve it**, then hand off to that routing contract.
 
-## The founder-decision-fork seam — routing the fork to the founder
+## The decision-owner-fork seam — routing the fork to the delegated decision owner
 
 This is the **one preserved human seam** of the whole ideation layer, and this section is its
 **routing contract** — the mechanics WORK mode's
-[founder-decision-fork seam](#the-founder-decision-fork-seam--surfaced-never-resolved-by-work)
+[decision-owner-fork seam](#the-decision-owner-fork-seam--surfaced-never-resolved-by-work)
 calls into once it has recognized the ticket it would pick as a fork. wayfinder automates the
-ideation layer end to end **except here**: a founder-decision-fork — a product/strategy/§CP choice
-that is the founder's to make, not an answerable question of fact — is **never** resolved by the
-agent. The agent **frames** it; the founder **decides** it. Two properties are asserted and held
+ideation layer end to end **except here**: a decision-owner-fork — a product/strategy/§CP choice
+that is belongs to a designated decision owner, not an answerable question of fact — is **never** resolved by the
+agent. The agent **frames** it; the delegated decision owner **decides** it. Two properties are asserted and held
 load-bearing: **no second human gate is added anywhere in wayfinder** (this is the *only* one), and
 **this seam is not a scaffold to be automated away later** — it is the telos constraint the
 ideation layer exists to preserve, the same product-driven-decision boundary the execution
-pipeline's §CP control point honors (the applicable safety invariant).
+pipeline's §CP control point honors (ADR
+repository decision record).
 
-### Route — frame the fork as a sharp decision-request addressed to the founder
+### Route — frame the fork as a sharp decision-request addressed to the delegated decision owner
 
 A fork already lives on the map as a `type:decision` sub-issue — CHART files it that way (the
 Grilling row of the
 [translation table](#the-ticket-type-translation-table--reuse-existing-types-invent-no-new-machinery)),
 reusing the pipeline's existing `type:decision` type, inventing no new label. Routing it to the
-founder is the **framing legwork** — the work that *frames* a decision without *making* it:
+delegated decision owner is the **framing legwork** — the work that *frames* a decision without *making* it:
 
 1. **Make the `type:decision` sub-issue decision-ready.** Its body must carry an explicit
-   **decision-request** addressed to the founder: the one sharp question, the concrete **options**,
-   and each option's **trade-offs** — the legwork that lets the founder decide in a single read
+   **decision-request** addressed to the delegated decision owner: the one sharp question, the concrete **options**,
+   and each option's **trade-offs** — the legwork that lets the delegated decision owner decide in a single read
    rather than re-derive the analysis. The agent supplies everything *except the choice*.
-2. **Never voice the founder.** The agent lays out the options and their trade-offs; it does
+2. **Never voice the delegated decision owner.** The agent lays out the options and their trade-offs; it does
    **not** pre-pick a default, phrase a recommendation *as* the decision, or write the answer "the
-   founder would probably give." A fork carrying an agent-supplied choice is the exact failure this
+   delegated decision owner would probably give." A fork carrying an agent-supplied choice is the exact failure this
    seam exists to prevent — the agent's authority ends at the frame.
 
-### Record — the fork stays on the frontier, marked awaiting the founder
+### Record — the fork stays on the frontier, marked awaiting the delegated decision owner
 
 Routing a fork touches the map's `## Open frontier` only, never `## Decisions-so-far`:
 
-- The fork's line **stays on `## Open frontier`**, marked `(founder-decision-fork — awaiting
-  founder)` and referencing its `type:decision` sub-issue — the map-shape contract's fork-marking
+- The fork's line **stays on `## Open frontier`**, marked `(decision-owner-fork — awaiting
+  delegated decision owner)` and referencing its `type:decision` sub-issue — the map-shape contract's fork-marking
   ([`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md), §The `wayfinder:map` issue
   shape).
 - It **does not graduate.** The lockstep invariant is that a ticket leaves `## Open frontier` only
@@ -382,27 +389,27 @@ Routing a fork touches the map's `## Open frontier` only, never `## Decisions-so
   written to `## Decisions-so-far` and the fork is never moved to `## Graduated fog` at routing
   time. The agent has decided nothing, so the map records no decision.
 
-### Block — the map waits on the founder; WORK never steps in
+### Block — the map waits on the delegated decision owner; WORK never steps in
 
-Once a fork is routed, the agent **blocks** on the founder's answer:
+Once a fork is routed, the agent **blocks** on the delegated decision owner's answer:
 
-- A WORK run **skips** an awaiting-founder fork and takes the next investigation ticket instead
-  (WORK's [seam step](#the-founder-decision-fork-seam--surfaced-never-resolved-by-work)) — the fork
+- A WORK run **skips** an awaiting-decision-owner fork and takes the next investigation ticket instead
+  (WORK's [seam step](#the-decision-owner-fork-seam--surfaced-never-resolved-by-work)) — the fork
   is simply not agent-resolvable.
-- If **every** remaining frontier ticket is a fork awaiting the founder, the map is **blocked on
-  the human**: there is nothing for WORK to resolve, so it surfaces that the map awaits a founder
+- If **every** remaining frontier ticket is a fork awaiting the delegated decision owner, the map is **blocked on
+  the human**: there is nothing for WORK to resolve, so it surfaces that the map awaits a delegated decision owner
   call and stops. This block is the seam **working, not a stall** — never route around it by having
   the agent pick an option to "unblock" the map.
 
-### Consume — the founder's answer graduates the fork, the founder's voice as the answer
+### Consume — the delegated decision owner's answer graduates the fork, the delegated decision owner's voice as the answer
 
-The founder answers by recording their choice on the `type:decision` sub-issue — their call, in
+The delegated decision owner answers by recording their choice on the `type:decision` sub-issue — their call, in
 their own voice. That answer **unblocks** the fork: a later WORK run then treats it exactly as it
-treats any resolved frontier ticket — it appends the founder's decision into `## Decisions-so-far`
+treats any resolved frontier ticket — it appends the delegated decision owner's decision into `## Decisions-so-far`
 (`— from #N`) and graduates the fork into `## Graduated fog`, in the same lockstep the
 [WORK walk](#the-walk-1) holds for an investigation, and spawns any new frontier the decision
 reveals. The **only** difference from an investigation is *whose answer it is*: the deciding voice
-was the founder's, never the agent's. wayfinder did the framing legwork, the founder made the call,
+was the delegated decision owner's, never the agent's. wayfinder did the framing legwork, the delegated decision owner made the call,
 and the map records it and moves on.
 
 ## Emission — the cleared map graduates into its durable artifact(s)
@@ -411,7 +418,7 @@ This is the **handoff seam** where the ideation layer graduates into the executi
 map that has cleared enough fog emits its **durable artifact(s)** — most often one or more concrete
 epics/features into the **existing** `report` → `triage` → `plan-epic` → `write-code` funnel, but a
 map whose destination was itself a decision graduates into an **ADR** (authored via `/adr`), and a
-map that charts strategic sequencing graduates into a **ROADMAP.md** entry. Emission is **not a
+map that charts strategic sequencing graduates into a **configured roadmap artifact** entry. Emission is **not a
 third mode with new machinery** — it is the terminal act of a map's life, reached from a WORK run
 whose graduation-readiness check finds the frontier cleared. Where CHART lays the frontier down and
 WORK clears it one ticket at a time, emission is what a map *becomes* once its frontier holds no
@@ -421,9 +428,9 @@ how to drain. Nothing downstream is rebuilt — emission only feeds the funnel f
 ### When emission fires — the graduation-readiness signal
 
 A map is **emission-ready** when its `## Open frontier` holds no more *answerable* unknowns: every
-investigation ticket has graduated into `## Graduated fog`, and no founder-decision-fork remains
-awaiting the founder that would gate the buildable plan. This readiness is the wayfinder CLI's
-**graduation-readiness signal** (<related work item>) — WORK **asks the CLI**, and never re-derives readiness by
+investigation ticket has graduated into `## Graduated fog`, and no decision-owner-fork remains
+awaiting the delegated decision owner that would gate the buildable plan. This readiness is the configured wayfinder adapter's
+**graduation-readiness signal** (the adapter implementation) — WORK **asks the CLI**, and never re-derives readiness by
 ad-hoc markdown parsing of the map body (the same single-source discipline every map-state op
 holds; see [Map state is read and written through the `wayfinder-map` CLI](#map-state-is-read-and-written-through-the-wayfinder-map-cli--never-ad-hoc-markdown-parsing)).
 
@@ -432,10 +439,10 @@ holds; see [Map state is read and written through the `wayfinder-map` CLI](#map-
   resolution in the same run.
 - A run that finds the frontier **cleared** performs emission instead of resolving a ticket.
   Emission is thus the natural terminus of the one-ticket-per-session walk, not a parallel machine.
-- **Graceful block on the human.** A map that still holds a founder-decision-fork *awaiting the
-  founder* is **not** emission-ready for the plan that fork gates — it is blocked on the human (the
-  [founder-decision-fork seam](#the-founder-decision-fork-seam--routing-the-fork-to-the-founder)),
-  and emission waits for the founder's answer to graduate the fork before that part of the plan
+- **Graceful block on the human.** A map that still holds a decision-owner-fork *awaiting the
+  delegated decision owner* is **not** emission-ready for the plan that fork gates — it is blocked on the human (the
+  [decision-owner-fork seam](#the-decision-owner-fork-seam--routing-the-fork-to-the-decision-owner)),
+  and emission waits for the delegated decision owner's answer to graduate the fork before that part of the plan
   becomes buildable. Emission never routes around an open fork by guessing the decision.
 
 ### Compose each brief from `## Destination` + `## Decisions-so-far`
@@ -455,8 +462,8 @@ One cleared map may emit **one or several** epics/features: decompose the cleare
 the coherent buildable units its accreted decisions now support, and give each emitted issue the
 relevant slice of `## Decisions-so-far` as its givens plus a link back to the map for provenance.
 
-Compose every emitted brief per §the distributable-plugin-only artifact rule: frame the crew as the
-distributable plugin `claude-plugins/pipeline-crew/` only, and carry no operator-local / personal
+Compose every emitted brief per §the repository-owned artifact rule: frame the crew as the
+repository-owned configuration only, and carry no operator-local / personal
 crew-def framing — the leak-scrub must not survive into an emitted epic.
 
 ### File into the existing `report` → `triage` entry seam — reuse, don't rebuild
@@ -483,7 +490,7 @@ create over stdin (no shared temp file to collide on, per the report skill's fil
 ```bash
 REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
 # One emitted epic per coherent buildable unit. The brief is composed from map #$MAP's
-# ## Destination + the relevant ## Decisions-so-far slice (read via the wayfinder CLI, never
+# ## Destination + the relevant ## Decisions-so-far slice (read via the configured wayfinder adapter, never
 # ad-hoc markdown slicing). Files into the SAME status:needs-triage entry `report` uses.
 {
   cat <<'EOF'
@@ -497,25 +504,25 @@ REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOw
 Charted and cleared on wayfinder:map #<MAP>. Downstream is the existing pipeline: triage → plan-epic → write-code.
 EOF
   echo   # blank line before the footer block
-  claude-plugins/kampus-pipeline/skills/report/footer.sh   # emits its own `---` + <sub>… line
-} | pipeline-cli tracker create-issue --title "<the epic, as one concrete deliverable>"
+  claude-plugins/pipeline/skills/report/footer.sh   # emits its own `---` + <sub>… line
+} | repository tracker adapter create-issue --title "<the epic, as one concrete deliverable>"
 ```
 
-The `tracker create-issue` verb owns this intake-create envelope (the applicable safety invariant;
-`packages/pipeline-cli/src/tools/tracker/`): it files a `status:needs-triage` issue, reading the
+The `tracker create-issue` verb owns this intake-create envelope (repository graduation policy;
+`repository tracker adapter`): it files a `status:needs-triage` issue, reading the
 body from stdin so the composed heredoc streams straight in. Don't hand-roll the
-`gh api repos/$REPO/issues` create — that inline envelope is what the adoption lint (<related work item>) flags.
+`gh api repos/$REPO/issues` create — that inline envelope is what the repository workflow validation (repository policy) flags.
 
 ### Close the map on graduation — the close-on-source forcing function
 
 Once the map's destination is fully realized in its durable artifact(s) — **whatever their kind:
-epic(s) filed into triage, an ADR authored via `/adr`, and/or a ROADMAP.md entry** — the map is
+epic(s) filed into triage, an ADR authored via `/adr`, and/or a configured roadmap artifact entry** — the map is
 **graduated**, and graduation **must close the map as part of the emission**, not leave it a step a
 human/agent remembers to run. A graduated-but-open map is indistinguishable from live ideation
 work: it looks pickable, inflates the backlog, and forces a manual dedup sweep to hand-close it
-(<related work item> — maps <related work item>/<related work item>/<related work item>/<related work item> all graduated but were closed only by hand; <related work item> is the
+(repository history — maps #2583/#2829/#2467/#2620 all graduated but were closed only by hand; a prior map is the
 exemplar that *was* closed on graduation). The close is the durable "this map graduated into X"
-record; generalize the <related work item> close across **every** graduation artifact, not epics alone.
+record; generalize the a prior map close across **every** graduation artifact, not epics alone.
 
 Make the ideation→execution handoff traceable from both ends, then close:
 
@@ -529,7 +536,7 @@ Make the ideation→execution handoff traceable from both ends, then close:
   plan landed as artifacts) is **closed** — its frontier is cleared and its purpose (charting the
   fog) is complete; it remains the durable record of *how* the plan was discovered while the
   artifacts carry it forward. A map that graduates only **part** of its plan (some destinations
-  still fogged, or a fork still awaiting the founder) is **annotated** with the artifact links but
+  still fogged, or a fork still awaiting the delegated decision owner) is **annotated** with the artifact links but
   stays **open** for a future WORK run to clear the rest and graduate again. Only the *source map*
   is closed; the emitted epics, the ADR, and the roadmap entry are legitimately-live artifacts and
   stay as they are.
@@ -537,12 +544,12 @@ Make the ideation→execution handoff traceable from both ends, then close:
 ```bash
 # Name every artifact the map graduated into (epics and/or ADR and/or roadmap), then close it
 # IFF the destination is FULLY graduated. A partial graduation is annotated but stays open.
-# The `tracker graduate` verb owns this graduation-close envelope (the applicable safety invariant, <related work item>): it posts
+# The `tracker graduate` verb owns this graduation-close envelope (repository graduation policy, repository policy): it posts
 # the `Graduated into <artifact>` source → artifact provenance record and closes the source as
 # completed. Don't hand-roll the comment + `state_reason=completed` PATCH — that inline
-# re-derivation is what the adoption lint (<related work item>) flags.
-pipeline-cli tracker graduate "$MAP" \
-  --artifact "#$E1, #$E2 → triage → plan-epic → write-code; the applicable safety invariant; ROADMAP.md v1" \
+# re-derivation is what the repository workflow validation (repository policy) flags.
+repository tracker adapter graduate "$MAP" \
+  --artifact "#$E1, #$E2 → triage → plan-epic → write-code; repository decision record; configured roadmap artifact v1" \
   --note "Frontier cleared — closing this map as the durable record of how the plan was discovered."
 # fully-graduated only; a partial graduation is annotated (a plain comment) but stays open.
 ```
@@ -557,8 +564,8 @@ pipeline-cli tracker graduate "$MAP" \
 
 > **Build status.** The construct — the `wayfinder:map` label, the map-issue shape contract, and
 > the two-mode + one-seam description — both mode walks, **CHART** and **WORK**, the
-> **founder-decision-fork** routing contract WORK surfaces-and-stops for, and the **emission** seam
-> a cleared map hands off through are in place (<related work item>, <related work item>, <related work item>, <related work item>, <related work item>). Still to land:
-> the **CLI tool** (<related work item>, the `wayfinder-map` reader/writer WORK's map-state ops and the
-> graduation-readiness signal go through) and the dogfood bootstrap (<related work item>). Each fills in against
+> **decision-owner-fork** routing contract WORK surfaces-and-stops for, and the **emission** seam
+> a cleared map hands off through are in place (repository follow-up records). Still to land:
+> the **CLI tool** (the adapter implementation, the `wayfinder-map` reader/writer WORK's map-state ops and the
+> graduation-readiness signal go through) and the repository bootstrap (the repository bootstrap). Each fills in against
 > the map-shape contract linked above; do not let a mode drift from that single source.

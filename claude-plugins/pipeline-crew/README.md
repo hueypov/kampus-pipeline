@@ -163,19 +163,10 @@ wiring. Afterwards, use `pnpm pipeline crew …` for crew lifecycle commands.
 ## Personalize, then stand up
 
 The shipped plugin carries **zero** operator data: the four defs, this README, and the config
-template hold only `<placeholders>`. Everything operator-specific enters through the
-**[personalization seam](PERSONALIZATION.md)** — at stand-up you copy the placeholder-only
-template to an operator-owned config and fill it once; each def resolves that file at spawn and
-addresses *your* people and machine.
-
-```bash
-# 1. Copy the placeholder-only template to your operator-owned config (default path).
-cp .claude/crew.config.template.jsonc .claude/crew.config.jsonc
-#    (or keep it anywhere and point $CREW_CONFIG at it).
-# 2. Fill EVERY <placeholder>. Leave no <...> behind.
-# 3. Git-ignore your copy — it holds your operator data and must never be committed.
-echo ".claude/crew.config.jsonc" >> .gitignore
-```
+template hold only `<placeholders>`. `pipeline init` materializes it as the operator-owned,
+git-ignored `.claude/crew.config.jsonc`. Everything operator-specific enters through the
+**[personalization seam](PERSONALIZATION.md)** — fill that file once; each def resolves it at
+spawn and addresses *your* people and machine. Leave no `<...>` behind.
 
 Resolution mirrors companion pipeline skill suite's repo-as-config seam (the repository-resolution rule: honor the repository override when set, otherwise derive the current working repository): **`$CREW_CONFIG`** if set, else the
 working repo's **`.claude/crew.config.jsonc`**. A def that can't resolve a filled config

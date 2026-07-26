@@ -21,18 +21,28 @@ git submodule add git@github.com:hueypov/kampus-pipeline.git .pipeline/toolkit
 your-repository/
 ├── .pipeline/
 │   ├── pipeline.json               # managed manifest and toolkit location
+│   ├── optional-workflow-policy.json # consumer opt-in policy; disabled by default
 │   └── toolkit/                    # pinned private Git submodule
-├── claude-plugins/
-│   └── kampus-pipeline -> ../.pipeline/toolkit/claude-plugins/kampus-pipeline
+├── CLAUDE.md                       # repository-owned contributor guidance
+├── .decisions/README.md            # architecture-decision surface
+├── .patterns/index.md              # code-pattern surface
 └── .claude/
-    ├── skills/                     # managed links to the toolkit skills
-    ├── agents/                     # managed links to the toolkit agents
+    ├── skills/                     # managed links to portable-core skills only
+    ├── agents/                     # managed links to portable-core agents
     └── settings.json               # existing settings preserved; pipeline hooks merged
 ```
 
 The links are managed paths recorded in `.pipeline/pipeline.json`. Re-running
-`pipeline init` or `pipeline sync` adds missing links without replacing user
-files. `--force` can replace only paths already recorded in that manifest.
+`pipeline init` or `pipeline sync` adds missing portable-core links without
+replacing user files. `--force` can replace only paths already recorded in that
+manifest. The full workflow archive remains in the pinned toolkit submodule;
+the catalog marks it as adapter-required and it is never linked into
+`.claude/skills` by default.
+
+On a clean repository, initialization also creates neutral starting documents
+for the repository's contributor guidance, architecture decisions, and code
+patterns. Those documents become repository-owned: an existing consumer copy is
+preserved, and the toolkit does not replace later consumer edits.
 
 After initialization, use the project-local command installed in the adopting
 repository's `package.json`:
@@ -57,8 +67,11 @@ is not the current checkout (for example, when working from a fork).
 REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
 ```
 
-The shared runtime prerequisites are Git, Node, pnpm, Claude Code, tmux, and an
-authenticated GitHub CLI. `pipeline init --check` reports missing prerequisites
+Bootstrap prerequisites are Git, Node, and pnpm. Claude Code, tmux, GitHub
+authentication, release platforms, and product-audit tooling are optional
+workflow requirements: a repository enables and documents them in its
+`.pipeline/optional-workflow-policy.json` adapter before using the matching
+archived workflow. `pipeline init --check` reports only bootstrap wiring
 without changing the repository.
 
 ## Worktree isolation
@@ -67,11 +80,11 @@ The generated Claude `WorktreeCreate` hook creates an additional checkout under
 `.claude/worktrees/<name>`. It derives a base from the current branch's upstream
 when available, otherwise the remote's default branch, and finally the local
 `HEAD`. It initializes declared submodules in that checkout. It does not assume
-an `origin/main` branch, Lefthook, a package manager, or a particular
+an `$PIPELINE_BASE_REF` branch, Lefthook, a package manager, or a particular
 application layout.
 
 This lets concurrent agents edit and commit separate branches without changing
-the main working directory. It is unrelated to reading GitHub issues or pull
+the configured base branch working directory. It is unrelated to reading GitHub issues or pull
 requests.
 
 ## Updating the toolkit
