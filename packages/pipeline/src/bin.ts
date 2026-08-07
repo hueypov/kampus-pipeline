@@ -428,6 +428,36 @@ const checkPrimaryIndexGuardHook = (projectRoot: string): string | undefined => 
 	return hook.state === "installed" ? undefined : hook.error ?? "managed pre-commit hook is missing or drifted";
 };
 
+/**
+ * Remove every path a previous install managed that this one no longer does.
+ *
+ * Without this, dropping an artifact from the payload strands it: the adopter updates the toolkit
+ * submodule, the skill directory it pointed at disappears, and the symlink stays behind pointing at
+ * nothing. Nobody notices, because a dangling entry in `.claude/skills/` fails by not matching
+ * rather than by erroring — the same silent shape the whole toolkit refuses elsewhere.
+ *
+ * It removes a path **only when it is still the link we recorded**, exactly as
+ * `retireLegacyPluginLink` does. A path the adopter has since replaced with their own file is
+ * theirs, and unmanaging something is never a licence to delete it.
+ */
+const retireUnmanagedPaths = (
+	projectRoot: string,
+	prior: Map<string, string>,
+	managedPaths: ReadonlyArray<ManagedPath>,
+): string[] => {
+	const kept = new Set(managedPaths.map((entry) => entry.path));
+	const retired: string[] = [];
+	for (const [path, target] of prior) {
+		if (kept.has(path)) continue;
+		const absolute = join(projectRoot, path);
+		if (!lstatSyncSafe(absolute)?.isSymbolicLink()) continue;
+		if (readlinkSync(absolute) !== target) continue;
+		rmSync(absolute, {recursive: true, force: true});
+		retired.push(path);
+	}
+	return retired;
+};
+
 const retireLegacyPluginLink = (projectRoot: string, prior: Map<string, string>): void => {
 	const expectedTarget = prior.get(LEGACY_PLUGIN_LINK_RELATIVE_PATH);
 	const path = join(projectRoot, LEGACY_PLUGIN_LINK_RELATIVE_PATH);
@@ -926,7 +956,9 @@ const init = (args: string[]): void => {
 			(CORE_WORKFLOW_SUPPORT_FILES.has(name) && existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name))),
 		force, prior),
 	];
+	const retired = retireUnmanagedPaths(projectRoot, prior, managedPaths);
 	writeJson(join(projectRoot, CONFIG_RELATIVE_PATH), {schemaVersion: 4, toolkitRoot: TOOLKIT_RELATIVE_PATH, managedPaths, managedHooks} satisfies PipelineConfig);
+	if (retired.length) console.error(`pipeline: retired ${retired.length} path(s) no longer in the payload:\n${retired.map((path) => `- ${path}`).join("\n")}`);
 	const errors = check(projectRoot);
 	if (errors.length) console.error(`pipeline: initialized with required follow-up:\n${errors.map((error) => `- ${error}`).join("\n")}`);
 	else console.error("pipeline: initialized and ready");
