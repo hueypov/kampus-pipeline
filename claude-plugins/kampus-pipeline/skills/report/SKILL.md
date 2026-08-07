@@ -1,13 +1,12 @@
 ---
 name: report
-description: File one issue the moment you notice work you will not do right now — a bug, a refactor, a design question, a missing test, a convention that confused you. Fire it mid-task, autonomously, without asking permission and without finishing what you were doing first: an observation that stays in the conversation dies there. Captures what you saw in six type-blind sections, checks whether it is already on the board, and files it as raw intake carrying one lifecycle stage and no classification. Also trigger on "/report", "file an issue", "report this", "open a follow-up", "track this for later". Done when the observation is on the board — a new issue at the needs-triage stage, or a note on the issue that already covered it — and you are back on the task you interrupted.
+description: File one issue the moment you notice work you will not do right now — a bug, a refactor, a design question, a missing test, a convention that confused you. Fire it mid-task, autonomously, without asking permission and without finishing what you were doing first: an observation that stays in the conversation dies there. Captures what you saw in six type-blind sections, checks whether it is already on the board, and files it as raw intake carrying no classification. Also trigger on "/report", "file an issue", "report this", "open a follow-up", "track this for later". Done when the observation is on the board — a new issue at the intake stage, or a note on the issue that already covered it — and you are back on the task you interrupted.
 ---
 
 # report
 
 **Intake, not judgment.** You saw something while doing other work. Capture it faithfully and get
-back to your task — a later `triage` run decides what it is and what it is worth. This skill
-records the observation and stops there.
+back to your task — a later `triage` run decides what it is and what it is worth.
 
 Capturing is meant to cost you almost nothing, which is why there is no permission step. Proposing
 first turns a five-second capture into a conversation, and the observation that waits for an answer
@@ -39,72 +38,61 @@ A hand-typed classification is indistinguishable from a triaged one, so a guess 
 corrupts the signal triage runs on. One observation, one issue — two things you noticed are two
 filings.
 
-**Repo-relative paths only.** Never write a path that exists only on this machine — `/Users/…`,
-`~/code/…`, a sibling clone. An issue is a shared artifact. Unlike `tracker post-verdict`, the
-create path does **not** yet refuse a leak for you, so this one is on your judgment; when a local
-path is genuinely the evidence, pipe the body through `pipeline cli redact-leaks` first, which
-masks each path to its class rather than dropping it.
-
 Done here when all six sections carry content, except the last, which may be empty.
 
 ## 2 — Check whether it is already filed
 
 Report runs happen concurrently, so what you just saw may have reached the board minutes ago. Run
-this **after** the body is written and immediately before filing, so the window between checking
-and creating stays small:
+this **after** the body is written and immediately before filing, so the window between checking and
+creating stays small:
 
 ```bash
-pipeline cli intake-dedup check --query "http worker aborted request downstream plain timeout"
+pipeline cli report dedup --query "http worker aborted request downstream plain timeout"
 ```
 
-Candidates print to stdout as `#<number>\t<title>`; the count and any diagnostic go to **stderr**.
+The first line of output is the outcome, and only one of the three is about your observation:
 
-**Read stderr, not just stdout.** Two different situations both print nothing on stdout and both
-exit 0:
+- **`candidates`** — open each and judge it yourself. Shared vocabulary is not a shared observation.
+- **`none`** — both sources were read and nothing open matched. A real answer.
+- **`indeterminate`** (exit 3) — your query carried too few distinctive terms, so nothing was
+  compared. **This is a non-check, not a clean one.** Re-query with the specific terms.
 
-- **A real "none"** — both sources were read and nothing open matched. stderr says
-  `0 candidate duplicate(s)`.
-- **A non-check** — your query carried no usable keywords, so nothing was compared at all. stderr
-  says `no usable keywords in --query`. This is not a clean result. Re-query with the distinctive
-  terms.
+A non-zero exit other than 3 is UNKNOWN, never `none`. **When it is genuinely ambiguous, file it** —
+triage closes a duplicate in seconds, and a lost observation is gone for good.
 
-A non-zero exit is UNKNOWN, never "none". **When it is genuinely ambiguous, file it** — triage
-closes a duplicate in seconds, and a lost observation is gone for good.
+Done when the outcome has told you which branch you are on:
 
-Done here when the outcome has told you which branch you are on:
-
-- none, a re-queried non-check that cleared, or candidates that are not your observation → **step 3**
+- `none`, a re-queried `indeterminate` that cleared, or candidates that are not your observation →
+  **step 3**
 - a candidate you have read and judged to be the same observation → **step 4**
-- a non-zero exit, or a non-check a re-query did not clear → **step 3**, and say in the body that
-  the duplicate check did not run
+- a failed check, or an `indeterminate` a re-query did not clear → **step 3**, and say in the body
+  that the duplicate check did not run
 
 ## 3 — File it
 
-The body streams in on stdin, so your markdown reaches the verb untouched — no temp file to collide
-on, no `@path` form that would post the path instead of the contents. **Append the provenance
-footer** after the sections and a blank line:
+The body streams in on stdin, so your markdown reaches the verb untouched:
 
 ```bash
-{ cat <<'EOF'
+pipeline cli report file --title "Aborted requests in the http worker surface as plain timeouts" <<'EOF'
 ## Summary
 …
 EOF
-  .pipeline/toolkit/claude-plugins/kampus-pipeline/skills/report/footer.sh
-} | pipeline cli tracker create-issue --title "Aborted requests in the http worker surface as plain timeouts"
 ```
 
-**The footer is never optional.** `triage` reads its presence as the filing-provenance signal:
-a footer means an agent filed it, so triage may close it as unsalvageable; no footer means a human
-typed it by hand, and triage must never auto-close it. An issue you file without one is
-permanently mistaken for a human's and can never be killed. The script emits only machine context
-— session, branch, timestamp — and drops any field the environment does not expose; it carries no
-identity and no paths, so it never needs review.
+The verb owns what is mechanical: it validates the six sections, appends the provenance footer,
+files at the intake stage, and reads back what landed. You supply the judgment — the title and what
+goes in the sections.
 
-The issue enters at the `needs-triage` stage by default. Do not pass `--stage` to send it anywhere
-else, and do not apply a classification — that is triage's call, and this is the seam that keeps
-its queue trustworthy.
+**When it refuses, fix the input and run it again.** A refusal names one thing: an empty section, a
+body that never reached stdin, a machine-local path, a title that classifies. **A refusal is never a
+reason to post some other way** — reaching for a different mechanism is how a body gets replaced by
+a path to the body.
 
-Done here when the verb exits 0 and prints the number and URL.
+Pass `--redact` when a machine-local path is genuinely part of the evidence — reporting a leak is
+the case it exists for. It masks each path to its class and says so; it never silently rewrites what
+you wrote.
+
+Done when the verb exits 0 and prints the number and URL.
 
 ## 4 — Add what the existing issue lacks
 
@@ -112,12 +100,15 @@ When step 2 found your observation already filed, do not file a twin. Add only w
 not already carry:
 
 ```bash
-pipeline cli tracker create-comment 4312 <<'EOF'
+pipeline cli report note --issue 4312 <<'EOF'
 …
 EOF
 ```
 
-Done when the verb exits 0 and prints the comment reference.
+No six-section template here — a note adds what is missing, and the full template would produce four
+empty sections restating what is already there.
+
+Done when the verb exits 0 and prints the reference.
 
 ## 5 — Report and return
 
