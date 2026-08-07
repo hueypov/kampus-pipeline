@@ -113,9 +113,45 @@ fi
 exit 0
 `;
 
-/** A hook body this tool wrote in an earlier version — recognised so `install` can upgrade it. */
-const isKnownManagedHook = (actual: string): boolean =>
-	actual.includes(MARKER_V1) || actual.includes(MARKER);
+/**
+ * The exact v1 hook body, for every path this tool could have rendered it with.
+ *
+ * Matching the MARKER alone was not enough: a v1 hook someone had edited by hand still carried the
+ * marker, so it read as ours-and-untouched and `install` overwrote the edit silently — the precise
+ * outcome the `drifted` refusal exists to prevent. Comparing against the rendering distinguishes
+ * "ours, untouched" from "ours, edited", which is what the state names claim to mean.
+ *
+ * v1's body varied only in the two absolute paths it baked, so the comparison is structural: same
+ * shape, any interpreter, any bin.
+ */
+/** v1's invocation line, with the two absolute paths it baked left open. */
+const V1_INVOCATION = /^"[^"]*" "[^"]*" ref-guard reference-transaction "\$1" \|\| status=\$\?$/;
+
+/**
+ * v1's body as a line-by-line shape. A regex over the whole body would say the same thing far less
+ * legibly, and this has to stay readable: it is the predicate deciding whether we may overwrite
+ * somebody's file.
+ */
+const V1_LINES: ReadonlyArray<string | RegExp> = [
+	"#!/bin/sh",
+	MARKER_V1,
+	"# Git only aborts a reference transaction for this command's deliberate refusal.",
+	"status=0",
+	V1_INVOCATION,
+	`[ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1`,
+	"exit 0",
+	"",
+];
+
+/** A hook body this tool wrote in an earlier version, UNEDITED — the only kind `install` replaces. */
+const isKnownManagedHook = (actual: string): boolean => {
+	const lines = actual.split("\n");
+	if (lines.length !== V1_LINES.length) return false;
+	return V1_LINES.every((want, i) => {
+		const got = lines[i] ?? "";
+		return typeof want === "string" ? got === want : want.test(got);
+	});
+};
 
 export type HookState = "absent" | "installed" | "outdated" | "drifted" | "foreign";
 
@@ -132,8 +168,9 @@ export const inspectHook = (path: string, expected: string): HookState => {
 	try {
 		const actual = readFileSync(path, "utf8");
 		if (actual === expected) return "installed";
-		if (!isKnownManagedHook(actual)) return "foreign";
-		return actual.includes(MARKER_V1) ? "outdated" : "drifted";
+		// Carries one of our markers but is not a rendering we produced ⇒ hand-edited ⇒ refuse.
+		if (!isKnownManagedHook(actual)) return actual.includes(MARKER_PREFIX) ? "drifted" : "foreign";
+		return "outdated";
 	} catch {
 		return "foreign";
 	}

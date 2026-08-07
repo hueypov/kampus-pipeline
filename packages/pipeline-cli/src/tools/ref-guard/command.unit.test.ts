@@ -72,4 +72,22 @@ describe("ref-guard managed hook contract", () => {
 		// discard an edit silently.
 		expect(inspectHook(tmpHook(edited), expected)).toBe("drifted");
 	});
+
+	it("refuses a hand-edited V1 hook rather than upgrading over the edit", () => {
+		const expected = renderManagedHook();
+		const edited = V1_HOOK.replace("status=0", "status=0\n# local tweak: skip on CI\n[ -n \"$CI\" ] && exit 0");
+		// Marker-substring matching called this `outdated` and install overwrote it silently —
+		// exactly what the `drifted` refusal exists to prevent, and the reason the shape is
+		// compared line by line instead.
+		expect(inspectHook(tmpHook(edited), expected)).toBe("drifted");
+	});
+
+	it("still upgrades an untouched v1 hook whatever paths it baked", () => {
+		const expected = renderManagedHook();
+		const other = V1_HOOK.replace("/opt/node/bin/node", "/usr/local/bin/node").replace(
+			"/somewhere/else/packages/pipeline-cli/src/bin.ts",
+			"/another/place/bin.ts",
+		);
+		expect(inspectHook(tmpHook(other), expected)).toBe("outdated");
+	});
 });
