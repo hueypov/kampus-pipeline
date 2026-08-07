@@ -3,7 +3,7 @@ import {chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, 
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
-import {ARCHIVED_SKILL_NAMES, CORE_AGENT_NAMES, CORE_SKILL_NAMES, CORE_WORKFLOW_SUPPORT_FILES} from "./payload.ts";
+import {CORE_AGENT_NAMES, CORE_SKILL_NAMES, CORE_WORKFLOW_SUPPORT_FILES} from "./payload.ts";
 
 const roots: string[] = [];
 
@@ -53,7 +53,6 @@ const fixture = (): {consumer: string; mockBin: string} => {
 	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/example/SKILL.md"), "# Example\n");
 	for (const name of CORE_SKILL_NAMES) write(join(toolkit, `claude-plugins/kampus-pipeline/skills/${name}/SKILL.md`), `# ${name}\n`);
 	for (const name of CORE_WORKFLOW_SUPPORT_FILES) write(join(toolkit, `claude-plugins/kampus-pipeline/skills/${name}`), `# ${name}\n`);
-	for (const name of ARCHIVED_SKILL_NAMES) write(join(toolkit, `claude-plugins/kampus-pipeline/skills/${name}/SKILL.md`), `# ${name}\n`);
 	copyFileSync(join(process.cwd(), "../../claude-plugins/kampus-pipeline/workflow-catalog.json"), join(toolkit, "claude-plugins/kampus-pipeline/workflow-catalog.json"));
 	for (const name of ["adr", "canon", "coder", "planner", "reporter", "reviewer", "shipper", "triager"]) {
 		write(join(toolkit, `claude-plugins/kampus-pipeline/agents/${name}.md`), `# ${name}\n`);
@@ -152,14 +151,17 @@ describe("pipeline init", () => {
 		expect(command(consumer, ["sync"], mockBin).status).toBe(0);
 		expect(readFileSync(join(consumer, ".github/workflows/pipeline-gitleaks.yml"), "utf8")).toBe("name: Fixture Gitleaks\n");
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-doc-links.yml"))).toBe(false);
-		expect(existsSync(join(consumer, ".claude/skills/release"))).toBe(false);
-		expect(command(consumer, ["enable", "release"], mockBin).status).toBe(0);
-		expect(existsSync(join(consumer, ".claude/skills/release"))).toBe(true);
-		expect(lstatSync(join(consumer, ".claude/skills/release")).isSymbolicLink()).toBe(true);
+		// `enable` now operates on the workflows, the only optional thing left in the payload (#34).
+		expect(command(consumer, ["enable", "pipeline-doc-links"], mockBin).status).toBe(0);
+		expect(readFileSync(join(consumer, ".github/workflows/pipeline-doc-links.yml"), "utf8")).toBe("name: Fixture doc links\n");
 		expect(JSON.parse(readFileSync(join(consumer, ".pipeline/optional-workflow-policy.json"), "utf8"))).toMatchObject({
-			workflows: {release: {enabled: true}},
+			workflows: {"pipeline-doc-links": {enabled: true}},
 		});
-		expect(JSON.parse(command(consumer, ["status", "--json"], mockBin).stdout).optional).toContainEqual(expect.objectContaining({name: "release", state: "enabled-adapter-required"}));
+		expect(JSON.parse(command(consumer, ["status", "--json"], mockBin).stdout).optional).toContainEqual(
+			expect.objectContaining({name: "pipeline-doc-links", state: "installed"}),
+		);
+		// A skill that no longer exists cannot be enabled — the old product skills are gone.
+		expect(command(consumer, ["enable", "release"], mockBin).status).not.toBe(0);
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
 		expect(command(consumer, ["enable", "not-a-workflow"], mockBin).status).toBe(1);
 		expect(readFileSync(join(consumer, ".glossary/TERMS.md"), "utf8")).toBe("# Fixture terms\n");
@@ -233,7 +235,12 @@ describe("pipeline init", () => {
 		write(join(consumer, ".pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{}}\n');
 		write(join(consumer, ".pipeline/optional-workflow-policy.json"), "{not-json}\n");
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(1);
+		// A policy naming nothing installable leaves the previously-enabled workflow on disk, and
+		// `check` is right to red on that drift — `sync` is what reconciles it, by uninstalling.
 		write(join(consumer, ".pipeline/optional-workflow-policy.json"), '{"schemaVersion":1,"workflows":{"release":{"enabled":true}}}\n');
+		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(1);
+		expect(command(consumer, ["sync"], mockBin).status).toBe(0);
+		expect(existsSync(join(consumer, ".github/workflows/pipeline-doc-links.yml"))).toBe(false);
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
 	}, 20_000);
 

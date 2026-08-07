@@ -40,14 +40,6 @@
 			"triager"
 		]
 	},
-	"archiveRequiresAdapter": {
-		"skills": [
-			"campaign",
-			"release",
-			"rite-audit"
-		],
-		"activation": "Run `pipeline enable <workflow>` to link an optional skill. A repository-owned adapter and explicit authority policy are still required before external operations."
-	},
 	"entries": [
 		{
 			"name": "adr",
@@ -554,39 +546,6 @@
 				".pipeline/optional-workflow-policy.json"
 			],
 			"authorityBoundary": "Installed only when the repository enables it; repository-owned checks and paths remain explicit."
-		},
-		{
-			"name": "campaign",
-			"artifactType": "skill",
-			"deliveryClass": "optional-with-adapter",
-			"entryPoint": ".claude/skills/campaign",
-			"prerequisites": [
-				".pipeline/optional-workflow-policy.json",
-				"repository-owned adapter"
-			],
-			"authorityBoundary": "Enabled means linked only; provider and external authority remain repository-owned."
-		},
-		{
-			"name": "release",
-			"artifactType": "skill",
-			"deliveryClass": "optional-with-adapter",
-			"entryPoint": ".claude/skills/release",
-			"prerequisites": [
-				".pipeline/optional-workflow-policy.json",
-				"repository-owned adapter"
-			],
-			"authorityBoundary": "Enabled means linked only; provider and external authority remain repository-owned."
-		},
-		{
-			"name": "rite-audit",
-			"artifactType": "skill",
-			"deliveryClass": "optional-with-adapter",
-			"entryPoint": ".claude/skills/rite-audit",
-			"prerequisites": [
-				".pipeline/optional-workflow-policy.json",
-				"repository-owned adapter"
-			],
-			"authorityBoundary": "Enabled means linked only; provider and external authority remain repository-owned."
 		}
 	]
 }
