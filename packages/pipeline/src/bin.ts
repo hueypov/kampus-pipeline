@@ -3,7 +3,7 @@ import {spawnSync} from "node:child_process";
 import {chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {basename, dirname, join, relative, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
-import {ARCHIVED_SKILL_NAMES, CORE_AGENT_NAMES, CORE_AGENT_SKILL_NAMES, CORE_SKILL_DEPENDENCIES, CORE_SKILL_NAMES, CORE_WORKFLOW_SUPPORT_FILES, renderWorkflowCatalog} from "./payload.ts";
+import {CORE_AGENT_NAMES, CORE_AGENT_SKILL_NAMES, CORE_SKILL_DEPENDENCIES, CORE_SKILL_NAMES, CORE_WORKFLOW_SUPPORT_FILES, renderWorkflowCatalog} from "./payload.ts";
 
 const TOOLKIT_RELATIVE_PATH = ".pipeline/toolkit";
 const CONFIG_RELATIVE_PATH = ".pipeline/pipeline.json";
@@ -298,18 +298,13 @@ const readOptionalWorkflowPolicy = (projectRoot: string): OptionalWorkflowPolicy
 	}
 };
 
-const enabledOptionalWorkflowNames = (policy: OptionalWorkflowPolicy): Set<string> => new Set(
-	Object.entries(policy.workflows)
-		.filter(([name, setting]) => ARCHIVED_SKILL_NAMES.has(name) && setting.enabled === true)
-		.map(([name]) => name),
-);
-
 /**
- * The CI workflows the repository has opted into.
+ * The CI workflows the repository has opted into — now the only optional thing in the payload.
  *
- * Deliberately NOT `enabledOptionalWorkflowNames`: that one filters on `ARCHIVED_SKILL_NAMES`, so
- * reusing it here produced a flag that could never be turned on — every workflow stayed uninstalled
- * whatever the policy said, which reads exactly like the feature working.
+ * There used to be a second resolver for optional *skills*, filtering the same policy block against
+ * a set of product-skill names. Reaching for it to gate workflows produced a flag that could never
+ * be turned on, because a workflow name was never in that set. Those skills are gone (#34) and so
+ * is the second resolver: one optional concept, one predicate, nothing to reach for by mistake.
  */
 const enabledWorkflowFileNames = (policy: OptionalWorkflowPolicy): Set<string> => {
 	const installable = new Set(GITHUB_WORKFLOW_TEMPLATES.map((t) => basename(t.destination, ".yml")));
@@ -731,13 +726,15 @@ const resolveStatus = (projectRoot: string): {errors: string[]; policy: "valid" 
 			state: existsSync(join(projectRoot, ".pipeline/toolkit/bin/pipeline")) ? "installed" : "missing-or-drifted"})),
 		...primaryIndexGuardStatus,
 	];
-	const optional = Array.from(ARCHIVED_SKILL_NAMES).map((name) => {
+	const optional = GITHUB_WORKFLOW_TEMPLATES.map((template) => {
+		const name = basename(template.destination, ".yml");
 		const enabled = optionalPolicy?.workflows[name]?.enabled === true;
-		const state = enabled
-			? managedLinkState(projectRoot, config, `.claude/skills/${name}`, expectedLinkTarget(projectRoot, toolkitRoot, `claude-plugins/kampus-pipeline/skills/${name}`, `.claude/skills/${name}`)) === "installed"
-				? "enabled-adapter-required" as const : "missing-or-drifted" as const
-			: "disabled" as const;
-		return {name, type: "optional-skill", state, path: `.claude/skills/${name}`};
+		const state = !enabled
+			? ("disabled" as const)
+			: existsSync(join(projectRoot, template.destination))
+				? ("installed" as const)
+				: ("missing-or-drifted" as const);
+		return {name, type: "optional-workflow", state, path: template.destination};
 	});
 	return {errors, policy, catalogue, core, optional};
 };
@@ -777,12 +774,12 @@ const check = (projectRoot: string): string[] => {
 		const hookError = checkPrimaryIndexGuardHook(projectRoot);
 		if (hookError) errors.push(`primary-index-guard hook: ${hookError}`);
 	}
-	let enabledOptionalWorkflows = new Set<string>();
+	let enabledWorkflowFiles = new Set<string>();
 	const optionalWorkflowPolicyPath = join(projectRoot, ".pipeline/optional-workflow-policy.json");
 	try {
 		const policy = parseOptionalWorkflowPolicy(JSON.parse(readFileSync(optionalWorkflowPolicyPath, "utf8")) as unknown);
 		if (!policy) errors.push("optional-workflow policy has an unsupported shape");
-		else enabledOptionalWorkflows = enabledOptionalWorkflowNames(policy);
+		else enabledWorkflowFiles = enabledWorkflowFileNames(policy);
 	} catch {
 		errors.push("missing or invalid .pipeline/optional-workflow-policy.json");
 	}
@@ -817,12 +814,14 @@ const check = (projectRoot: string): string[] => {
 		for (const file of CORE_WORKFLOW_SUPPORT_FILES) {
 			if (!managedPaths.has(`.claude/skills/${file}`)) errors.push(`missing managed core workflow support file: ${file}`);
 		}
-		for (const skill of ARCHIVED_SKILL_NAMES) {
-			const active = managedPaths.has(`.claude/skills/${skill}`);
-			if (active && !enabledOptionalWorkflows.has(skill)) {
-				errors.push(`archived workflow is activated without a repository-owned adapter: ${skill}`);
-			}
-			if (enabledOptionalWorkflows.has(skill) && !active) errors.push(`enabled optional workflow is missing its managed skill link: ${skill}`);
+		for (const template of GITHUB_WORKFLOW_TEMPLATES) {
+			const name = basename(template.destination, ".yml");
+			const present = managedPaths.has(template.destination);
+			// Both directions are errors: a workflow present without being enabled was installed by
+			// something that did not consult the policy, and an enabled one that is absent means the
+			// adopter asked for a check they are not getting.
+			if (present && !enabledWorkflowFiles.has(name)) errors.push(`workflow installed without being enabled in policy: ${name}`);
+			if (enabledWorkflowFiles.has(name) && !present) errors.push(`enabled workflow is not installed: ${name}`);
 		}
 		for (const agent of CORE_AGENT_NAMES) {
 			if (!managedPaths.has(`.claude/agents/${agent}.md`)) {
@@ -892,21 +891,27 @@ const init = (args: string[]): void => {
 	});
 	const workflowCatalog = linkManagedFile(projectRoot, toolkitRoot, WORKFLOW_CATALOG_RELATIVE_PATH, WORKFLOW_CATALOG_CONSUMER_PATH, force, prior);
 	const optionalWorkflowPolicy = readOptionalWorkflowPolicy(projectRoot);
-	const enabledOptionalWorkflows = enabledOptionalWorkflowNames(optionalWorkflowPolicy);
 	const enabledWorkflowFiles = enabledWorkflowFileNames(optionalWorkflowPolicy);
 	// Opt-in only. A workflow the adopter did not ask for becomes a required check they did not
 	// choose, and a red one blocks the merge gate over something that is not their change (#32).
 	const githubWorkflows = GITHUB_WORKFLOW_TEMPLATES.flatMap((template) => {
 		const name = basename(template.destination, ".yml");
-		if (!enabledWorkflowFiles.has(name)) return [];
+		if (!enabledWorkflowFiles.has(name)) {
+			// Disabling has to UNINSTALL, not merely stop reinstalling. Leaving the file behind keeps
+			// the check running in the adopter's CI after they turned it off, and `check` would then
+			// red on a workflow present without being enabled — forever, with no way to clear it.
+			// Only a copy we manage is removed; an adopter's own file of the same name is untouched.
+			if (prior.has(template.destination)) rmSync(join(projectRoot, template.destination), {force: true});
+			return [];
+		}
 		const managed = materializeTemplate(projectRoot, toolkitRoot, template.source, template.destination, prior);
 		return managed ? [managed] : [];
 	});
 	const managedHooks = mergeSettings(projectRoot, toolkitRoot);
 	mergePackageScript(projectRoot);
-	// The generic equivalent of Phoenix's `prepare: lefthook install`: ref safety is core
-	// checkout containment. The command is idempotent and refuses a foreign hook instead of
-	// silently taking another hook manager's ownership.
+	// Ref safety is core checkout containment, installed the way a hook manager's `prepare` step
+	// would install it. The command is idempotent and refuses a foreign hook instead of silently
+	// taking another hook manager's ownership.
 	if (isPrimaryCheckout(projectRoot)) run(join(toolkitRoot, "bin/pipeline"), ["cli", "ref-guard", "install"], projectRoot);
 	const managedPaths = [
 		...(languageVocabulary ? [languageVocabulary] : []),
@@ -918,7 +923,6 @@ const init = (args: string[]): void => {
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/agents", ".claude/agents", () => true, force, prior),
 		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/skills", ".claude/skills", (name) =>
 			(CORE_SKILL_NAMES.has(name) && existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name, "SKILL.md"))) ||
-			(enabledOptionalWorkflows.has(name) && existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name, "SKILL.md"))) ||
 			(CORE_WORKFLOW_SUPPORT_FILES.has(name) && existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name))),
 		force, prior),
 	];
@@ -935,8 +939,10 @@ const enable = (args: string[]): void => {
 	const requested = args.includes("--project-root") ? args[args.indexOf("--project-root") + 1] : undefined;
 	if (args.includes("--project-root") && !requested) fail("--project-root requires a path");
 	const workflow = args.find((arg) => arg !== "--project-root" && arg !== requested)
-		?? fail(`workflow name is required; available: ${Array.from(ARCHIVED_SKILL_NAMES).join(", ")}`);
-	if (!ARCHIVED_SKILL_NAMES.has(workflow)) fail(`workflow is not optional or does not exist: ${workflow}`);
+		?? fail(`workflow name is required; available: ${GITHUB_WORKFLOW_TEMPLATES.map((template) => basename(template.destination, ".yml")).join(", ")}`);
+	if (!GITHUB_WORKFLOW_TEMPLATES.some((template) => basename(template.destination, ".yml") === workflow)) {
+		fail(`workflow is not optional or does not exist: ${workflow}`);
+	}
 	const projectRoot = findProjectRoot(requested);
 	const policy = readOptionalWorkflowPolicy(projectRoot);
 	policy.workflows[workflow] = {...policy.workflows[workflow], enabled: true};
@@ -944,7 +950,7 @@ const enable = (args: string[]): void => {
 	init(["--project-root", projectRoot]);
 	const errors = check(projectRoot);
 	if (errors.length) fail(`enable failed:\n${errors.map((error) => `- ${error}`).join("\n")}`);
-	console.log(`pipeline: enabled optional workflow ${workflow}; configure its repository-owned adapter before external operations`);
+	console.log(`pipeline: enabled ${workflow}; it will run on the next pull request`);
 };
 
 const status = (args: string[]): void => {

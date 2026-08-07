@@ -1,7 +1,7 @@
 import {existsSync, readdirSync, readFileSync, statSync} from "node:fs";
 import {join} from "node:path";
 import {describe, expect, it} from "vitest";
-import {ARCHIVED_SKILL_NAMES, CORE_AGENT_NAMES, CORE_AGENT_SKILL_NAMES, CORE_SKILL_DEPENDENCIES, CORE_SKILL_NAMES, CORE_WORKFLOW_SUPPORT_FILES, renderWorkflowCatalog, WORKFLOW_CATALOG} from "./payload.ts";
+import {CORE_AGENT_NAMES, CORE_AGENT_SKILL_NAMES, CORE_SKILL_DEPENDENCIES, CORE_SKILL_NAMES, CORE_WORKFLOW_SUPPORT_FILES, renderWorkflowCatalog, WORKFLOW_CATALOG} from "./payload.ts";
 
 const root = join(process.cwd(), "../..");
 const portablePaths = [
@@ -79,7 +79,6 @@ const files = (path: string): string[] => {
 	);
 };
 const archivedWorkflowFiles = [
-	...Array.from(ARCHIVED_SKILL_NAMES, (name) => `claude-plugins/kampus-pipeline/skills/${name}`),
 	"claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md",
 	"claude-plugins/kampus-pipeline/skills/validate-cycle-absence.sh",
 	"claude-plugins/kampus-pipeline/skills/validate-cycle-presence.sh",
@@ -210,41 +209,7 @@ describe("portable toolkit boundary", () => {
 		expect(registry).toContain("refGuardCommand");
 	});
 
-	it("declares a complete, non-overlapping portable core and archived workflow catalog", () => {
-		const catalog = JSON.parse(readFileSync(join(root, "claude-plugins/kampus-pipeline/workflow-catalog.json"), "utf8")) as {
-		portableCore?: {skills?: string[]; supportFiles?: string[]; agents?: string[]};
-			archiveRequiresAdapter?: {skills?: string[]; activation?: string};
-		};
-		expect(new Set(catalog.portableCore?.skills)).toEqual(CORE_SKILL_NAMES);
-		expect(new Set(catalog.portableCore?.supportFiles)).toEqual(CORE_WORKFLOW_SUPPORT_FILES);
-		expect(new Set(catalog.portableCore?.agents)).toEqual(CORE_AGENT_NAMES);
-		expect(new Set(catalog.archiveRequiresAdapter?.skills)).toEqual(ARCHIVED_SKILL_NAMES);
-		expect(catalog.archiveRequiresAdapter?.activation).toContain("repository-owned adapter");
-		for (const skill of ARCHIVED_SKILL_NAMES) expect(CORE_SKILL_NAMES.has(skill)).toBe(false);
-		expect(readFileSync(join(root, "claude-plugins/kampus-pipeline/workflow-catalog.json"), "utf8")).toBe(renderWorkflowCatalog());
-		expect(WORKFLOW_CATALOG.entries.some((entry) => entry.name === "main-sync" && entry.artifactType === "cli-command")).toBe(true);
-		expect(WORKFLOW_CATALOG.entries.some((entry) => entry.name === "release" && entry.deliveryClass === "optional-with-adapter")).toBe(true);
-	});
 
-	it("retains archived workflows without source policy or default activation", () => {
-		const missingArchivedSkills: string[] = [];
-		const missingAdapterBoundary: string[] = [];
-		const sourcePolicyMatches: string[] = [];
-		for (const skill of ARCHIVED_SKILL_NAMES) {
-			const file = join(root, "claude-plugins/kampus-pipeline/skills", skill, "SKILL.md");
-			if (!existsSync(file)) {
-				missingArchivedSkills.push(skill);
-				continue;
-			}
-			const text = readFileSync(file, "utf8");
-			if (!text.includes(".pipeline/optional-workflow-policy.json")) missingAdapterBoundary.push(skill);
-			const match = text.match(archivedWorkflowForbidden);
-			if (match) sourcePolicyMatches.push(`${skill}: ${match[0]}`);
-		}
-		expect(missingArchivedSkills).toEqual([]);
-		expect(missingAdapterBoundary).toEqual([]);
-		expect(sourcePolicyMatches).toEqual([]);
-	});
 
 	it("keeps the retained archive free of source rules and unresolved provenance", () => {
 		const matches = archivedWorkflowFiles.flatMap((file) => {

@@ -12,8 +12,6 @@ const CORE_SKILLS = [
 
 const CORE_SUPPORT_FILES = ["gh-issue-intake-formats.md"] as const;
 const CORE_AGENTS = ["adr", "canon", "coder", "planner", "reporter", "reviewer", "shipper", "triager"] as const;
-const OPTIONAL_SKILLS = ["campaign", "release", "rite-audit"] as const;
-
 export const CORE_SKILL_DEPENDENCIES: Readonly<Record<string, ReadonlyArray<string>>> = {
 	adr: ["glossary", "report"], "architecture-audit": ["report"], "author-skill": ["review-skill"], canon: [],
 	"deslop-comments": ["adr", "report"], diataxis: ["deslop-comments"], doctor: [], glossary: [],
@@ -86,21 +84,11 @@ const optionalWorkflowEntries: ReadonlyArray<CatalogEntry> = GENERATED_WORKFLOWS
 	authorityBoundary: "Installed only when the repository enables it; repository-owned checks and paths remain explicit.",
 }));
 
-const optionalEntries: ReadonlyArray<CatalogEntry> = OPTIONAL_SKILLS.map((name) => ({
-	name, artifactType: "skill", deliveryClass: "optional-with-adapter",
-	entryPoint: `.claude/skills/${name}`, prerequisites: [".pipeline/optional-workflow-policy.json", "repository-owned adapter"],
-	authorityBoundary: "Enabled means linked only; provider and external authority remain repository-owned.",
-}));
-
 /** The canonical consumer-facing catalogue. */
 export const WORKFLOW_CATALOG = {
 	schemaVersion: 2,
 	portableCore: {skills: CORE_SKILLS, supportFiles: CORE_SUPPORT_FILES, agents: CORE_AGENTS},
-	archiveRequiresAdapter: {
-		skills: OPTIONAL_SKILLS,
-		activation: "Run `pipeline enable <workflow>` to link an optional skill. A repository-owned adapter and explicit authority policy are still required before external operations.",
-	},
-	entries: [...coreEntries, ...optionalWorkflowEntries, ...optionalEntries],
+	entries: [...coreEntries, ...optionalWorkflowEntries],
 } as const;
 
 /** Deterministic JSON payload used by the checked-in catalogue generator and drift check. */
@@ -110,4 +98,3 @@ export const renderWorkflowCatalog = (): string => `${JSON.stringify(WORKFLOW_CA
 export const CORE_SKILL_NAMES = new Set<string>(WORKFLOW_CATALOG.portableCore.skills);
 export const CORE_WORKFLOW_SUPPORT_FILES = new Set<string>(WORKFLOW_CATALOG.portableCore.supportFiles);
 export const CORE_AGENT_NAMES = new Set<string>(WORKFLOW_CATALOG.portableCore.agents);
-export const ARCHIVED_SKILL_NAMES = new Set<string>(WORKFLOW_CATALOG.archiveRequiresAdapter.skills);
