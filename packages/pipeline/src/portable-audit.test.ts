@@ -1,7 +1,8 @@
-import {existsSync, readdirSync, readFileSync, statSync} from "node:fs";
+import {existsSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import {describe, expect, it} from "vitest";
 import {CORE_AGENT_NAMES, CORE_AGENT_SKILL_NAMES, CORE_SKILL_DEPENDENCIES, CORE_SKILL_NAMES, CORE_WORKFLOW_SUPPORT_FILES, renderWorkflowCatalog, WORKFLOW_CATALOG} from "./payload.ts";
+import {collectPayloadFiles} from "./portable-files.ts";
 
 const root = join(process.cwd(), "../..");
 const portablePaths = [
@@ -71,13 +72,11 @@ const archivedWorkflowForbidden = new RegExp(
 	"i",
 );
 
-const files = (path: string): string[] => {
-	const absolute = join(root, path);
-	if (!statSync(absolute).isDirectory()) return [absolute];
-	return readdirSync(absolute, {withFileTypes: true}).flatMap((entry) =>
-		files(join(path, entry.name)),
-	);
-};
+/**
+ * The payload files under a path. Bounded to the repository — see `portable-files.ts` for why a
+ * walk that follows a symlink out of the tree audits somebody else's copy of the pipeline (#36).
+ */
+const files = (path: string): string[] => collectPayloadFiles(root, path);
 const archivedWorkflowFiles = [
 	"claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md",
 	"claude-plugins/kampus-pipeline/skills/validate-cycle-absence.sh",
