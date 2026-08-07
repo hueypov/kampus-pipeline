@@ -6,11 +6,15 @@ import {
 	isReviewed,
 	isUnboundPolarityMarker,
 	malformedEmittedSha,
+	nextRounds,
 	parseVerdict,
 	resolveVerdict,
+	roundsOf,
 	type VerdictComment,
 	type VerdictGate,
 	type VerdictOutcome,
+	verdictRe,
+	withRounds,
 } from "./verdict-match.ts";
 
 const HEAD = "abc1234def5678";
@@ -406,4 +410,41 @@ describe("emissionDefect — the one gate `post` and `validate` share (#2683/#27
 		assert.isNotNull(
 			emissionDefect(`review-code: PASS @ ${SHA40}\n\nsee /Users/foo/scratch/notes`, "code"),
 		));
+});
+
+describe("repair-round trailer (#21)", () => {
+	it("reads 0 from a first verdict that carries no trailer", () => {
+		assert.strictEqual(roundsOf("review-code: FAIL @ abc\n\nfindings"), 0);
+	});
+
+	it("round-trips a count through the trailer", () => {
+		const body = withRounds("review-code: FAIL @ abc\n\nfindings", 2);
+		assert.strictEqual(roundsOf(body), 2);
+		assert.ok(body.includes("<!-- rounds: 2 -->"));
+	});
+
+	it("replaces an existing trailer rather than stacking a second", () => {
+		const twice = withRounds(withRounds("review-code: FAIL @ abc", 1), 2);
+		assert.strictEqual(roundsOf(twice), 2);
+		assert.strictEqual((twice.match(/<!-- rounds:/g) ?? []).length, 1);
+	});
+
+	it("never displaces the marker line the matchers anchor on", () => {
+		const body = withRounds("review-code: FAIL @ abcdef1\n\nfindings", 3);
+		assert.strictEqual(body.split("\n")[0], "review-code: FAIL @ abcdef1");
+		assert.ok(verdictRe("code").test(body));
+	});
+
+	it("a FAIL opens a round; a PASS preserves the count rather than resetting it", () => {
+		// The count must survive the verdict that ends the loop, or the history of how many
+		// repairs it took is destroyed by the success — which is the #21 defect itself.
+		assert.strictEqual(nextRounds(0, "FAIL"), 1);
+		assert.strictEqual(nextRounds(1, "FAIL"), 2);
+		assert.strictEqual(nextRounds(2, "PASS"), 2);
+		assert.strictEqual(nextRounds(0, "PASS"), 0);
+	});
+
+	it("treats a malformed trailer as no count rather than NaN", () => {
+		assert.strictEqual(roundsOf("x <!-- rounds: -->"), 0);
+	});
 });

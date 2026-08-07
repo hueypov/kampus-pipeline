@@ -202,7 +202,13 @@ Machine-readable, one line: `rounds <k> cap <n> <under|at|over>`.
 
 **Scope**
 
-A round is one FAIL verdict in a gate namespace. The cap comes from repository policy; absent
+**A round is a count the verdict marker carries, not a FAIL marker to be counted.** The obvious
+reading — one FAIL comment is one round — cannot work here, and the reason is the gate-verdict
+contract's own §V3: one verdict per gate is *upserted*, so the FAIL a repair answered is overwritten
+by the PASS that follows it. Counting markers therefore yields 0 after any completed round and can
+never exceed 1. `verdict post` maintains a round trailer inside the marker instead — a FAIL
+increments it, a PASS preserves it — and the trailer survives because the comment is patched rather
+than replaced. The cap comes from repository policy; absent
 policy, the default cap is 2. Exit 3 is the escalation signal, and it is the verb's job rather than
 the skill's because a bound nobody counts is not a bound — a directly-invoked run with no
 orchestrator can otherwise repair forever.

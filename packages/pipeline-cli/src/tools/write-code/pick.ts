@@ -76,19 +76,27 @@ export const composePrBody = (description: string, issue: number): string =>
 	`${description.replace(/\s+$/, "")}\n\n${closingReference(issue)}\n`;
 
 /**
- * How many repair rounds a PR has had, counted from its verdict markers.
+ * How many repair rounds a PR has had, read from the round trailer its verdict marker carries.
  *
- * One FAIL marker is one round. The cap is a bound with nothing behind it unless something counts,
- * and a skill invoked directly — with no orchestrator tracking state — can otherwise repair
- * forever.
+ * It does NOT count FAIL markers. One verdict per gate is upserted, so the FAIL a repair answered
+ * is overwritten by the PASS that follows it — counting them yields 0 after any completed round and
+ * can never exceed 1 (#21). The trailer survives the upsert because the comment is patched, not
+ * replaced, and `verdict post` maintains it.
  */
 export const countFailRounds = (
 	comments: ReadonlyArray<{readonly body: string}>,
 	gate?: string,
 ): number => {
 	const ns = gate ? `review-${gate}` : "review-(?:code|doc|skill|design)";
-	const re = new RegExp(`^\\s*\\**\\s*${ns}:\\s*\\**\\s*FAIL\\b`, "im");
-	return comments.filter((c) => re.test(c.body)).length;
+	const marker = new RegExp(`^\\s*\\**\\s*${ns}:\\s*\\**\\s*(?:PASS|FAIL)\\b`, "im");
+	const trailer = /<!--\s*rounds:\s*(\d+)\s*-->/;
+	return comments
+		.filter((c) => marker.test(c.body))
+		.reduce((most, c) => {
+			const m = trailer.exec(c.body);
+			const n = m ? Number.parseInt(m[1] ?? "0", 10) : 0;
+			return Number.isFinite(n) && n > most ? n : most;
+		}, 0);
 };
 
 export type CapState = "under" | "at" | "over";
