@@ -30,16 +30,28 @@ copy of something load-bearing and keep an intact copy of something nobody needs
 
 Two things came out of measuring rather than reading, and both changed the answer.
 
-**The damage is not spread across seventeen skills. It is concentrated in five.**
+**The damage is not spread across seventeen skills. It is concentrated in the review family and the
+one contract they all cite.**
 
-| | placeholders | broken links |
-|---|---|---|
-| the five `review-*` gates (excl. `review-code`) | 27–63 each | 2–8 each |
-| every other remaining skill | 0–5 | 0–1 |
+| | placeholders |
+|---|---|
+| `gh-issue-intake-formats.md` — the shared formats contract | **197** |
+| the five `review-*` gates (excl. `review-code`) | 63, 63, 48, 27, 16 |
+| the installed agent definitions, `reviewer` worst at 15 | 28 total |
+| every other skill combined | 14 |
 
 Issue #39 was filed on the premise that roughly seventeen skills carry the extraction's prose. They
-do not. The ambient skills are largely intact and mostly just **oversized**; the review family is the
-wreck. That reframes the remaining work from a broad sweep into one concentrated repair.
+do not. The ambient skills are largely intact and mostly just **oversized**.
+
+The first row is the finding, and it was nearly missed: measuring only `SKILL.md` files put the
+review gates on top and made the answer look like "rewrite five skills". The largest single
+concentration is not a skill at all — it is the support file every stage cites, and it holds more
+damage than all five gates but one. Rewriting the gates without it would leave five fresh skills
+pointing into 197 unanchored references.
+
+So `gh-issue-intake-formats.md` is part of the review-family unit of work, not a separate item after
+it. Thirty-two link targets with spaces in them survive across eight files, and they travel with the
+same repair.
 
 **Reachability is a real discriminator, and it overturned a verdict.** `wayfinder` was set for
 deletion on a grep that found one inbound reference, which read as noise. It is not noise: the
@@ -93,8 +105,10 @@ and is tested. That is a wiring gap, not a dead skill. Rewriting it belongs with
 
 ## What follows
 
-- The five `review-*` gates are one unit of work, not five, and now include `review-trivial`
-  ([#40](https://github.com/hueypov/kampus-pipeline/issues/40)). `reviewer` should list it.
+- The review repair is **seven files, not five**: the five gates, plus
+  `gh-issue-intake-formats.md` (the largest concentration of damage anywhere), plus
+  `agents/reviewer.md` ([#40](https://github.com/hueypov/kampus-pipeline/issues/40)). `reviewer`
+  should also list `review-trivial`.
 - Six kept skills are over the 140-line band — `canon`, `glossary`, `heal-ci`, and the gates. Being
   oversized is a rewrite cost, not a deletion reason, and it is the only thing left after this.
 - Fixed here: `doctor`'s routing description called this "the private, project-local kampus
