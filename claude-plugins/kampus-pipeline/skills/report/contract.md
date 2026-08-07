@@ -62,10 +62,18 @@ Exit 3 is the load-bearing one. A query with no usable keywords must be **imposs
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `report dedup: no usable keywords in --query — nothing was compared` | stderr | 3 | refusal |
-| `report dedup: could not read the <queue\|search> source (<reason>) — outcome UNKNOWN` | stderr | 4 | refusal |
+| `report dedup: too few distinctive keywords in --query (<n>: [<tokens>]) — nothing was compared` | stderr | 3 | refusal |
+| `report dedup: could not read a source (<reason>) — outcome UNKNOWN` | stderr | 4 | refusal |
 | `report dedup: --query is required` | stderr | 1 | usage |
 | `report dedup: --limit must be a positive integer` | stderr | 1 | usage |
+
+**The `indeterminate` threshold is a count, not an empty set.** A query is indeterminate below
+**three** usable tokens after stopword removal. An earlier draft of this spec said "no usable
+keywords", and implementing it exposed that as wrong: `"it did the thing"` survives tokenization as
+`did thing` — neither word is a stopword and both clear the length floor — so a zero-token test
+never fires and the verb reports a confident `none` from a query that compared nothing. Growing the
+stoplist instead would be endless; the defect is the count of discriminating terms, not which
+particular words slipped through.
 
 **Scope**
 
