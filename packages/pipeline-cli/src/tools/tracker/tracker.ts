@@ -849,8 +849,8 @@ const postVerdict = Effect.fn("Tracker.postVerdict")(function* (
 });
 
 /**
- * Create a new issue (the portable tracker-interface rule) — the intake-create envelope the report / wayfinder /
- * architecture-audit / triage skills hand-composed, now one verb with the content as a
+ * Create a new issue (the portable tracker-interface rule) — the intake-create envelope the report /
+ * wayfinder / plan-epic / triage skills hand-composed, now one verb with the content as a
  * parameter. The `stage` maps to the single `status:<stage>` label the new entity enters
  * with (default `needs-triage`, the intake queue); the created ref + locator are
  * Schema-decoded at the REST boundary and returned domain-shaped.

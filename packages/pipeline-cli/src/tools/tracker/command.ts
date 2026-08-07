@@ -153,8 +153,8 @@ const applyTriage = Command.make(
 );
 
 // The create envelope (the originating work item): title/body/stage as parameters. `--body` defaults to stdin so
-// a composed markdown body streams straight in — the report/wayfinder/architecture-audit
-// intake flows pipe their heredoc into the verb, keeping the documented failure no-shared-temp-file property.
+// a composed markdown body streams straight in — the report/wayfinder/plan-epic intake flows pipe
+// their heredoc into the verb, keeping the documented failure no-shared-temp-file property.
 const titleFlag = Flag.string("title").pipe(Flag.withDescription("the new issue's title"));
 
 const bodyFlag = Flag.string("body").pipe(

@@ -3,7 +3,6 @@
 	"portableCore": {
 		"skills": [
 			"adr",
-			"architecture-audit",
 			"author-skill",
 			"canon",
 			"deslop-comments",
@@ -22,7 +21,6 @@
 			"ship-it",
 			"triage",
 			"wayfinder",
-			"what-shipped",
 			"write-code",
 			"writing-clearly-and-concisely"
 		],
@@ -48,16 +46,6 @@
 			"entryPoint": ".claude/skills/adr",
 			"prerequisites": [
 				"glossary",
-				"report"
-			],
-			"authorityBoundary": "Repository-owned policy governs external operations."
-		},
-		{
-			"name": "architecture-audit",
-			"artifactType": "skill",
-			"deliveryClass": "core-installed",
-			"entryPoint": ".claude/skills/architecture-audit",
-			"prerequisites": [
 				"report"
 			],
 			"authorityBoundary": "Repository-owned policy governs external operations."
@@ -240,14 +228,6 @@
 			"artifactType": "skill",
 			"deliveryClass": "core-installed",
 			"entryPoint": ".claude/skills/wayfinder",
-			"prerequisites": [],
-			"authorityBoundary": "Repository-owned policy governs external operations."
-		},
-		{
-			"name": "what-shipped",
-			"artifactType": "skill",
-			"deliveryClass": "core-installed",
-			"entryPoint": ".claude/skills/what-shipped",
 			"prerequisites": [],
 			"authorityBoundary": "Repository-owned policy governs external operations."
 		},

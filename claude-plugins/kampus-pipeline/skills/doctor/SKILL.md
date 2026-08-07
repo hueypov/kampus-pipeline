@@ -1,6 +1,6 @@
 ---
 name: doctor
-description: Check that a repository is ready to use the private, project-local kampus pipeline toolkit. Use for "doctor", "preflight", "check pipeline prerequisites", or "verify pipeline setup".
+description: Check that a repository is ready to use the project-local pipeline toolkit. Use for "doctor", "preflight", "check pipeline prerequisites", or "verify pipeline setup".
 ---
 
 # doctor

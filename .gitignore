@@ -2,3 +2,6 @@ node_modules
 dist
 *.tsbuildinfo
 .DS_Store
+
+# The toolkit's install hook plants these; they point outside the repo (#36).
+**/.claude/.pipeline
