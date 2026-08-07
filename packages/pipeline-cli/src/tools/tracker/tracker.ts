@@ -35,7 +35,12 @@
 import {Context, Effect, Layer} from "effect";
 import * as Schema from "effect/Schema";
 import {ChildProcessSpawner} from "effect/unstable/process";
-import {type ClaimComment, type ClaimWinner, resolveWinner} from "../epic-lock/claim-resolution.ts";
+import {
+	type ClaimComment,
+	type ClaimWinner,
+	ownClaimCommentIds,
+	resolveWinner,
+} from "../epic-lock/claim-resolution.ts";
 // The SHA-bound verdict-marker grammar and emission guard are the SINGLE SOURCE — reused, never
 // re-derived, exactly as the claim decision reuses `epic-lock/claim-resolution.ts`. `postVerdict`
 // composes and self-verifies its comment through this pure core so the tool OWNS the decision the
@@ -145,6 +150,14 @@ export interface TriageJudgment {
 	readonly type: string;
 	readonly priority: string;
 	readonly status?: string;
+	/**
+	 * Who the work is addressed to. Distinct from readiness: the stage says the ticket is ready,
+	 * this says ready *for whom*. Without it, a decision written for a person lands in a builder's
+	 * candidate pool.
+	 */
+	readonly readyFor?: string;
+	/** A standing-lane label applied instead of a milestone. Mutually exclusive with a home. */
+	readonly lane?: string;
 }
 
 /**
@@ -157,6 +170,10 @@ export type TriageResult = {
 	readonly type: string;
 	readonly priority: string;
 	readonly status: string;
+	/** The audience label that landed, read back rather than echoed. */
+	readonly readyFor: string | null;
+	/** The standing lane that landed, when one was requested. */
+	readonly lane: string | null;
 };
 
 /**
@@ -207,6 +224,32 @@ export type ReadIssueResult = {
 	readonly title: string;
 	readonly body: string;
 	readonly closed: boolean;
+};
+
+/**
+ * The `releaseClaim` result — how many of our own claim markers were retracted.
+ *
+ * Zero is a success, not a miss: the goal is "we hold no claim", and a session that never claimed
+ * already meets it. Making that an error would force every caller to special-case the common path.
+ */
+export type ReleaseResult = {
+	readonly _tag: "released";
+	readonly target: TargetId;
+	readonly retracted: number;
+};
+
+/** The `replaceBody` result — the landed body, read back so a caller can prove what it wrote. */
+export type ReplaceBodyResult = {
+	readonly _tag: "replaced";
+	readonly target: TargetId;
+	readonly body: string;
+};
+
+/** The `closeNotPlanned` result — the terminal state, read back rather than assumed. */
+export type CloseResult = {
+	readonly _tag: "closed";
+	readonly target: TargetId;
+	readonly reason: string;
 };
 
 /**
@@ -273,6 +316,28 @@ export type GraduateResult = {
 const readIssueArgs = (repo: string, target: number): ReadonlyArray<string> => [
 	"api",
 	`repos/${repo}/issues/${target}`,
+];
+
+const replaceBodyArgs = (repo: string, target: number, body: string): ReadonlyArray<string> => [
+	"api",
+	"-X",
+	"PATCH",
+	`repos/${repo}/issues/${target}`,
+	"-f",
+	`body=${body}`,
+];
+
+// `state_reason=not_planned` is the half that matters. A plain close reads as "done", and an
+// unsalvageable filing closed as done is indistinguishable downstream from work that shipped.
+const closeNotPlannedArgs = (repo: string, target: number): ReadonlyArray<string> => [
+	"api",
+	"-X",
+	"PATCH",
+	`repos/${repo}/issues/${target}`,
+	"-f",
+	"state=closed",
+	"-f",
+	"state_reason=not_planned",
 ];
 
 const createIssueArgs = (
@@ -460,6 +525,8 @@ const applyTriage = Effect.fn("Tracker.applyTriage")(function* (
 ) {
 	const status = judgment.status ?? "triaged";
 	const add = [`type:${judgment.type}`, judgment.priority, `${LABEL_STATUS_PREFIX}${status}`];
+	if (judgment.readyFor) add.push(`ready-for:${judgment.readyFor}`);
+	if (judgment.lane) add.push(judgment.lane);
 	yield* runGh(addLabelsArgs(repo, target, add));
 	yield* runGh(removeLabelArgs(repo, target, `${LABEL_STATUS_PREFIX}${QUEUE_STATUS}`)).pipe(
 		Effect.catchTag("@kampus/gh-io/GhCommandError", () => Effect.succeed("")),
@@ -470,11 +537,15 @@ const applyTriage = Effect.fn("Tracker.applyTriage")(function* (
 		.filter((name) => name.startsWith(LABEL_STATUS_PREFIX))
 		.map((name) => name.slice(LABEL_STATUS_PREFIX.length))
 		.find((stage) => stage !== QUEUE_STATUS);
+	const landed = labels.map((label) => label.name);
 	return {
 		_tag: "triaged",
 		type: judgment.type,
 		priority: judgment.priority,
 		status: landedStatus ?? status,
+		readyFor:
+			landed.find((name) => name.startsWith("ready-for:"))?.slice("ready-for:".length) ?? null,
+		lane: judgment.lane && landed.includes(judgment.lane) ? judgment.lane : null,
 	} satisfies TriageResult;
 });
 
@@ -611,6 +682,44 @@ const readIssue = Effect.fn("Tracker.readIssue")(function* (repo: string, target
 	} satisfies ReadIssueResult;
 });
 
+const releaseClaim = Effect.fn("Tracker.releaseClaim")(function* (
+	repo: string,
+	target: TargetId,
+	session: string,
+) {
+	const ids = ownClaimCommentIds(yield* listClaimComments(repo, target), session);
+	// Deleting a comment that is already gone is not a failure — a retried release must converge
+	// on "no claim held" rather than red on the second attempt.
+	for (const id of ids) yield* runGh(deleteCommentArgs(repo, id)).pipe(Effect.ignore);
+	return {_tag: "released", target, retracted: ids.length} satisfies ReleaseResult;
+});
+
+const replaceBody = Effect.fn("Tracker.replaceBody")(function* (
+	repo: string,
+	target: TargetId,
+	body: string,
+) {
+	yield* json(replaceBodyArgs(repo, target, body));
+	// Read back rather than trust the PATCH echo: the caller's whole reason to call this is to
+	// prove a rewrite preserved something, and that proof has to come from the stored body.
+	const landed = yield* decodeIssue(yield* json(readIssueArgs(repo, target)));
+	return {_tag: "replaced", target, body: landed.body ?? ""} satisfies ReplaceBodyResult;
+});
+
+const closeNotPlanned = Effect.fn("Tracker.closeNotPlanned")(function* (
+	repo: string,
+	target: TargetId,
+) {
+	yield* json(closeNotPlannedArgs(repo, target));
+	const landed = yield* decodeIssue(yield* json(readIssueArgs(repo, target)));
+	if (landed.state === "open") {
+		return yield* new TrackerVerifyError({
+			message: `close did not land on #${target} — still open`,
+		});
+	}
+	return {_tag: "closed", target, reason: "not_planned"} satisfies CloseResult;
+});
+
 const createIssue = Effect.fn("Tracker.createIssue")(function* (
 	repo: string,
 	judgment: CreateIssueJudgment,
@@ -703,6 +812,17 @@ export class Tracker extends Context.Service<
 			judgment: TriageJudgment,
 		) => Effect.Effect<TriageResult, TrackerErrors>;
 		readonly readIssue: (target: TargetId) => Effect.Effect<ReadIssueResult, TrackerErrors>;
+		readonly releaseClaim: (
+			target: TargetId,
+			judgment: ClaimJudgment,
+		) => Effect.Effect<ReleaseResult, TrackerErrors>;
+		readonly replaceBody: (
+			target: TargetId,
+			body: string,
+		) => Effect.Effect<ReplaceBodyResult, TrackerErrors>;
+		readonly closeNotPlanned: (
+			target: TargetId,
+		) => Effect.Effect<CloseResult, TrackerErrors | TrackerVerifyError>;
 		readonly createIssue: (
 			judgment: CreateIssueJudgment,
 		) => Effect.Effect<CreateIssueResult, TrackerErrors>;
@@ -746,6 +866,12 @@ export const GithubTrackerLive: Layer.Layer<
 			applyTriage: (target, judgment) =>
 				repo.pipe(Effect.flatMap((r) => withSpawner(applyTriage(r, target, judgment)))),
 			readIssue: (target) => repo.pipe(Effect.flatMap((r) => withSpawner(readIssue(r, target)))),
+			releaseClaim: (target, judgment) =>
+				repo.pipe(Effect.flatMap((r) => withSpawner(releaseClaim(r, target, judgment.session)))),
+			replaceBody: (target, body) =>
+				repo.pipe(Effect.flatMap((r) => withSpawner(replaceBody(r, target, body)))),
+			closeNotPlanned: (target) =>
+				repo.pipe(Effect.flatMap((r) => withSpawner(closeNotPlanned(r, target)))),
 			createIssue: (judgment) =>
 				repo.pipe(Effect.flatMap((r) => withSpawner(createIssue(r, judgment)))),
 			createComment: (target, judgment) =>

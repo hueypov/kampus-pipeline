@@ -327,6 +327,8 @@ describe("Tracker.applyTriage — the label-transition envelope over a mock gh s
 				type: "feature",
 				priority: "p2",
 				status: "triaged",
+				readyFor: null,
+				lane: null,
 			});
 		}).pipe((effect) =>
 			provide(effect, {
@@ -355,6 +357,8 @@ describe("Tracker.applyTriage — the label-transition envelope over a mock gh s
 				type: "bug",
 				priority: "p1",
 				status: "needs-info",
+				readyFor: null,
+				lane: null,
 			});
 		}).pipe((effect) =>
 			provide(effect, {
@@ -378,6 +382,8 @@ describe("Tracker.applyTriage — the label-transition envelope over a mock gh s
 				type: "chore",
 				priority: "p2",
 				status: "triaged",
+				readyFor: null,
+				lane: null,
 			});
 		}).pipe((effect) =>
 			provide(effect, {
