@@ -14,10 +14,9 @@ import {Console, Effect, Option} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
 import {Tracker, GithubTrackerLive} from "../tracker/tracker.ts";
 import {acceptanceCriteria, closedIssue, renderBrief} from "./brief.ts";
+import * as Exit from "../../exit-codes.ts";
 
-const EXIT_NO_REFERENCE = 3;
-const EXIT_NO_CRITERIA = 4;
-const EXIT_UNKNOWN = 11;
+
 
 const refuse = (message: string, code: number): Effect.Effect<never> =>
 	Effect.sync(() => {
@@ -40,7 +39,7 @@ const brief = Command.make(
 
 		const prState = yield* tracker.readPullRequest(pr).pipe(Effect.option);
 		if (Option.isNone(prState)) {
-			return yield* refuse(`could not read #${pr} — UNKNOWN`, EXIT_UNKNOWN);
+			return yield* refuse(`could not read #${pr} — UNKNOWN`, Exit.PRECONDITION_UNKNOWN);
 		}
 
 		const issue = closedIssue(prState.value.body);
@@ -49,13 +48,13 @@ const brief = Command.make(
 			// the reviewer from inventing criteria, which would make it the author of the spec.
 			return yield* refuse(
 				`#${pr} has no closing reference — nothing to grade against`,
-				EXIT_NO_REFERENCE,
+				Exit.ZERO_SCOPE,
 			);
 		}
 
 		const issueState = yield* tracker.readIssue(issue).pipe(Effect.option);
 		if (Option.isNone(issueState)) {
-			return yield* refuse(`could not read #${issue} for #${pr} — UNKNOWN`, EXIT_UNKNOWN);
+			return yield* refuse(`could not read #${issue} for #${pr} — UNKNOWN`, Exit.PRECONDITION_UNKNOWN);
 		}
 
 		const criteria = acceptanceCriteria(issueState.value.body);
@@ -64,13 +63,13 @@ const brief = Command.make(
 		if (criteria === null || criteria.length === 0) {
 			return yield* refuse(
 				`#${pr} closes #${issue}, which has no acceptance criteria`,
-				EXIT_NO_CRITERIA,
+				Exit.MALFORMED_INPUT,
 			);
 		}
 
 		const files = yield* tracker.listPrFiles(pr).pipe(Effect.option);
 		if (Option.isNone(files)) {
-			return yield* refuse(`could not read changed files for #${pr} — UNKNOWN`, EXIT_UNKNOWN);
+			return yield* refuse(`could not read changed files for #${pr} — UNKNOWN`, Exit.PRECONDITION_UNKNOWN);
 		}
 
 		const assembled = {

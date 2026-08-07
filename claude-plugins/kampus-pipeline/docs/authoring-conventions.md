@@ -102,7 +102,25 @@ from a finished one before starting.
 6. **No clause defers** to a v1 script, another skill's prose, or the authoring session. The spec
    *is* the contract; one that points elsewhere has not derived one.
 
-## 6. Evals
+## 6. Exit codes come from one table
+
+Every verb allocates from `packages/pipeline-cli/src/exit-codes.ts`. A code means the same thing
+whichever verb produced it, so a caller driving several stages in one sweep can branch on the number
+without first knowing which verb it came from.
+
+Before that table existed, `3` meant "backed off", "nothing pickable" and "the check did not
+discriminate" depending on the caller, and `5` meant three more things — the same proven-versus-
+unknown collapse the verbs were written to remove, reintroduced at the level of the exit code.
+
+`0`, `1` and `2` are reserved by the interface. Everything from `3` up is a fact the verb **proved**.
+The distinctions that look redundant are the ones carrying the design — proven-absent versus
+could-not-read, a check that matched nothing versus one that could not discriminate, a write whose
+outcome is unknown versus a plain failure, a reviewer's FAIL versus a red build.
+
+A contract's exit table is a **view** of that module, never a second source. When they disagree, the
+module is right and the contract is stale.
+
+## 7. Evals
 
 `evals/evals.json` grades the **judgment layer** — what the SKILL.md carries — not the verbs.
 
@@ -120,7 +138,7 @@ decline — measuring verification diligence instead of the behavior under test.
 An invariant only fails under pressure, so a prompt should supply a sympathetic reason to break the
 rule, not a neutral one.
 
-## 7. Frontmatter, enforced
+## 8. Frontmatter, enforced
 
 `validate-skills.sh` fails the build unless every `skills/*/SKILL.md` opens with a `---` fence on
 line 1, carries a non-empty `name` matching its directory, and carries a non-empty `description`.

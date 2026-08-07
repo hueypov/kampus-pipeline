@@ -22,12 +22,12 @@ import {canDiscriminate} from "./body.ts";
 import {Github, GithubLive} from "../intake-dedup/github.ts";
 import {GithubTrackerLive} from "../tracker/tracker.ts";
 import {writeSubcommands} from "./write.ts";
+import * as Exit from "../../exit-codes.ts";
 
 const DEFAULT_STAGE = "status:needs-triage";
 const DEFAULT_LIMIT = 20;
 
-const EXIT_INDETERMINATE = 3;
-const EXIT_READ_FAILED = 4;
+
 
 const queryFlag = Flag.string("query").pipe(
 	Flag.withDescription(
@@ -72,7 +72,7 @@ const check = Command.make(
 		if (!canDiscriminate(tokens)) {
 			return yield* refuse(
 				`too few distinctive keywords in --query (${tokens.length}: [${tokens.join(" ")}]) — nothing was compared`,
-				EXIT_INDETERMINATE,
+				Exit.INDETERMINATE,
 			);
 		}
 
@@ -81,7 +81,7 @@ const check = Command.make(
 		// generic non-zero exit would be survivable; printing `none` would not, which is why this
 		// resolves to its own code rather than sharing one with a usage error.
 		const unknown = (reason: string) =>
-			refuse(`could not read a source (${reason}) — outcome UNKNOWN`, EXIT_READ_FAILED);
+			refuse(`could not read a source (${reason}) — outcome UNKNOWN`, Exit.PRECONDITION_UNKNOWN);
 		const [queue, search] = yield* Effect.all([gh.queue(stage), gh.search(tokens)], {
 			concurrency: "unbounded",
 		}).pipe(

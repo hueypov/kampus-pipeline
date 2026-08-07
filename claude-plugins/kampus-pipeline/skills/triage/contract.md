@@ -109,18 +109,18 @@ Prose, one line: `triage: claimed #<n> (session <id>) — proceed.` /
 | Code | Trigger |
 |---|---|
 | 0 | `claim`: the hold is ours. `release`: the hold is gone (including when we did not hold one) |
-| 3 | `claim`: another session holds it, or we lost the tiebreak — back off, do not mutate |
-| 2 | no session id available, so no distinguishable claim can be made |
-| 4 | the read or write failed; ownership is UNKNOWN |
+| 6 | `claim`: another session holds it, or we lost the tiebreak — back off, do not mutate |
+| 4 | no session id available, so no distinguishable claim can be made |
+| 11 | the read or write failed; ownership is UNKNOWN |
 | 1 | usage error |
 
 **Errors**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `triage claim: no session id (set $CLAUDE_CODE_SESSION_ID or pass --session) — refusing an indistinguishable claim` | stderr | 2 | refusal |
-| `triage claim: #<n> is held by session <id> — back off, do not mutate` | stderr | 3 | refusal |
-| `triage release: could not confirm the hold was removed on #<n>` | stderr | 4 | refusal |
+| `triage claim: no session id (set $CLAUDE_CODE_SESSION_ID or pass --session) — refusing an indistinguishable claim` | stderr | 4 | refusal |
+| `triage claim: #<n> is held by session <id> — back off, do not mutate` | stderr | 6 | refusal |
+| `triage release: could not confirm the hold was removed on #<n>` | stderr | 11 | refusal |
 
 `release` is idempotent: releasing a hold we do not have is exit 0, because the goal — no hold — is
 already met.
@@ -129,7 +129,7 @@ already met.
 
 A triage hold is **sweep-scoped**, unlike the durable hold `write-code` takes. It exists to stop two
 concurrent sweeps rewriting one body, and it must not outlive the sweep: an issue whose triage hold
-was never released can never be re-triaged, because every later session backs off at exit 3.
+was never released can never be re-triaged, because every later session backs off at exit 6.
 
 **Examples**
 
@@ -144,7 +144,7 @@ triage: released #4312.
 
 - `tracker claim` exists; there is no counterpart that drops a hold, so today a triaged issue keeps
   its claim marker permanently.
-- Exit 3 is separate from 1 so "somebody else has it" — an expected, correct outcome during a
+- Exit 6 is separate from 1 so "somebody else has it" — an expected, correct outcome during a
   concurrent sweep — is never confused with a broken invocation.
 
 ---
@@ -172,16 +172,16 @@ Machine-readable, one word on stdout: `agent`, `human`, or `ambiguous`.
 | Code | Trigger |
 |---|---|
 | 0 | `agent` — the provenance footer is present and well-formed |
-| 3 | `human` — no footer; hand-typed, and therefore protected from closure |
-| 5 | `ambiguous` — a footer-like line that does not parse; treat as human |
-| 4 | the body could not be read; provenance UNKNOWN |
+| 10 | `human` — no footer; hand-typed, and therefore protected from closure |
+| 11 | `ambiguous` — a footer-like line that does not parse; treat as human |
+| 11 | the body could not be read; provenance UNKNOWN |
 | 1 | usage error |
 
 **Errors**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `triage provenance: #<n> body unreadable (<reason>) — provenance UNKNOWN` | stderr | 4 | refusal |
+| `triage provenance: #<n> body unreadable (<reason>) — provenance UNKNOWN` | stderr | 11 | refusal |
 
 **Scope**
 
@@ -198,14 +198,14 @@ agent
 $ pipeline cli triage provenance 4403
 human
 $ echo $?
-3
+10
 ```
 
 **Grounding**
 
 - This is the only check standing between a person's issue and machine closure, and it is currently
   performed by an agent looking for a string in a body.
-- `human` is exit 3 rather than 0 so a caller that ignores the exit code and reads only stdout still
+- `human` is exit 10 rather than 0 so a caller that ignores the exit code and reads only stdout still
   cannot proceed to a close by accident.
 
 ---
@@ -238,17 +238,19 @@ Prose, one line: `triage: split #<parent> -> created #<child> — <url>`, or
 | Code | Trigger |
 |---|---|
 | 0 | a child was created, or an existing one covering this (parent, title) was found and reused |
-| 2 | a guard refused before any write |
-| 4 | created, but the read-back did not match |
+| 3 | stdin held nothing |
+| 4 | the input cannot be used as given |
+| 5 | the body carries a machine-local path |
+| 13 | created, but the read-back did not match |
 | 1 | usage error |
 
 **Errors**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `triage split: empty body on stdin — nothing to file` | stderr | 2 | refusal |
-| `triage split: machine-local path in body (<class>)` | stderr | 2 | refusal |
-| `triage split: #<parent> not found` | stderr | 2 | refusal |
+| `triage split: empty body on stdin — nothing to file` | stderr | 3 | refusal |
+| `triage split: machine-local path in body (<class>)` | stderr | 5 | refusal |
+| `triage split: #<parent> not found` | stderr | 7 | refusal |
 
 **Scope**
 
@@ -301,20 +303,22 @@ the composed body on stdout.
 | Code | Trigger |
 |---|---|
 | 0 | the body was replaced and read back with the original intact |
-| 2 | a guard refused before any write |
-| 4 | written, but the read-back shows the original did not survive |
+| 3 | stdin held nothing |
+| 4 | the input cannot be used as given |
+| 5 | the body carries a machine-local path |
+| 13 | written, but the read-back shows the original did not survive |
 | 1 | usage error |
 
 **Errors**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `triage enrich: empty rewrite on stdin — refusing to replace a body with nothing` | stderr | 2 | refusal |
-| `triage enrich: machine-local path in the rewrite (<class>)` | stderr | 2 | refusal |
-| `triage enrich: machine-local path in the original (<class>) — pass --redact to preserve it masked` | stderr | 2 | refusal |
-| `triage enrich: --epic given but stdin is not empty — an epic's brief is never rewritten over` | stderr | 2 | refusal |
-| `triage enrich: read-back on #<n> shows the original was not preserved` | stderr | 4 | refusal |
-| `triage enrich: #<n> already carries a preserve block — re-enriching would nest it` | stderr | 2 | refusal |
+| `triage enrich: empty rewrite on stdin — refusing to replace a body with nothing` | stderr | 3 | refusal |
+| `triage enrich: machine-local path in the rewrite (<class>)` | stderr | 5 | refusal |
+| `triage enrich: machine-local path in the original (<class>) — pass --redact to preserve it masked` | stderr | 5 | refusal |
+| `triage enrich: --epic given but stdin is not empty — an epic's brief is never rewritten over` | stderr | 4 | refusal |
+| `triage enrich: read-back on #<n> shows the original was not preserved` | stderr | 13 | refusal |
+| `triage enrich: #<n> already carries a preserve block — re-enriching would nest it` | stderr | 4 | refusal |
 
 **Scope**
 
@@ -381,9 +385,11 @@ Prose, one line reading back what landed:
 | Code | Trigger |
 |---|---|
 | 0 | every facet landed and read back as sent |
-| 2 | a guard refused before any write |
-| 4 | written, but the read-back differs from what was sent |
-| 6 | homing is required by policy and neither `--home` nor `--lane` was given |
+| 3 | stdin held nothing |
+| 4 | the input cannot be used as given |
+| 5 | the body carries a machine-local path |
+| 13 | written, but the read-back differs from what was sent |
+| 10 | homing is required by policy and neither `--home` nor `--lane` was given |
 | 1 | usage error |
 
 **Errors**
@@ -391,10 +397,10 @@ Prose, one line reading back what landed:
 | Message | Stream | Code | Kind |
 |---|---|---|---|
 | `triage apply: --home and --lane are mutually exclusive` | stderr | 1 | usage |
-| `triage apply: '<t>' is not a configured type` | stderr | 2 | refusal |
-| `triage apply: homing is required by policy — pass --home or --lane` | stderr | 6 | refusal |
-| `triage apply: milestone '<h>' does not exist — triage never creates one` | stderr | 2 | refusal |
-| `triage apply: read-back on #<n> differs from what was sent` | stderr | 4 | refusal |
+| `triage apply: '<t>' is not a configured type` | stderr | 4 | refusal |
+| `triage apply: homing is required by policy — pass --home or --lane` | stderr | 10 | refusal |
+| `triage apply: milestone '<h>' does not exist — triage never creates one` | stderr | 7 | refusal |
+| `triage apply: read-back on #<n> differs from what was sent` | stderr | 13 | refusal |
 
 **Scope**
 
@@ -423,7 +429,7 @@ triage: #4318 — type:decision p1 ready-for:human stage:triaged home:none
 - `--ready-for` separates two questions that today collapse into one: `stage:triaged` says the
   ticket is ready, and nothing says ready *for whom*. Without it, a decision written for a person
   lands in a builder's candidate pool.
-- Exit 6 is distinct so a policy-required home that is missing cannot be mistaken for a rejected
+- A policy-required home that is missing cannot be mistaken for a rejected
   classification.
 
 ---
@@ -454,15 +460,17 @@ Prose, one line: `triage: parked #<n> at <stage> — questions posted.`
 | Code | Trigger |
 |---|---|
 | 0 | the questions landed and the stage moved |
-| 2 | a guard refused before any write |
+| 3 | stdin held nothing |
+| 4 | the input cannot be used as given |
+| 5 | the body carries a machine-local path |
 | 1 | usage error |
 
 **Errors**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `triage park: empty body on stdin — parking without questions strands the issue` | stderr | 2 | refusal |
-| `triage park: machine-local path in body (<class>)` | stderr | 2 | refusal |
+| `triage park: empty body on stdin — parking without questions strands the issue` | stderr | 3 | refusal |
+| `triage park: machine-local path in body (<class>)` | stderr | 5 | refusal |
 
 **Scope**
 
@@ -517,19 +525,21 @@ Prose, one line: `triage: killed #<n> — closed not-planned.` With `--duplicate
 | Code | Trigger |
 |---|---|
 | 0 | the fold (if any) landed, and the issue closed not-planned |
-| 2 | a guard refused before any write |
-| 3 | the target resolves to `human` provenance and may not be killed |
-| 4 | the fold succeeded but the close did not — content moved, issue still open |
+| 3 | stdin held nothing |
+| 4 | the input cannot be used as given |
+| 5 | the body carries a machine-local path |
+| 10 | the target resolves to `human` provenance and may not be killed |
+| 12 | the fold succeeded but the close did not — content moved, issue still open |
 | 1 | usage error |
 
 **Errors**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `triage kill: #<n> is human-filed — park it instead; it may not be closed` | stderr | 3 | refusal |
+| `triage kill: #<n> is human-filed — park it instead; it may not be closed` | stderr | 10 | refusal |
 | `triage kill: --confirm is required — it attests salvage was attempted` | stderr | 1 | usage |
-| `triage kill: empty reason on stdin — a kill with no audit trail is unreviewable` | stderr | 2 | refusal |
-| `triage kill: fold into #<m> failed — refusing to close and lose the content` | stderr | 2 | refusal |
+| `triage kill: empty reason on stdin — a kill with no audit trail is unreviewable` | stderr | 3 | refusal |
+| `triage kill: fold into #<m> failed — refusing to close and lose the content` | stderr | 12 | refusal |
 
 **Scope**
 

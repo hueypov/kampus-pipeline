@@ -13,6 +13,7 @@ import {
 	findSectionDefects,
 	hasFooter,
 } from "./body.ts";
+import * as Exit from "../../exit-codes.ts";
 
 const SECTIONS = [
 	"## Summary",
@@ -152,9 +153,13 @@ describe("checkFileInput guard ordering", () => {
 		expect(checkFileInput({...ok, body, redact: true})).toBeNull();
 	});
 
-	it("every refusal is code 2 — nothing was written", () => {
-		expect(checkFileInput({...ok, body: ""})?.code).toBe(2);
-		expect(checkFileInput({...ok, title: "BUG: x"})?.code).toBe(2);
+	it("each refusal carries the shared code naming its kind, not one generic refusal code", () => {
+		// Before #22 every one of these was `2`, so a caller could not tell an empty pipe from a
+		// leaked path without parsing the message.
+		expect(checkFileInput({...ok, body: ""})?.code).toBe(Exit.EMPTY_INPUT);
+		expect(checkFileInput({...ok, title: "BUG: x"})?.code).toBe(Exit.MALFORMED_INPUT);
+		const leaked = SECTIONS.replace("`src/sweep.ts`", "/Users/someone/Library/Caches/x/s.json");
+		expect(checkFileInput({...ok, body: leaked})?.code).toBe(Exit.LEAKED_PATH);
 	});
 });
 

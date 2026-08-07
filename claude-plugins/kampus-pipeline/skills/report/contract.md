@@ -51,19 +51,19 @@ keywords, so nothing was compared.
 | Code | Trigger |
 |---|---|
 | 0 | the check ran and returned a real answer — `candidates` or `none` |
-| 3 | `indeterminate` — the check could not discriminate, so it did not run |
-| 4 | a source read failed; the answer is UNKNOWN |
+| 8 | `indeterminate` — the check could not discriminate, so it did not run |
+| 11 | a source read failed; the answer is UNKNOWN |
 | 1 | usage error |
 
-Exit 3 is the load-bearing one. A query with no usable keywords must be **impossible** to read as
+Exit 8 is the load-bearing one. A query with no usable keywords must be **impossible** to read as
 "no duplicate found" at the exit-code level, not merely distinguishable by inspecting stderr.
 
 **Errors**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `report dedup: too few distinctive keywords in --query (<n>: [<tokens>]) — nothing was compared` | stderr | 3 | refusal |
-| `report dedup: could not read a source (<reason>) — outcome UNKNOWN` | stderr | 4 | refusal |
+| `report dedup: too few distinctive keywords in --query (<n>: [<tokens>]) — nothing was compared` | stderr | 8 | refusal |
+| `report dedup: could not read a source (<reason>) — outcome UNKNOWN` | stderr | 11 | refusal |
 | `report dedup: --query is required` | stderr | 1 | usage |
 | `report dedup: --limit must be a positive integer` | stderr | 1 | usage |
 
@@ -100,13 +100,13 @@ candidates
 $ pipeline cli report dedup --query "it did the thing"
 indeterminate
 $ echo $?
-3
+8
 ```
 
 **Grounding**
 
 - The existing `intake-dedup check` exits 0 with empty stdout for both "nothing matched" and "no
-  usable keywords", so the two are separable only by reading a stderr string. Exit 3 removes that.
+  usable keywords", so the two are separable only by reading a stderr string. Exit 8 removes that.
 - `--stage` exists because the current implementation hardcodes the intake label in source, so any
   repo whose stages are named differently gets a check that silently matches nothing.
 
@@ -141,23 +141,25 @@ Prose, one line: `report: created #<n> — <url>`. Under `--dry-run`, the fully 
 | Code | Trigger |
 |---|---|
 | 0 | the issue was created and read back clean |
-| 2 | a guard refused before any write |
-| 4 | the write succeeded but the read-back did not match what was sent |
+| 3 | stdin held nothing |
+| 4 | a section is missing or empty, or the title classifies |
+| 5 | the body carries a machine-local path and `--redact` was not given |
+| 13 | the write succeeded but the read-back did not match what was sent |
 | 1 | usage error |
 
-Exit 4 is distinct from 2 on purpose: a refusal means nothing happened, and a read-back mismatch
+Exit 13 is distinct from 3, 4 and 5 on purpose: a refusal means nothing happened, and a read-back mismatch
 means something happened that must not be retried blindly.
 
 **Errors**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `report file: empty body on stdin — nothing to file` | stderr | 2 | refusal |
-| `report file: missing required section '<name>'` | stderr | 2 | refusal |
-| `report file: section '<name>' is empty` | stderr | 2 | refusal |
-| `report file: machine-local path in body (<class>) — fix it, or pass --redact if the path is the evidence` | stderr | 2 | refusal |
-| `report file: title carries a classification prefix ('<prefix>') — type is triage's call` | stderr | 2 | refusal |
-| `report file: read-back mismatch on #<n> — created, but the landed body differs` | stderr | 4 | refusal |
+| `report file: empty body on stdin — nothing to file` | stderr | 3 | refusal |
+| `report file: missing required section '<name>'` | stderr | 4 | refusal |
+| `report file: section '<name>' is empty` | stderr | 4 | refusal |
+| `report file: machine-local path in body (<class>) — fix it, or pass --redact if the path is the evidence` | stderr | 5 | refusal |
+| `report file: title carries a classification prefix ('<prefix>') — type is triage's call` | stderr | 4 | refusal |
+| `report file: read-back mismatch on #<n> — created, but the landed body differs` | stderr | 13 | refusal |
 | `report file: --title is required` | stderr | 1 | usage |
 
 An unread stdin pipe is byte-identical to an empty one, so the empty-body refusal is what stops a
@@ -243,19 +245,20 @@ Prose, one line: `report: noted on #<n> — <url>`.
 | Code | Trigger |
 |---|---|
 | 0 | the comment was created and read back clean |
-| 2 | a guard refused before any write |
-| 4 | written, but the read-back did not match |
-| 5 | `--issue` names an issue that is closed or does not exist |
+| 3 | stdin held nothing |
+| 5 | the body carries a machine-local path |
+| 7 | `--issue` names an issue that is closed or does not exist |
+| 13 | written, but the read-back did not match |
 | 1 | usage error |
 
 **Errors**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `report note: empty body on stdin — nothing to add` | stderr | 2 | refusal |
-| `report note: machine-local path in body (<class>) — fix it, or pass --redact` | stderr | 2 | refusal |
-| `report note: #<n> is closed — a note on a closed issue reaches nobody` | stderr | 5 | refusal |
-| `report note: #<n> not found` | stderr | 5 | refusal |
+| `report note: empty body on stdin — nothing to add` | stderr | 3 | refusal |
+| `report note: machine-local path in body (<class>) — fix it, or pass --redact` | stderr | 5 | refusal |
+| `report note: #<n> is closed — a note on a closed issue reaches nobody` | stderr | 7 | refusal |
+| `report note: #<n> not found` | stderr | 7 | refusal |
 | `report note: --issue is required` | stderr | 1 | usage |
 
 **Scope**
@@ -278,7 +281,7 @@ report: noted on #398 — https://github.com/hueypov/kampus-pipeline/issues/398#
 
 **Grounding**
 
-- Exit 5 exists because a note on a closed issue silently reaches nobody: the write succeeds, the
+- Exit 7 exists because a note on a closed issue silently reaches nobody: the write succeeds, the
   observation is recorded where no queue reads it, and the filer sees success.
 - No six-section requirement on a note — the template serves a first filing, not an addition.
 

@@ -10,6 +10,7 @@
  * already owns the pattern set, and a second definition beside it would drift from it the first
  * time either moved.
  */
+import * as Exit from "../../exit-codes.ts";
 import {findCommentLeaks, type Leak} from "../leak-guard/leak-guard.ts";
 
 /**
@@ -160,7 +161,7 @@ export const assembleBody = (body: string, footer: string): string =>
 	`${body.replace(/\s+$/, "")}\n\n${footer}\n`;
 
 export interface BodyRefusal {
-	readonly code: 2;
+	readonly code: number;
 	readonly message: string;
 }
 
@@ -178,18 +179,18 @@ export const checkFileInput = (opts: {
 	readonly redact: boolean;
 }): BodyRefusal | null => {
 	if (opts.body.trim() === "") {
-		return {code: 2, message: "empty body on stdin — nothing to file"};
+		return {code: Exit.EMPTY_INPUT, message: "empty body on stdin — nothing to file"};
 	}
 	const defect = findSectionDefects(opts.body)[0];
 	if (defect) {
 		return defect.kind === "missing"
-			? {code: 2, message: `missing required section '${defect.section}'`}
-			: {code: 2, message: `section '${defect.section}' is empty`};
+			? {code: Exit.MALFORMED_INPUT, message: `missing required section '${defect.section}'`}
+			: {code: Exit.MALFORMED_INPUT, message: `section '${defect.section}' is empty`};
 	}
 	const prefix = classificationPrefix(opts.title);
 	if (prefix) {
 		return {
-			code: 2,
+			code: Exit.MALFORMED_INPUT,
 			message: `title carries a classification prefix ('${prefix}') — type is triage's call`,
 		};
 	}
@@ -202,7 +203,7 @@ export const checkNoteInput = (opts: {
 	readonly redact: boolean;
 }): BodyRefusal | null => {
 	if (opts.body.trim() === "") {
-		return {code: 2, message: "empty body on stdin — nothing to add"};
+		return {code: Exit.EMPTY_INPUT, message: "empty body on stdin — nothing to add"};
 	}
 	return leakRefusal(opts.body, opts.redact);
 };
@@ -214,7 +215,7 @@ const leakRefusal = (text: string, redact: boolean): BodyRefusal | null => {
 	const first = leaks[0];
 	return first
 		? {
-				code: 2,
+				code: Exit.LEAKED_PATH,
 				message: `machine-local path in body (${first.reason}) — fix it, or pass --redact if the path is the evidence`,
 			}
 		: null;

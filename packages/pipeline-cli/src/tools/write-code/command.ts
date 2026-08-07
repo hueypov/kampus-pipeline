@@ -14,14 +14,12 @@ import {Console, Effect, Option} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
 import {GithubTrackerLive, Tracker} from "../tracker/tracker.ts";
 import {capState, closesIssue, composePrBody, countFailRounds, rankCandidates} from "./pick.ts";
+import * as Exit from "../../exit-codes.ts";
 
 const DEFAULT_STAGE = "status:triaged";
 const DEFAULT_CAP = 2;
 
-const EXIT_REFUSED = 2;
-const EXIT_EMPTY = 3;
-const EXIT_READ_FAILED = 4;
-const EXIT_NOT_OURS = 5;
+
 
 const refuse = (verb: string, message: string, code: number): Effect.Effect<never> =>
 	Effect.sync(() => {
@@ -57,7 +55,7 @@ const next = Command.make(
 	{stage: stageFlag, readyFor: readyForFlag, limit: limitFlag},
 	Effect.fn(function* ({stage, readyFor, limit}) {
 		if (readyFor !== "agent" && readyFor !== "human" && readyFor !== "any") {
-			return yield* refuse("next", "--ready-for must be agent, human, or any", EXIT_REFUSED);
+			return yield* refuse("next", "--ready-for must be agent, human, or any", Exit.MALFORMED_INPUT);
 		}
 		const tracker = yield* Tracker;
 		const rows = yield* tracker.listStage(stage);
@@ -75,7 +73,7 @@ const next = Command.make(
 
 		if (free.length === 0) {
 			yield* Console.log("empty");
-			return yield* Effect.sync(() => process.exit(EXIT_EMPTY));
+			return yield* Effect.sync(() => process.exit(Exit.ZERO_SCOPE));
 		}
 		yield* Console.log("pick");
 		for (const r of free) {
@@ -85,7 +83,7 @@ const next = Command.make(
 	}),
 ).pipe(
 	Command.withDescription(
-		"Which issue to pick up: highest band, oldest, unclaimed, addressed to an agent. exit 3 = nothing pickable",
+		"Which issue to pick up: highest band, oldest, unclaimed, addressed to an agent. exit 7 = nothing pickable",
 	),
 );
 
@@ -123,7 +121,7 @@ const openPr = Command.make(
 	Effect.fn(function* ({issue, head, base, title, draft, dryRun, session}) {
 		const description = readStdin();
 		if (description.trim() === "") {
-			return yield* refuse("open-pr", "empty description on stdin", EXIT_REFUSED);
+			return yield* refuse("open-pr", "empty description on stdin", Exit.EMPTY_INPUT);
 		}
 		const tracker = yield* Tracker;
 
@@ -135,7 +133,7 @@ const openPr = Command.make(
 			return yield* refuse(
 				"open-pr",
 				`#${issue} is claimed by session ${owner.owner.session}, not this one`,
-				EXIT_NOT_OURS,
+				Exit.HELD_BY_OTHER,
 			);
 		}
 
@@ -153,7 +151,7 @@ const openPr = Command.make(
 			return yield* refuse(
 				"open-pr",
 				`opened #${opened.pr} but its closing reference does not resolve to #${issue}`,
-				EXIT_READ_FAILED,
+				Exit.READBACK_MISMATCH,
 			);
 		}
 		yield* Console.log(`write-code: opened #${opened.pr} — closes #${issue} — ${opened.url}`);
@@ -187,14 +185,14 @@ const rounds = Command.make(
 		const state = capState(n, cap);
 		yield* Console.log(`rounds ${n} cap ${cap} ${state}`);
 		if (state !== "under") {
-			// Exit 3 is the escalation signal. A bound nobody counts is not a bound — without this
-			// a directly-invoked run with no orchestrator can repair indefinitely.
-			return yield* Effect.sync(() => process.exit(EXIT_EMPTY));
+			// The escalation signal. A bound nobody counts is not a bound — without this a
+			// directly-invoked run with no orchestrator can repair indefinitely.
+			return yield* Effect.sync(() => process.exit(Exit.CAP_REACHED));
 		}
 	}),
 ).pipe(
 	Command.withDescription(
-		"How many repair rounds this PR has had against the cap. exit 3 = at or over — escalate, do not repair again",
+		"How many repair rounds this PR has had against the cap. exit 17 = at or over — escalate, do not repair again",
 	),
 );
 
