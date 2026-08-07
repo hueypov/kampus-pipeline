@@ -492,6 +492,16 @@
 			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
 		},
 		{
+			"name": "reachability-guard check",
+			"artifactType": "cli-command",
+			"deliveryClass": "core-installed",
+			"entryPoint": "pipeline cli reachability-guard check",
+			"prerequisites": [
+				".pipeline/agent-policy.json"
+			],
+			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
+		},
+		{
 			"name": "worktree-sweep",
 			"artifactType": "cli-command",
 			"deliveryClass": "core-installed",
