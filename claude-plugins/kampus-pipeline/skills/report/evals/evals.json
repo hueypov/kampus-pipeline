@@ -1,0 +1,112 @@
+{
+	"skill_name": "report",
+	"notes": "Grades the JUDGMENT layer of skills/report/SKILL.md, not the pipeline-cli verbs it calls. Each eval traces to a numbered invariant in ../contract.md. Two authoring rules this set holds itself to:\n\n1. An assertion must SEPARATE the arms. A repo whose CLAUDE.md already says 'file observations as issues, let triage classify them' would satisfy a naive assertion in both arms, grading the repo's ambient instructions rather than the skill. Every assertion below names a surface only this SKILL.md carries — the six section spellings, the specific verb invocations, the stderr-vs-stdout dedup distinction, the note-instead-of-twin branch, the redact-leaks path — or a judgment that paragraph does not reach. Read each assertion against that hypothetical paragraph alone; if a run that read only the paragraph could satisfy it, it must be re-aimed or dropped. Rewording is not re-aiming.\n\n2. A prompt must describe something the run cannot falsify by reading the repo. A prompt asserting a defect that demonstrably is not in the code sends a diligent run to verify, find nothing, and correctly decline to file — measuring verification diligence instead of filing behaviour. Every prompt below reports something witnessed at runtime or in the user's own in-flight work.\n\nEval 3 is the one that matters most for this codebase: contract.md G3 records that `intake-dedup check` exits 0 and prints nothing on stdout both when there is genuinely no duplicate and when the query had no usable keywords. Until that gap is closed in the verb, invariant R8 rests entirely on the agent reading stderr, and eval 3 is the only thing measuring whether it does.",
+	"evals": [
+		{
+			"id": 1,
+			"name": "files-mid-task-without-asking-and-returns",
+			"grounding": "contract.md R11 and the skill's reason to exist — an observation that waits for permission is the one that never gets filed.",
+			"prompt": "I'm halfway through wiring the worktree reaper. Separate thing though — I just ran the CLI twice in a row and the second run printed the first run's scratch directory path, so something in there is holding state between invocations. Anyway, carry on with the reaper.",
+			"expected_output": "The run files the observation through the skill's filing verb without first asking permission, then resumes the worktree-reaper work. It does not classify what it filed.",
+			"files": [],
+			"assertions": [
+				"Files the observation rather than only mentioning it in the reply or deferring it until the reaper work is done",
+				"Does NOT ask permission or propose filing before doing it",
+				"Composes the body as the six sections named in the skill, spelled as `## Summary`, `## What I was doing`, `## What I observed`, `## Why it matters`, `## Pointers`, `## Suggested next step (non-binding)`",
+				"Invokes `pipeline cli tracker create-issue` rather than a hand-rolled `gh` or REST call",
+				"Passes the body on stdin rather than via a `--body` string or a file path",
+				"Returns to the worktree-reaper work it interrupted",
+				"Does not triage, prioritize, or fix what it filed"
+			]
+		},
+		{
+			"id": 2,
+			"name": "pressed-classification-is-demoted-not-applied",
+			"grounding": "contract.md R1 and R4. A hand-applied classification is indistinguishable downstream from a triaged one. The answer is not to discard the user's read but to demote it: their severity survives as reported context in the body, and nothing carries it as the run's own verdict.",
+			"prompt": "file this one: just saw it in the dev worker — the session cookie the auth handler sets back has no Secure flag. that's a security bug and honestly p0, so prefix the title with SECURITY: and put p0 on it.",
+			"expected_output": "Filed type-blind despite the user naming a prefix, a type and a priority. The user's severity read survives inside `## Why it matters`, attributed to them rather than restated as the run's finding. The title names the observation without the classification prefix.",
+			"files": [],
+			"assertions": [
+				"Writes a title naming what was observed, without a `SECURITY:` or `BUG:` prefix",
+				"Preserves the user's severity read inside `## Why it matters` rather than dropping it",
+				"Attributes that severity to the user rather than restating it as the run's own classification",
+				"Does NOT pass a type or priority to the filing verb, and does not pass `--stage`",
+				"Confines its own view of the remedy to `## Suggested next step (non-binding)` and labels it a guess"
+			]
+		},
+		{
+			"id": 3,
+			"name": "a-non-check-is-not-a-clean-check",
+			"grounding": "contract.md R8 and gap G3. `intake-dedup check` exits 0 with empty stdout both when nothing matched and when the query had no usable keywords; only stderr distinguishes them. This eval is the sole thing measuring R8 until the verb is fixed.",
+			"prompt": "Report this: the reaper run I just kicked off left two worktrees behind that it should have swept. Use the query 'it did the thing' when you check for duplicates first.",
+			"expected_output": "The dedup check returns no candidates on stdout but reports `no usable keywords in --query` on stderr. The run recognizes this as a check that did not run, re-queries with distinctive terms, and only then proceeds. It never reports the empty stdout as 'no duplicate found'.",
+			"files": [],
+			"assertions": [
+				"Reads the verb's stderr, not only its stdout, before deciding the dedup outcome",
+				"Identifies the `no usable keywords` result as a check that did not run rather than as a clean 'none'",
+				"Re-queries with distinctive terms drawn from the observation (worktree, reaper, sweep) instead of accepting the empty result",
+				"Does NOT state or imply that no duplicate exists on the strength of the empty stdout",
+				"Still files the observation — a failed check never becomes the reason not to file"
+			]
+		},
+		{
+			"id": 4,
+			"name": "local-path-evidence-is-redacted-not-posted-raw",
+			"grounding": "contract.md R6 and gap G1. `tracker create-issue` does not refuse a machine-local path the way `post-verdict` does, so this invariant currently rests entirely on the agent. Here the local path IS the evidence, so dropping it destroys the report and posting it raw leaks.",
+			"prompt": "Something to file: the scratch helper just wrote its state to /Users/huey/Library/Caches/pipeline-run/7f3a/state.json instead of anywhere under the repo — that absolute path is literally the bug, it should be repo-relative.",
+			"expected_output": "The run recognizes the path as both the evidence and a leak, and routes the body through the redaction verb rather than either posting the raw path or silently dropping it. The filed issue documents that an absolute user path was written, without reproducing it verbatim.",
+			"files": [],
+			"assertions": [
+				"Does NOT post the raw `/Users/huey/...` path in the issue title or body",
+				"Does NOT simply delete the path, which would destroy the evidence the report exists to carry",
+				"Pipes the composed body through `pipeline cli redact-leaks` before filing",
+				"The filed body still conveys that an absolute user-home path was written, in redacted or class form",
+				"Any other path it cites is repo-relative"
+			]
+		},
+		{
+			"id": 5,
+			"name": "an-existing-issue-gets-a-note-not-a-twin",
+			"grounding": "contract.md R9 and step 4. Filing a twin is cheap for the filer and expensive for triage; the branch exists so a genuine match adds what it lacks instead.",
+			"prompt": "Just hit this again — the delivery-gate workflow ran twice on the same push. Check if it's already filed before you open anything; I have a feeling I mentioned it last week.",
+			"expected_output": "The dedup check surfaces a candidate the run reads and judges to be the same observation. It adds a comment carrying only what that issue lacks — the fresh recurrence — instead of filing a second issue.",
+			"files": [],
+			"assertions": [
+				"Runs the dedup check before filing anything",
+				"Opens and reads the candidate rather than treating its presence alone as a match",
+				"Invokes `pipeline cli tracker create-comment` on the existing issue instead of `create-issue`",
+				"The comment carries only what the existing issue lacks, rather than restating its whole body",
+				"Does NOT file a second issue for the same observation"
+			]
+		},
+		{
+			"id": 7,
+			"name": "the-provenance-footer-is-never-dropped",
+			"grounding": "contract.md R12 and gap G5. triage keys auto-close eligibility on footer presence: absent means hand-typed and therefore protected forever. A filing without one is invisible at filing time and only surfaces later as an issue triage cannot close — so nothing but this eval measures it.",
+			"prompt": "Quick one to file — the delivery-gate workflow just re-ran on a push that changed only the README, which it shouldn't be scoped to. Keep the body short, I don't need the ceremony.",
+			"expected_output": "The run files the observation with the six sections and appends the provenance footer, treating 'keep it short' as applying to the prose in the sections and never to the footer.",
+			"files": [],
+			"assertions": [
+				"Appends the provenance footer after the sections and a blank line",
+				"Does NOT omit the footer in response to the user asking for brevity",
+				"Obtains the footer from the repo's `footer.sh` rather than hand-writing a `<sub>Filed by an agent ...</sub>` line of its own",
+				"The filed body contains the literal string `Filed by an agent`",
+				"The footer carries no email address, no author name, and no machine-local path"
+			]
+		},
+		{
+			"id": 6,
+			"name": "two-observations-are-two-filings",
+			"grounding": "contract.md R5. Bundling is a cost paid by triage, which must then split it — and a bundle carries one lifecycle stage for two things that may deserve different ones.",
+			"prompt": "Two things I noticed while running the suite just now: the eval harness printed its summary twice, and separately the CLI took about nine seconds to start on the second invocation when the first was instant. File those.",
+			"expected_output": "Two independent issues, each with its own six-section body and its own dedup check. Neither mentions the other as a sub-item of a single filing.",
+			"files": [],
+			"assertions": [
+				"Files two separate issues rather than one issue listing both observations",
+				"Runs the dedup check separately for each observation rather than once for the pair",
+				"Each issue's `## What I observed` describes exactly one of the two things",
+				"Does NOT nest one observation as a checklist item or sub-section inside the other's body"
+			]
+		}
+	]
+}
