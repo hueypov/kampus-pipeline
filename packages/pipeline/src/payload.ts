@@ -32,8 +32,12 @@ export const CORE_AGENT_SKILL_NAMES: Readonly<Record<string, ReadonlyArray<strin
 	reviewer: ["review-code", "review-design", "review-doc", "review-plan", "review-skill"], shipper: ["ship-it"], triager: ["triage"],
 };
 
+/**
+ * CI workflows an adopter may opt into. None ships enabled: installing a workflow somebody did not
+ * ask for turns it into a required check they did not choose (#32). `pipeline-toolkit` is not here
+ * at all — it runs the toolkit's own suite, which is never a consumer's concern.
+ */
 const GENERATED_WORKFLOWS = [
-	["pipeline-toolkit", ".github/workflows/pipeline-toolkit.yml"],
 	["pipeline-doc-safety", ".github/workflows/pipeline-doc-safety.yml"],
 	["pipeline-delivery-gate", ".github/workflows/pipeline-delivery-gate.yml"],
 	["pipeline-gitleaks", ".github/workflows/pipeline-gitleaks.yml"],
@@ -68,16 +72,19 @@ const coreEntries: ReadonlyArray<CatalogEntry> = [
 		entryPoint: `.claude/agents/${name}.md`, prerequisites: CORE_AGENT_SKILL_NAMES[name] ?? [],
 		authorityBoundary: "Delegates to linked skills and repository policy.",
 	})),
-	...GENERATED_WORKFLOWS.map(([name, entryPoint]) => ({
-		name, artifactType: "generated-workflow" as const, deliveryClass: "core-installed" as const,
-		entryPoint, prerequisites: [], authorityBoundary: "Repository-owned checks and paths remain explicit.",
-	})),
+
 	...LIFECYCLE_COMMANDS.map((name) => ({
 		name, artifactType: "cli-command" as const, deliveryClass: "core-installed" as const,
 		entryPoint: `pipeline cli ${name}`, prerequisites: [".pipeline/agent-policy.json"],
 		authorityBoundary: "Local safety command; mutations require explicit execution and configuration.",
 	})),
 ];
+
+const optionalWorkflowEntries: ReadonlyArray<CatalogEntry> = GENERATED_WORKFLOWS.map(([name, entryPoint]) => ({
+	name, artifactType: "generated-workflow" as const, deliveryClass: "optional-with-adapter" as const,
+	entryPoint, prerequisites: [".pipeline/optional-workflow-policy.json"],
+	authorityBoundary: "Installed only when the repository enables it; repository-owned checks and paths remain explicit.",
+}));
 
 const optionalEntries: ReadonlyArray<CatalogEntry> = OPTIONAL_SKILLS.map((name) => ({
 	name, artifactType: "skill", deliveryClass: "optional-with-adapter",
@@ -93,7 +100,7 @@ export const WORKFLOW_CATALOG = {
 		skills: OPTIONAL_SKILLS,
 		activation: "Run `pipeline enable <workflow>` to link an optional skill. A repository-owned adapter and explicit authority policy are still required before external operations.",
 	},
-	entries: [...coreEntries, ...optionalEntries],
+	entries: [...coreEntries, ...optionalWorkflowEntries, ...optionalEntries],
 } as const;
 
 /** Deterministic JSON payload used by the checked-in catalogue generator and drift check. */

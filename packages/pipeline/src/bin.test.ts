@@ -1,5 +1,5 @@
 import {execFileSync, spawnSync} from "node:child_process";
-import {chmodSync, copyFileSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
+import {chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
@@ -125,18 +125,33 @@ describe("pipeline init", () => {
 		expect(readFileSync(join(consumer, ".claude/crew.config.jsonc"), "utf8")).toBe('{"operator":"<operator-name>"}\n');
 		expect(readFileSync(join(consumer, ".gitignore"), "utf8")).toContain(".claude/crew.config.jsonc\n");
 		expect(command(consumer, ["init"], mockBin).stderr).toContain("fill every placeholder in .claude/crew.config.jsonc before running pipeline crew stand-up");
-		expect(readFileSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"), "utf8")).toBe("name: Fixture toolkit\n");
-		expect(readFileSync(join(consumer, ".github/workflows/pipeline-delivery-gate.yml"), "utf8")).toBe("name: Fixture delivery gate\n");
-		expect(readFileSync(join(consumer, ".github/workflows/pipeline-gitleaks.yml"), "utf8")).toBe("name: Fixture Gitleaks\n");
-		expect(readFileSync(join(consumer, ".github/workflows/pipeline-doc-links.yml"), "utf8")).toBe("name: Fixture doc links\n");
-		expect(readFileSync(join(consumer, ".github/workflows/pipeline-settings-env-guard.yml"), "utf8")).toBe("name: Fixture settings env\n");
-		expect(readFileSync(join(consumer, ".github/workflows/pipeline-unresolved-threads.yml"), "utf8")).toBe("name: Fixture unresolved threads\n");
+		// No CI workflow is installed unless the repository asked for it (#32). Writing seven into
+		// an adopter made their first pull request red over checks about the toolkit, and `ship-it`
+		// then correctly refused to merge anything.
+		expect(existsSync(join(consumer, ".github/workflows/pipeline-delivery-gate.yml"))).toBe(false);
+		expect(existsSync(join(consumer, ".github/workflows/pipeline-gitleaks.yml"))).toBe(false);
+		expect(existsSync(join(consumer, ".github/workflows/pipeline-doc-links.yml"))).toBe(false);
+		expect(existsSync(join(consumer, ".github/workflows/pipeline-settings-env-guard.yml"))).toBe(false);
+		// pipeline-toolkit is not installable at all: it runs the TOOLKIT's own suite, which gated an
+		// adopter's merges on our unit tests passing in their runner.
+		expect(existsSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"))).toBe(false);
+		expect(existsSync(join(consumer, ".github/workflows/pipeline-unresolved-threads.yml"))).toBe(false);
+		expect(existsSync(join(consumer, ".github/workflows/pipeline-doc-safety.yml"))).toBe(false);
 		expect(existsSync(join(consumer, "claude-plugins/kampus-pipeline"))).toBe(false);
 		expect(existsSync(join(consumer, "claude-plugins/pipeline-crew"))).toBe(false);
 		for (const agent of CORE_AGENT_NAMES) expect(existsSync(join(consumer, ".claude/agents", `${agent}.md`))).toBe(true);
 		expect(lstatSync(join(consumer, ".claude/agents/reviewer.md")).isSymbolicLink()).toBe(true);
 		for (const skill of CORE_SKILL_NAMES) expect(existsSync(join(consumer, ".claude/skills", skill))).toBe(true);
 		for (const file of CORE_WORKFLOW_SUPPORT_FILES) expect(existsSync(join(consumer, ".claude/skills", file))).toBe(true);
+		// The opt-in half: a workflow the repository ENABLES is written. Without this the previous
+		// assertions would pass just as well if the feature had been deleted rather than gated.
+		writeFileSync(
+			join(consumer, ".pipeline/optional-workflow-policy.json"),
+			'{"schemaVersion":1,"workflows":{"pipeline-gitleaks":{"enabled":true}}}\n',
+		);
+		expect(command(consumer, ["sync"], mockBin).status).toBe(0);
+		expect(readFileSync(join(consumer, ".github/workflows/pipeline-gitleaks.yml"), "utf8")).toBe("name: Fixture Gitleaks\n");
+		expect(existsSync(join(consumer, ".github/workflows/pipeline-doc-links.yml"))).toBe(false);
 		expect(existsSync(join(consumer, ".claude/skills/release"))).toBe(false);
 		expect(command(consumer, ["enable", "release"], mockBin).status).toBe(0);
 		expect(existsSync(join(consumer, ".claude/skills/release"))).toBe(true);
@@ -278,6 +293,67 @@ describe("pipeline init", () => {
 		expect(readFileSync(hook, "utf8")).toBe("#!/usr/bin/env sh\necho adopter hook\n");
 		write(join(consumer, ".pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{},"git":{"primaryIndexGuard":{"enabled":true,"protectedPathPrefixes":[],"blockThreshold":2}}}\n');
 		expect(command(consumer, ["primary-index-guard", "check-hook"], mockBin).status).toBe(1);
+	}, 20_000);
+
+	// The crew launcher only uses a multiplexer as a window manager, but a missing binary still fails the
+	// whole stand-up — so `check` verifies the terminal the crew config actually selects. It is scoped to
+	// a PERSONALIZED config on purpose: a repo that never stands a crew up must not be made to install
+	// tmux to pass, which is also what keeps CI (where the git-ignored crew config is absent) unaffected.
+	const personalizeCrew = (consumer: string, config: Record<string, unknown>): void =>
+		write(join(consumer, ".claude/crew.config.jsonc"), `${JSON.stringify(config)}\n`);
+
+	// These assert on the presence/absence of the terminal diagnostic rather than the exit status, so
+	// they stay meaningful independently of whatever else the fixture's `check` reports.
+	const TERMINAL_DIAGNOSTIC = "crew terminal";
+
+	it("check accepts a personalized crew config whose terminal is installed", () => {
+		const {consumer, mockBin} = fixture();
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		write(join(mockBin, "herdr"), "#!/usr/bin/env bash\nexit 0\n", true);
+		personalizeCrew(consumer, {operator: "op", terminal: "herdr"});
+		expect(command(consumer, ["check"], mockBin).stderr).not.toContain(TERMINAL_DIAGNOSTIC);
+	}, 20_000);
+
+	it("check reports the configured crew terminal when its binary is absent", () => {
+		const {consumer, mockBin} = fixture();
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		// mockBin is PREPENDED to PATH, so a stub that exits non-zero shadows any really-installed herdr
+		// and makes the missing-binary branch deterministic on any machine.
+		write(join(mockBin, "herdr"), "#!/usr/bin/env bash\nexit 1\n", true);
+		personalizeCrew(consumer, {operator: "op", terminal: "herdr"});
+		const result = command(consumer, ["check"], mockBin);
+		expect(result.status).toBe(1);
+		expect(result.stderr).toContain("missing required command for the configured crew terminal: herdr");
+	}, 20_000);
+
+	it("check rejects a crew terminal outside the supported vocabulary", () => {
+		const {consumer, mockBin} = fixture();
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		personalizeCrew(consumer, {operator: "op", terminal: "screen"});
+		const result = command(consumer, ["check"], mockBin);
+		expect(result.status).toBe(1);
+		expect(result.stderr).toContain("unsupported crew terminal in .claude/crew.config.jsonc: screen");
+	}, 20_000);
+
+	it("check reads the terminal past the template's surrounding comments", () => {
+		const {consumer, mockBin} = fixture();
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		// The shipped template documents the dimension in prose directly above the key, naming both
+		// backends — a naive match would read the comment instead of the value.
+		write(
+			join(consumer, ".claude/crew.config.jsonc"),
+			'{\n\t// Which terminal: "tmux" (the default) or "herdr".\n\t"operator": "op",\n\t"terminal": "screen"\n}\n',
+		);
+		expect(command(consumer, ["check"], mockBin).stderr).toContain("unsupported crew terminal in .claude/crew.config.jsonc: screen");
+	}, 20_000);
+
+	it("check skips the terminal while the crew config is still unpersonalized", () => {
+		const {consumer, mockBin} = fixture();
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		// An unfilled config carries `<placeholders>`; init already tells the operator to fill it, and a
+		// crew that was never set up must not fail the install contract on a terminal it will never use.
+		personalizeCrew(consumer, {operator: "<operator-name>", terminal: "screen"});
+		expect(command(consumer, ["check"], mockBin).stderr).not.toContain(TERMINAL_DIAGNOSTIC);
 	}, 20_000);
 
 	it("requires a CLI tool name", () => {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {spawnSync} from "node:child_process";
 import {chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
-import {dirname, join, relative, resolve} from "node:path";
+import {basename, dirname, join, relative, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {ARCHIVED_SKILL_NAMES, CORE_AGENT_NAMES, CORE_AGENT_SKILL_NAMES, CORE_SKILL_DEPENDENCIES, CORE_SKILL_NAMES, CORE_WORKFLOW_SUPPORT_FILES, renderWorkflowCatalog} from "./payload.ts";
 
@@ -30,8 +30,19 @@ const WORKFLOW_CATALOG_CONSUMER_PATH = ".pipeline/workflow-catalog.json";
 const LEGACY_PLUGIN_LINK_RELATIVE_PATH = "claude-plugins/kampus-pipeline";
 const PRIMARY_INDEX_GUARD_HOOK_MARKER = "# kampus-pipeline primary-index-guard managed hook";
 const PRIMARY_INDEX_GUARD_HOOK_NAME = "pre-commit";
+/**
+ * The CI workflows an adopting repository MAY install, each opt-in through
+ * `.pipeline/optional-workflow-policy.json`.
+ *
+ * None is installed by default. Writing seven workflows into somebody's repository means their
+ * first pull request is gated on checks about the toolkit rather than about their change — five of
+ * these failed out of the box, and `ship-it` then correctly refused to merge anything (#32). An
+ * adopter brings their own CI; the pipeline adds guards only where they ask for them.
+ *
+ * `pipeline-toolkit` is deliberately absent: it runs the TOOLKIT's own test suite, which is never
+ * an adopter's concern and gated their merges on our unit tests passing in their runner.
+ */
 const GITHUB_WORKFLOW_TEMPLATES = [
-	{source: "templates/github/workflows/pipeline-toolkit.yml", destination: ".github/workflows/pipeline-toolkit.yml"},
 	{source: "templates/github/workflows/pipeline-doc-safety.yml", destination: ".github/workflows/pipeline-doc-safety.yml"},
 	{source: "templates/github/workflows/pipeline-delivery-gate.yml", destination: ".github/workflows/pipeline-delivery-gate.yml"},
 	{source: "templates/github/workflows/pipeline-gitleaks.yml", destination: ".github/workflows/pipeline-gitleaks.yml"},
@@ -293,6 +304,22 @@ const enabledOptionalWorkflowNames = (policy: OptionalWorkflowPolicy): Set<strin
 		.map(([name]) => name),
 );
 
+/**
+ * The CI workflows the repository has opted into.
+ *
+ * Deliberately NOT `enabledOptionalWorkflowNames`: that one filters on `ARCHIVED_SKILL_NAMES`, so
+ * reusing it here produced a flag that could never be turned on — every workflow stayed uninstalled
+ * whatever the policy said, which reads exactly like the feature working.
+ */
+const enabledWorkflowFileNames = (policy: OptionalWorkflowPolicy): Set<string> => {
+	const installable = new Set(GITHUB_WORKFLOW_TEMPLATES.map((t) => basename(t.destination, ".yml")));
+	return new Set(
+		Object.entries(policy.workflows)
+			.filter(([name, setting]) => installable.has(name) && setting.enabled === true)
+			.map(([name]) => name),
+	);
+};
+
 const lstatSyncSafe = (path: string) => {
 	try { return lstatSync(path); } catch { return undefined; }
 };
@@ -553,6 +580,82 @@ const ensureGitignoreEntry = (projectRoot: string, entry: string): void => {
 	writeFileSync(path, `${current}${current && !current.endsWith("\n") ? "\n" : ""}${entry}\n`);
 };
 
+/** The terminals the crew launcher can place its panes in — the `terminal` config dimension's vocabulary. */
+const CREW_TERMINALS = new Set(["tmux", "herdr"]);
+/** The terminal a crew config launches under when it omits the dimension entirely. */
+const DEFAULT_CREW_TERMINAL = "tmux";
+
+/**
+ * Drop JSONC comments while leaving string literals intact, so a key regex can never match text that
+ * only appears in a comment. The shipped crew template documents the `terminal` dimension in prose
+ * directly above it, which is exactly the case a naive match would get wrong.
+ */
+const stripJsoncComments = (text: string): string => {
+	let out = "";
+	let inString = false, inLine = false, inBlock = false, escaped = false;
+	for (let i = 0; i < text.length; i += 1) {
+		const char = text[i];
+		const next = text[i + 1];
+		if (inLine) {
+			if (char === "\n") { inLine = false; out += char; }
+			continue;
+		}
+		if (inBlock) {
+			if (char === "*" && next === "/") { inBlock = false; i += 1; }
+			continue;
+		}
+		if (inString) {
+			out += char;
+			if (escaped) escaped = false;
+			else if (char === "\\") escaped = true;
+			else if (char === '"') inString = false;
+			continue;
+		}
+		if (char === '"') { inString = true; out += char; continue; }
+		if (char === "/" && next === "/") { inLine = true; i += 1; continue; }
+		if (char === "/" && next === "*") { inBlock = true; i += 1; continue; }
+		out += char;
+	}
+	return out;
+};
+
+/**
+ * The terminal the operator's crew config selects, or `undefined` when the config is absent/unreadable.
+ * An omitted dimension is not a distinct state here — it simply means the default — so it resolves to
+ * `tmux`, matching how the launcher's own typed reader folds it.
+ */
+const crewTerminal = (projectRoot: string): string | undefined => {
+	try {
+		const text = stripJsoncComments(readFileSync(join(projectRoot, CREW_CONFIG_RELATIVE_PATH), "utf8"));
+		return /"terminal"\s*:\s*"([^"]*)"/.exec(text)?.[1] ?? DEFAULT_CREW_TERMINAL;
+	} catch {
+		return undefined;
+	}
+};
+
+/**
+ * Verify the terminal the crew will actually launch into is installed. The launcher only ever uses a
+ * multiplexer as a window manager, but a missing binary still fails the whole stand-up — so it is worth
+ * catching here, at install time, rather than when the operator first tries to boot a crew.
+ *
+ * Deliberately scoped to a PERSONALIZED crew config. A config still carrying `<placeholders>` means the
+ * crew is not set up yet (`init` says as much on its own line), and a repo that never stands a crew up
+ * must not be made to install tmux to pass a check — which is also why CI, where the git-ignored crew
+ * config is simply absent, is unaffected.
+ */
+const checkCrewTerminal = (projectRoot: string): string | undefined => {
+	if (hasCrewConfigPlaceholders(projectRoot)) return undefined;
+	const terminal = crewTerminal(projectRoot);
+	if (terminal === undefined) return undefined;
+	if (!CREW_TERMINALS.has(terminal)) {
+		return `unsupported crew terminal in ${CREW_CONFIG_RELATIVE_PATH}: ${terminal} (expected one of ${Array.from(CREW_TERMINALS).join(", ")})`;
+	}
+	if (!commandExists(terminal)) {
+		return `missing required command for the configured crew terminal: ${terminal} (set "terminal" in ${CREW_CONFIG_RELATIVE_PATH}, or install ${terminal})`;
+	}
+	return undefined;
+};
+
 const hasCrewConfigPlaceholders = (projectRoot: string): boolean => {
 	try {
 		return /"<[^">\n]+>"/.test(readFileSync(join(projectRoot, CREW_CONFIG_RELATIVE_PATH), "utf8"));
@@ -652,6 +755,8 @@ const check = (projectRoot: string): string[] => {
 	}
 	for (const command of ["node", "pnpm"]) if (!commandExists(command)) errors.push(`missing required command: ${command}`);
 	if (!supportsTypeStripping()) errors.push("Node.js 22.6 or newer is required");
+	const terminalError = checkCrewTerminal(projectRoot);
+	if (terminalError) errors.push(terminalError);
 	const config = readConfig(projectRoot);
 	if (toolkitRoot && config?.toolkitRoot !== TOOLKIT_RELATIVE_PATH) errors.push("pipeline config has an unsupported toolkit path");
 	if (!config) {
@@ -788,10 +893,15 @@ const init = (args: string[]): void => {
 	const workflowCatalog = linkManagedFile(projectRoot, toolkitRoot, WORKFLOW_CATALOG_RELATIVE_PATH, WORKFLOW_CATALOG_CONSUMER_PATH, force, prior);
 	const optionalWorkflowPolicy = readOptionalWorkflowPolicy(projectRoot);
 	const enabledOptionalWorkflows = enabledOptionalWorkflowNames(optionalWorkflowPolicy);
+	const enabledWorkflowFiles = enabledWorkflowFileNames(optionalWorkflowPolicy);
+	// Opt-in only. A workflow the adopter did not ask for becomes a required check they did not
+	// choose, and a red one blocks the merge gate over something that is not their change (#32).
 	const githubWorkflows = GITHUB_WORKFLOW_TEMPLATES.flatMap((template) => {
-			const managed = materializeTemplate(projectRoot, toolkitRoot, template.source, template.destination, prior);
-			return managed ? [managed] : [];
-		});
+		const name = basename(template.destination, ".yml");
+		if (!enabledWorkflowFiles.has(name)) return [];
+		const managed = materializeTemplate(projectRoot, toolkitRoot, template.source, template.destination, prior);
+		return managed ? [managed] : [];
+	});
 	const managedHooks = mergeSettings(projectRoot, toolkitRoot);
 	mergePackageScript(projectRoot);
 	// The generic equivalent of Phoenix's `prepare: lefthook install`: ref safety is core

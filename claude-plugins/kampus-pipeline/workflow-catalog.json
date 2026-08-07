@@ -376,62 +376,6 @@
 			"authorityBoundary": "Delegates to linked skills and repository policy."
 		},
 		{
-			"name": "pipeline-toolkit",
-			"artifactType": "generated-workflow",
-			"deliveryClass": "core-installed",
-			"entryPoint": ".github/workflows/pipeline-toolkit.yml",
-			"prerequisites": [],
-			"authorityBoundary": "Repository-owned checks and paths remain explicit."
-		},
-		{
-			"name": "pipeline-doc-safety",
-			"artifactType": "generated-workflow",
-			"deliveryClass": "core-installed",
-			"entryPoint": ".github/workflows/pipeline-doc-safety.yml",
-			"prerequisites": [],
-			"authorityBoundary": "Repository-owned checks and paths remain explicit."
-		},
-		{
-			"name": "pipeline-delivery-gate",
-			"artifactType": "generated-workflow",
-			"deliveryClass": "core-installed",
-			"entryPoint": ".github/workflows/pipeline-delivery-gate.yml",
-			"prerequisites": [],
-			"authorityBoundary": "Repository-owned checks and paths remain explicit."
-		},
-		{
-			"name": "pipeline-gitleaks",
-			"artifactType": "generated-workflow",
-			"deliveryClass": "core-installed",
-			"entryPoint": ".github/workflows/pipeline-gitleaks.yml",
-			"prerequisites": [],
-			"authorityBoundary": "Repository-owned checks and paths remain explicit."
-		},
-		{
-			"name": "pipeline-doc-links",
-			"artifactType": "generated-workflow",
-			"deliveryClass": "core-installed",
-			"entryPoint": ".github/workflows/pipeline-doc-links.yml",
-			"prerequisites": [],
-			"authorityBoundary": "Repository-owned checks and paths remain explicit."
-		},
-		{
-			"name": "pipeline-settings-env-guard",
-			"artifactType": "generated-workflow",
-			"deliveryClass": "core-installed",
-			"entryPoint": ".github/workflows/pipeline-settings-env-guard.yml",
-			"prerequisites": [],
-			"authorityBoundary": "Repository-owned checks and paths remain explicit."
-		},
-		{
-			"name": "pipeline-unresolved-threads",
-			"artifactType": "generated-workflow",
-			"deliveryClass": "core-installed",
-			"entryPoint": ".github/workflows/pipeline-unresolved-threads.yml",
-			"prerequisites": [],
-			"authorityBoundary": "Repository-owned checks and paths remain explicit."
-		},
-		{
 			"name": "main-sync",
 			"artifactType": "cli-command",
 			"deliveryClass": "core-installed",
@@ -550,6 +494,66 @@
 				".pipeline/agent-policy.json"
 			],
 			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
+		},
+		{
+			"name": "pipeline-doc-safety",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "optional-with-adapter",
+			"entryPoint": ".github/workflows/pipeline-doc-safety.yml",
+			"prerequisites": [
+				".pipeline/optional-workflow-policy.json"
+			],
+			"authorityBoundary": "Installed only when the repository enables it; repository-owned checks and paths remain explicit."
+		},
+		{
+			"name": "pipeline-delivery-gate",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "optional-with-adapter",
+			"entryPoint": ".github/workflows/pipeline-delivery-gate.yml",
+			"prerequisites": [
+				".pipeline/optional-workflow-policy.json"
+			],
+			"authorityBoundary": "Installed only when the repository enables it; repository-owned checks and paths remain explicit."
+		},
+		{
+			"name": "pipeline-gitleaks",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "optional-with-adapter",
+			"entryPoint": ".github/workflows/pipeline-gitleaks.yml",
+			"prerequisites": [
+				".pipeline/optional-workflow-policy.json"
+			],
+			"authorityBoundary": "Installed only when the repository enables it; repository-owned checks and paths remain explicit."
+		},
+		{
+			"name": "pipeline-doc-links",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "optional-with-adapter",
+			"entryPoint": ".github/workflows/pipeline-doc-links.yml",
+			"prerequisites": [
+				".pipeline/optional-workflow-policy.json"
+			],
+			"authorityBoundary": "Installed only when the repository enables it; repository-owned checks and paths remain explicit."
+		},
+		{
+			"name": "pipeline-settings-env-guard",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "optional-with-adapter",
+			"entryPoint": ".github/workflows/pipeline-settings-env-guard.yml",
+			"prerequisites": [
+				".pipeline/optional-workflow-policy.json"
+			],
+			"authorityBoundary": "Installed only when the repository enables it; repository-owned checks and paths remain explicit."
+		},
+		{
+			"name": "pipeline-unresolved-threads",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "optional-with-adapter",
+			"entryPoint": ".github/workflows/pipeline-unresolved-threads.yml",
+			"prerequisites": [
+				".pipeline/optional-workflow-policy.json"
+			],
+			"authorityBoundary": "Installed only when the repository enables it; repository-owned checks and paths remain explicit."
 		},
 		{
 			"name": "campaign",
