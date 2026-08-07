@@ -205,6 +205,15 @@ export interface CommentJudgment {
 	readonly body: string;
 }
 
+/** What opening a pull request needs. The closing reference is composed by the caller's verb. */
+export interface OpenPrJudgment {
+	readonly head: string;
+	readonly base: string;
+	readonly title: string;
+	readonly body: string;
+	readonly draft: boolean;
+}
+
 /** The `createComment` result — the created note's `ref` (its domain reference). */
 export type CommentResult = {
 	readonly _tag: "commented";
@@ -250,6 +259,36 @@ export type CloseResult = {
 	readonly _tag: "closed";
 	readonly target: TargetId;
 	readonly reason: string;
+};
+
+/** One issue row from a stage listing — enough to order candidates without a second read. */
+export type StageRow = {
+	readonly number: TargetId;
+	readonly title: string;
+	readonly labels: ReadonlyArray<string>;
+	readonly createdAt: string;
+};
+
+/** A comment body with its author — what a marker scan needs and nothing more. */
+export type CommentRow = {readonly id: number; readonly author: string; readonly body: string};
+
+/** What opening a pull request produced, plus the head it opened on. */
+export type OpenPrResult = {
+	readonly _tag: "opened";
+	readonly pr: number;
+	readonly url: string;
+};
+
+/**
+ * A pull request's identity fields. `author` is what the split-role firewall compares against —
+ * it is the one fact that decides whether a verdict is a self-verdict.
+ */
+export type ReadPrResult = {
+	readonly _tag: "pr";
+	readonly pr: number;
+	readonly author: string;
+	readonly body: string;
+	readonly head: string;
 };
 
 /**
@@ -316,6 +355,40 @@ export type GraduateResult = {
 const readIssueArgs = (repo: string, target: number): ReadonlyArray<string> => [
 	"api",
 	`repos/${repo}/issues/${target}`,
+];
+
+const listStageArgs = (repo: string, label: string): ReadonlyArray<string> => [
+	"api",
+	`repos/${repo}/issues?state=open&per_page=100&labels=${encodeURIComponent(label)}`,
+];
+
+const openPrArgs = (
+	repo: string,
+	head: string,
+	base: string,
+	title: string,
+	body: string,
+	draft: boolean,
+): ReadonlyArray<string> => [
+	"api",
+	"-X",
+	"POST",
+	`repos/${repo}/pulls`,
+	"-f",
+	`head=${head}`,
+	"-f",
+	`base=${base}`,
+	"-f",
+	`title=${title}`,
+	"-f",
+	`body=${body}`,
+	"-F",
+	`draft=${draft}`,
+];
+
+const readPrArgs = (repo: string, pr: number): ReadonlyArray<string> => [
+	"api",
+	`repos/${repo}/pulls/${pr}`,
 ];
 
 const replaceBodyArgs = (repo: string, target: number, body: string): ReadonlyArray<string> => [
@@ -416,6 +489,25 @@ const RawCreatedIssue = Schema.Struct({number: Schema.Number, html_url: Schema.S
 const decodeCreatedIssue = Schema.decodeUnknownEffect(RawCreatedIssue);
 
 /** An issue as the read endpoint returns it. `body` is null on an issue filed with none. */
+const RawStageRow = Schema.Struct({
+	number: Schema.Number,
+	title: Schema.String,
+	created_at: Schema.String,
+	labels: Schema.Array(Schema.Struct({name: Schema.String})),
+	// The issues endpoint returns PRs too; this is how they are told apart.
+	pull_request: Schema.optional(Schema.Unknown),
+});
+const decodeStageRows = Schema.decodeUnknownEffect(Schema.Array(RawStageRow));
+
+const RawPr = Schema.Struct({
+	number: Schema.Number,
+	body: Schema.NullOr(Schema.String),
+	user: Schema.NullOr(Schema.Struct({login: Schema.String})),
+	head: Schema.Struct({sha: Schema.String}),
+	html_url: Schema.String,
+});
+const decodePr = Schema.decodeUnknownEffect(RawPr);
+
 const RawIssue = Schema.Struct({
 	number: Schema.Number,
 	title: Schema.String,
@@ -682,6 +774,52 @@ const readIssue = Effect.fn("Tracker.readIssue")(function* (repo: string, target
 	} satisfies ReadIssueResult;
 });
 
+const listStage = Effect.fn("Tracker.listStage")(function* (repo: string, label: string) {
+	const raw = yield* decodeStageRows(yield* json(listStageArgs(repo, label)));
+	// A pull request is never a triage candidate, and the issues endpoint returns both.
+	return raw
+		.filter((row) => row.pull_request === undefined)
+		.map(
+			(row) =>
+				({
+					number: row.number,
+					title: row.title,
+					labels: row.labels.map((l) => l.name),
+					createdAt: row.created_at,
+				}) satisfies StageRow,
+		);
+});
+
+const listComments = Effect.fn("Tracker.listComments")(function* (repo: string, target: TargetId) {
+	const raw = yield* decodeComments(yield* json(listCommentsArgs(repo, target)));
+	return raw.map(
+		(c) => ({id: c.id, author: c.user?.login ?? "", body: c.body ?? ""}) satisfies CommentRow,
+	);
+});
+
+const openPullRequest = Effect.fn("Tracker.openPullRequest")(function* (
+	repo: string,
+	judgment: OpenPrJudgment,
+) {
+	const raw = yield* decodePr(
+		yield* json(
+			openPrArgs(repo, judgment.head, judgment.base, judgment.title, judgment.body, judgment.draft),
+		),
+	);
+	return {_tag: "opened", pr: raw.number, url: raw.html_url} satisfies OpenPrResult;
+});
+
+const readPullRequest = Effect.fn("Tracker.readPullRequest")(function* (repo: string, pr: number) {
+	const raw = yield* decodePr(yield* json(readPrArgs(repo, pr)));
+	return {
+		_tag: "pr",
+		pr: raw.number,
+		author: raw.user?.login ?? "",
+		body: raw.body ?? "",
+		head: raw.head.sha,
+	} satisfies ReadPrResult;
+});
+
 const releaseClaim = Effect.fn("Tracker.releaseClaim")(function* (
 	repo: string,
 	target: TargetId,
@@ -812,6 +950,14 @@ export class Tracker extends Context.Service<
 			judgment: TriageJudgment,
 		) => Effect.Effect<TriageResult, TrackerErrors>;
 		readonly readIssue: (target: TargetId) => Effect.Effect<ReadIssueResult, TrackerErrors>;
+		readonly listStage: (label: string) => Effect.Effect<ReadonlyArray<StageRow>, TrackerErrors>;
+		readonly listComments: (
+			target: TargetId,
+		) => Effect.Effect<ReadonlyArray<CommentRow>, TrackerErrors>;
+		readonly openPullRequest: (
+			judgment: OpenPrJudgment,
+		) => Effect.Effect<OpenPrResult, TrackerErrors>;
+		readonly readPullRequest: (pr: number) => Effect.Effect<ReadPrResult, TrackerErrors>;
 		readonly releaseClaim: (
 			target: TargetId,
 			judgment: ClaimJudgment,
@@ -866,6 +1012,13 @@ export const GithubTrackerLive: Layer.Layer<
 			applyTriage: (target, judgment) =>
 				repo.pipe(Effect.flatMap((r) => withSpawner(applyTriage(r, target, judgment)))),
 			readIssue: (target) => repo.pipe(Effect.flatMap((r) => withSpawner(readIssue(r, target)))),
+			listStage: (label) => repo.pipe(Effect.flatMap((r) => withSpawner(listStage(r, label)))),
+			listComments: (target) =>
+				repo.pipe(Effect.flatMap((r) => withSpawner(listComments(r, target)))),
+			openPullRequest: (judgment) =>
+				repo.pipe(Effect.flatMap((r) => withSpawner(openPullRequest(r, judgment)))),
+			readPullRequest: (pr) =>
+				repo.pipe(Effect.flatMap((r) => withSpawner(readPullRequest(r, pr)))),
 			releaseClaim: (target, judgment) =>
 				repo.pipe(Effect.flatMap((r) => withSpawner(releaseClaim(r, target, judgment.session)))),
 			replaceBody: (target, body) =>
