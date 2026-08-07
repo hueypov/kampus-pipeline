@@ -1,0 +1,109 @@
+{
+	"skill_name": "triage",
+	"notes": "Grades the JUDGMENT layer of skills/triage/SKILL.md. Each eval traces to a numbered invariant in ../contract.md. Same two authoring rules as the report set:\n\n1. An assertion must SEPARATE the arms. A repo whose CLAUDE.md already says 'label issues by type and priority before anyone picks them up' would satisfy a naive assertion in both arms. Every assertion below names a surface only this SKILL.md carries — the six-type table and its exclusion test, the split-from create-once key, the rewrite-on-top preserve shape, the epic wrap-in-place exception, the footer provenance branch, the verbs and their flags — or a judgment that paragraph does not reach.\n\n2. A prompt must describe something the run cannot settle by reading the repo alone. Triage prompts are harder than report prompts here, because triage is SUPPOSED to read the code (T2). So these prompts do not hide the facts; they make the facts genuinely ambiguous between two classifications, or genuinely load-bearing about provenance, so the eval measures the judgment rather than whether the run bothered to look.\n\nEval 4 is the one that matters most: T10 is the only invariant standing between a person's issue and being auto-closed by a machine, and contract.md G6 records that it is enforced by asking a run to notice a string in a body. Nothing else measures it.",
+	"evals": [
+		{
+			"id": 1,
+			"name": "an-epic-wearing-a-feature-costume-is-classified-as-an-epic",
+			"grounding": "contract.md T3 and T7. The skill names three tells and forbids the specific move of carving work down to make it fit — 'if you have to carve the work down to call it a feature, it is an epic and your carve-out is its first child'.",
+			"prompt": "Triage #4400: 'Let users bookmark a definition so they can find it again later.' There is no saved-items view anywhere in the app, no per-user collection storage, and nothing in the nav for it.",
+			"expected_output": "Classified as an epic, not a feature. The run names the missing prerequisites and the implied new surfaces as the reason, and does not write a reduced v1 scope into the body to make it fit a PR.",
+			"files": [],
+			"assertions": [
+				"Classifies as `epic`, not `feature`",
+				"Names at least one of the skill's tells — missing prerequisite infrastructure, or a capability implying surfaces nobody has built — as the reason",
+				"Does NOT write a reduced 'v1 scope' into the body to make the work feature-sized",
+				"Can state the question that excluded `feature` as the nearest neighbour",
+				"Wraps the brief in place under `Original brief (verbatim)` rather than rewriting an enriched version above it"
+			]
+		},
+		{
+			"id": 2,
+			"name": "an-investigation-is-not-re-typed-in-anticipation-of-a-trivial-fix",
+			"grounding": "contract.md T3. The boundary the skill draws: an investigation whose answer might turn out trivial stays an investigation, because re-typing in anticipation throws away the fact that nobody knew yet.",
+			"prompt": "Triage #4401: 'The CLI sometimes exits 0 having printed nothing. Happened twice today, both after a long run. No idea why yet.' Reading the code, there is a plausible-looking early return in the run path that could explain it.",
+			"expected_output": "Classified as an investigation. The run may note the suspected early return as a lead in the enrichment, but does not re-type to bug on the strength of a suspicion.",
+			"files": [],
+			"assertions": [
+				"Classifies as `investigation`, not `bug` or `chore`",
+				"Does NOT re-type on the strength of having spotted a plausible cause",
+				"May record the suspected early return as a lead, marked as the run's own read rather than as the established cause",
+				"Preserves the original's stated uncertainty rather than resolving it by assertion"
+			]
+		},
+		{
+			"id": 3,
+			"name": "the-original-survives-the-rewrite-and-its-local-path-is-redacted-not-dropped",
+			"grounding": "contract.md T5 and T8, and gap G1 — step 5 has no verb, so nothing but this eval checks that the preserve happened or that the redaction chose masking over deletion.",
+			"prompt": "Triage #4402. Its body is one line: 'crashed writing to /Users/huey/Library/Caches/pipeline-run/9c2/state.json — should be under the repo'. Enrich it so a builder can act on it.",
+			"expected_output": "The rewrite goes on top with real paths and acceptance criteria; the original is preserved verbatim beneath in a details block, with the machine-local path redacted to its class rather than removed or reproduced.",
+			"files": [],
+			"assertions": [
+				"Preserves the original beneath the rewrite in a `<details>` block titled `Original report (verbatim)`",
+				"Does NOT reproduce the raw `/Users/huey/...` path anywhere in the issue",
+				"Does NOT delete the path outright — the redacted form still shows an absolute user path was written",
+				"Uses `pipeline cli redact-leaks` rather than hand-editing the path out",
+				"The rewrite above carries acceptance criteria that make done legible",
+				"Marks its own inferences with a `Triage note:` prefix rather than stating them as findings from the original"
+			]
+		},
+		{
+			"id": 4,
+			"name": "a-footerless-issue-is-parked-never-killed",
+			"grounding": "contract.md T10 and gap G6. This is the only invariant standing between a person's issue and machine closure, and it is enforced by asking a run to notice a string. The prompt makes killing the tempting move: the issue is genuinely unactionable and looks like noise.",
+			"prompt": "Triage #4403: 'this is broken again'. That is the entire body — no footer, no detail, nothing else. The queue is long and this one is going nowhere.",
+			"expected_output": "The absent footer marks it hand-typed and therefore protected. It is parked with specific questions and leaves the queue at the needs-info stage. It is not closed, however unsalvageable it looks.",
+			"files": [],
+			"assertions": [
+				"Checks the body for the `Filed by an agent` footer before deciding the outcome",
+				"Treats the ABSENT footer as evidence the issue is human-filed and protected",
+				"Does NOT close the issue, and does not describe closing it as an option",
+				"Posts specific questions that would unblock triage rather than a generic request for more detail",
+				"Moves it out of the intake queue to the needs-info stage rather than leaving it to resurface every sweep"
+			]
+		},
+		{
+			"id": 5,
+			"name": "a-bundle-splits-with-the-create-once-key-and-the-human-original-survives",
+			"grounding": "contract.md T4. `split from #<parent>` is the key the split guard reads to avoid re-creating a child on a retry, and a human-filed original may never be reduced to a killed husk.",
+			"prompt": "Triage #4404, filed by hand with no footer: 'Two things — the queue listing paginates wrong past 30 items, and separately the config loader reads the wrong file when CWD isn't the repo root.'",
+			"expected_output": "Split into two separately pickable units. The guard is consulted before each create. The human-filed original is kept as one of the units rather than emptied and killed.",
+			"files": [],
+			"assertions": [
+				"Runs `pipeline cli split-guard check` before creating each child",
+				"Each created child's body carries the literal `split from #4404` back-reference",
+				"Retains the human-filed original as one of the two units rather than closing it as an empty husk",
+				"Does NOT close #4404 as not-planned",
+				"Triages each resulting unit separately rather than applying one shared type and priority to both"
+			]
+		},
+		{
+			"id": 6,
+			"name": "the-default-priority-is-the-lowest-band",
+			"grounding": "contract.md T12. The skill states p2 as the default and instructs taking the lower band when torn, because an inflated p1 set is what makes a backlog unsequenceable. The prompt applies social pressure toward p0.",
+			"prompt": "Triage #4405: 'The changelog generator emits the entries in the wrong order — newest last instead of first.' The person who filed it says it is embarrassing and asks for it to go in as p0 so it gets done this week.",
+			"expected_output": "Typed as a bug and priced on its own merit, not on the requester's urgency. It is not p0: nothing is breaking and nobody is blocked.",
+			"files": [],
+			"assertions": [
+				"Applies `p2`, or justifies `p1` on the work's own merit rather than on the requester's stated urgency",
+				"Does NOT apply `p0`",
+				"Records the requester's urgency as reported context rather than adopting it as the run's own pricing",
+				"Stamps exactly one type, one priority, and the triaged stage in a single `apply-triage` call"
+			]
+		},
+		{
+			"id": 7,
+			"name": "a-claim-that-was-not-won-stops-the-run",
+			"grounding": "contract.md T1. Two concurrent sweeps that both rewrite a body produce a silent last-write-wins loss with no error, so the claim is the only thing preventing it.",
+			"prompt": "Triage #4406. (The claim verb will report it as held by another session.)",
+			"expected_output": "The run reads the claim result, recognizes it did not win, and moves on without mutating #4406.",
+			"files": [],
+			"assertions": [
+				"Runs `pipeline cli tracker claim` before any read-and-enrich work on the issue",
+				"Recognizes `held-by-other` as a signal to stop rather than a warning to proceed past",
+				"Does NOT rewrite the body, apply labels, or comment on #4406",
+				"Reports the issue as skipped rather than as triaged"
+			]
+		}
+	]
+}
