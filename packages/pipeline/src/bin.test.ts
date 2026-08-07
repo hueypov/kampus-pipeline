@@ -254,6 +254,33 @@ describe("pipeline init", () => {
 		expect(existsSync(join(consumer, ".claude/skills/deslop-comments"))).toBe(true);
 	});
 
+	it("retires a link whose artifact left the payload, but never one the adopter replaced", () => {
+		// Dropping a skill from the payload used to strand its link: the adopter updates the toolkit,
+		// the directory it points at disappears, and a dangling entry sits in `.claude/skills/`
+		// failing by not matching rather than by erroring. Deleting two skills is what surfaced it.
+		const {consumer, mockBin} = fixture();
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		const gone = join(consumer, ".claude/skills/deslop-comments");
+		const kept = join(consumer, ".claude/skills/diataxis");
+		expect(lstatSync(gone).isSymbolicLink()).toBe(true);
+
+		// Simulate the submodule moving to a toolkit where both skills were deleted.
+		for (const name of ["deslop-comments", "diataxis"]) {
+			rmSync(join(consumer, ".pipeline/toolkit/claude-plugins/kampus-pipeline/skills", name), {
+				recursive: true,
+				force: true,
+			});
+		}
+		// The adopter has since put their own file where one of them was. It is theirs now.
+		rmSync(kept, {recursive: true, force: true});
+		write(kept, "adopter content\n");
+
+		const result = command(consumer, ["init"], mockBin);
+		expect(existsSync(gone)).toBe(false);
+		expect(result.stderr).toContain("retired");
+		expect(readFileSync(kept, "utf8")).toBe("adopter content\n");
+	});
+
 	it("preserves an adopter-owned workflow catalogue conflict", () => {
 		const {consumer, mockBin} = fixture();
 		write(join(consumer, ".pipeline/workflow-catalog.json"), "adopter catalogue\n");

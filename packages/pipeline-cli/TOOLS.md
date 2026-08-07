@@ -562,8 +562,8 @@ The tool is the pure projection only. It decodes the untrusted entries file at t
 boundary and accepts `{issue?, pr, title, type?, milestone?, category?, joinedCategory?,
 releaseState?}`. `pr` and `title` are required. A malformed/unreadable file, invalid entry, or
 failed output write is a typed non-zero exit; an empty valid array is a successful report stating
-that nothing shipped in the window. The Git/GitHub/tracker gather belongs to `/what-shipped`, not
-this tool, and no release provider, network command, or mutation is embedded in the CLI.
+that nothing shipped in the window. Gathering the input is the caller's, not this tool's, and no
+release provider, network command, or mutation is embedded in the CLI.
 
 The category rule preserves the useful join-free mechanism without a product-specific taxonomy:
 the direct PR category (`category`) wins, then the gather's joined metadata (`joinedCategory`),

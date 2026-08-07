@@ -567,7 +567,7 @@ metadata path and then to an explicit uncertainty bucket.
 **PR-signal-preferred precedence** (`resolveCategory` in
 `packages/pipeline-cli/src/tools/ship-digest/digest.ts`): an entry's direct `category` signal
 wins; when it is absent the gather-supplied `joinedCategory` fallback is consulted; when neither
-is present the configured visible fallback is used. The `/what-shipped` gather populates
+is present the configured visible fallback is used. The caller's gather populates
 `category` from the PR label (join-free) and `joinedCategory` from its repository-owned join when
 the label is missing. Legacy `area` / `joinedArea` input keys are temporary CLI compatibility
 aliases only; new gatherers must emit the generic keys.
@@ -1361,7 +1361,7 @@ closing the documented repository precedent drift class).
   - `claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md` (this file)
 
   **Deliberately OUT of §CP** (recorded so their absence is a decision, not an oversight): the
-  `heal-ci`, `what-shipped`, `doctor`, and `wayfinder` skills are operational diagnostics /
+  `heal-ci`, `doctor`, and `wayfinder` skills are operational diagnostics /
   reporting / orientation — they neither gate a merge nor hold release authority nor sit on a
   gate-critical path, so they auto-merge on a `review-skill` PASS like any ordinary skill. Do
   **not** add them to the boundary (the applicable safety invariant).

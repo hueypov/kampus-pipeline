@@ -50,7 +50,7 @@ These hold on every run regardless of what the spawn prompt remembered to say:
   nothing else. **NOT the `.decisions/` *why* surface** (a rationale belongs in an ADR — link to
   it, don't re-derive it; a pattern doc that re-litigates an ADR's *why* is drift, collapse it to
   a pointer at the ADR), **NOT the `.glossary/` noun surface** (you *use* those canonical names,
-  you don't redefine them), **NOT an architecture audit** (that files issues — `architecture-audit`),
+  you don't redefine them), **NOT an architecture audit** (that files issues — use `report`),
   and **NOT intake** (`report` or a repository-owned issue workflow).
 - **Source is the source of truth — ground every claim, cut opinion.** The repo is the authority:
   when a doc and the source disagree, **fix the doc.** Every rule, anti-pattern, and default traces
