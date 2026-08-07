@@ -11,5 +11,8 @@
 		"@typescript/native-preview": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
+	},
+	"scripts": {
+		"pipeline": "./.pipeline/toolkit/bin/pipeline"
 	}
 }

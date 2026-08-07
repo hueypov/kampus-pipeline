@@ -153,6 +153,31 @@ describe("standup/config — decodeLaunchConfig (happy path, one-role-map shape)
 			assert.strictEqual(cfg.channels.mode, "allowlist");
 		}),
 	);
+	it.effect("an omitted terminal decodes to tmux, so an existing config keeps its launch path", () =>
+		Effect.gen(function* () {
+			// Unlike cliVersion, absence here is NOT its own variant: the key is additive, and every
+			// config written before the dimension existed must select exactly the path it already ran.
+			const cfg = yield* decodeLaunchConfig(validLaunch, DEFAULT_CONFIG_PATH);
+			assert.strictEqual(cfg.terminal, "tmux");
+		}),
+	);
+	it.effect("decodes an explicitly selected terminal backend", () =>
+		Effect.gen(function* () {
+			const cfg = yield* decodeLaunchConfig(
+				{...validLaunch, terminal: "herdr"},
+				DEFAULT_CONFIG_PATH,
+			);
+			assert.strictEqual(cfg.terminal, "herdr");
+		}),
+	);
+	it.effect("rejects an unknown terminal rather than silently falling back to tmux", () =>
+		Effect.gen(function* () {
+			// Fail-closed: an operator who typo'd their backend must be told, not quietly launched
+			// somewhere else — the same discipline the tier vocabulary holds.
+			const err = yield* decodeErr({...validLaunch, terminal: "screen"});
+			assert.include(err.reason, "terminal");
+		}),
+	);
 	it.effect("accepts the development channel mode carrying a top-level server: ref", () =>
 		Effect.gen(function* () {
 			// A `server:` ref rides --dangerously-load-development-channels, so it is
