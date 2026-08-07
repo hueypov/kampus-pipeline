@@ -1,0 +1,66 @@
+{
+	"skill_name": "plan-epic",
+	"notes": "Grades the JUDGMENT layer of skills/plan-epic/SKILL.md. The verbs cover the child shape, the create-once key, the topology gate, and the brief proof, so none of those need an eval — a unit test settles them. What is left is exactly the two things the skill says are irreducibly the model's: what the epic is for, and where the seams between children fall.\n\nSame two authoring rules as the report and triage sets:\n\n1. An assertion must SEPARATE the arms. A repo whose CLAUDE.md says 'break large work into small issues' would satisfy a naive assertion in every eval below. So each names a surface only this SKILL.md carries — the product-layer-first ordering, the tracer-bullet seam test, the decision-child carve-out, the born-triaged rule, the append-only brief — or a judgment that paragraph does not reach.\n\n2. A prompt must describe something the run cannot settle by reading the repo alone. plan-epic is supposed to read the codebase, so these prompts do not hide facts; they make the facts genuinely ambiguous about where a seam falls, or genuinely load-bearing about whether a question is answerable at all.\n\nEval 3 is the one that matters most. The decision-child carve-out is the only thing standing between an unanswerable product question and a planner inventing an answer that a whole fleet then builds against — and nothing mechanical can detect an invented answer, because it reads exactly like a grounded one.",
+	"evals": [
+		{
+			"id": 1,
+			"name": "the-plan-leads-with-the-product-layer-not-the-architecture",
+			"grounding": "SKILL.md step 2 and contract.md. The skill orders the plan problem → user-side solution → numbered stories → testing strategy → engineering, and names the failure: 'a plan that opens with architecture says how without ever saying who needs this'.",
+			"prompt": "Plan epic #500: 'Sessions get lost when the worker restarts. We should persist them.' The codebase has an in-memory session map in the worker, a Postgres instance already used for other state, and no session table.",
+			"expected_output": "A plan whose first sections are the problem and what changes for the user, then numbered user stories, then the testing strategy, and only then the storage approach. The obvious architecture answer appears, but not first and not as the plan's spine.",
+			"files": [],
+			"assertions": [
+				"The plan's first section states the problem in terms of who is affected, not in terms of the session map",
+				"Numbered user stories appear before any storage or schema discussion",
+				"Every child the run files traces to at least one of those numbered stories",
+				"A testing strategy is stated as its own section, not folded into the engineering approach",
+				"Does NOT open with the Postgres table design, even though it is the obvious and correct approach"
+			]
+		},
+		{
+			"id": 2,
+			"name": "children-are-tracer-bullets-not-layers",
+			"grounding": "SKILL.md step 3, 'Sizing a child'. The seam test is stated as a check the planner can apply: if a child's acceptance criteria cannot be written without referring to another child's output, the seam is wrong.",
+			"prompt": "Plan epic #501: 'Let a user report a comment.' Nothing exists yet — no report button, no reports table, no moderation surface.",
+			"expected_output": "Children sliced end to end, each independently verifiable. The horizontal split — schema child, API child, UI child — is not produced, because the first two have no acceptance criteria a person could check.",
+			"files": [],
+			"assertions": [
+				"Does NOT produce a child whose scope is a layer (schema-only, endpoint-only, UI-only)",
+				"Each child's acceptance criteria are stateable without reference to another child's output",
+				"At least one child is end-to-end thin — a user can do one whole thing and observe the result",
+				"If the run notices the moderation surface is missing, it carves it rather than assuming it exists",
+				"Can articulate the seam test it applied, not merely the seams it chose"
+			]
+		},
+		{
+			"id": 3,
+			"name": "an-ungroundable-product-question-becomes-a-decision-child-not-an-invented-answer",
+			"grounding": "SKILL.md step 2, the carve-out: 'do not resolve it yourself and do not write around it — an invented answer propagates to every agent that reads the plan, and none of them will know it was invented'. Nothing mechanical can catch this; an invented answer reads exactly like a grounded one.",
+			"prompt": "Plan epic #502: 'Add rate limiting to the public API.' The codebase has no rate limiting anywhere and nothing that states what the limits should be, who is exempt, or what happens on breach — no config, no ADR, no prior art, and the brief does not say.",
+			"expected_output": "A decision child for the policy — limits, exemptions, breach behaviour — and implementation children that depend on it. The plan does not name a specific rate.",
+			"files": [],
+			"assertions": [
+				"Files a `decision`-typed child for the rate-limit policy",
+				"Does NOT state a specific limit, window, or exemption rule anywhere in the plan as though it were settled",
+				"The dependency topology places the implementation children after the decision",
+				"Is explicit that the policy is unresolved, rather than silently omitting it",
+				"Does NOT resolve it by picking a common default and noting it as adjustable later"
+			]
+		},
+		{
+			"id": 4,
+			"name": "the-brief-is-appended-below-never-rewritten-and-children-are-born-triaged",
+			"grounding": "SKILL.md steps 3 and 5, and the 'What you never do' list. Two rules that a run can violate while producing an otherwise-good plan: rewriting a brief it judged unclear, and leaving children for a triager to classify. The second was a real defect in the verb, found by the pre-flight the skill mandates.",
+			"prompt": "Plan epic #503. Its brief is three vague sentences that you could state far better after reading the code. Plan it.",
+			"expected_output": "The plan is appended below the brief; the brief is untouched even though the run can state it better. Each child is filed with its own type and priority rather than entering the intake queue.",
+			"files": [],
+			"assertions": [
+				"Does NOT edit, clarify, or replace the original brief, despite judging it improvable",
+				"The plan appears below the brief, not above or in place of it",
+				"Every child carries a type the run chose, and none is typed `epic`",
+				"Runs the structural gate before releasing the lock, and reads its verdict rather than chaining on its exit status",
+				"Releases the lock, including on the path where the gate reports a defect"
+			]
+		}
+	]
+}

@@ -272,6 +272,19 @@ export type StageRow = {
 /** A comment body with its author — what a marker scan needs and nothing more. */
 export type CommentRow = {readonly id: number; readonly author: string; readonly body: string};
 
+/** A natively-linked child of an epic — the ledger relationship, as the tracker reports it. */
+export interface SubIssueRow {
+	readonly number: TargetId;
+	readonly title: string;
+}
+
+/** A confirmed parent→child link. Only returned once the read-back proves it landed. */
+export interface LinkSubIssueResult {
+	readonly _tag: "linked";
+	readonly parent: TargetId;
+	readonly child: TargetId;
+}
+
 /** What opening a pull request produced, plus the head it opened on. */
 export type OpenPrResult = {
 	readonly _tag: "opened";
@@ -380,6 +393,20 @@ const readIssueArgs = (repo: string, target: number): ReadonlyArray<string> => [
 const listStageArgs = (repo: string, label: string): ReadonlyArray<string> => [
 	"api",
 	`repos/${repo}/issues?state=open&per_page=100&labels=${encodeURIComponent(label)}`,
+];
+
+const listSubIssuesArgs = (repo: string, parent: number): ReadonlyArray<string> => [
+	"api",
+	`repos/${repo}/issues/${parent}/sub_issues?per_page=100`,
+];
+
+const linkSubIssueArgs = (repo: string, parent: number, childId: number): ReadonlyArray<string> => [
+	"api",
+	"-X",
+	"POST",
+	`repos/${repo}/issues/${parent}/sub_issues`,
+	"-F",
+	`sub_issue_id=${childId}`,
 ];
 
 const openPrArgs = (
@@ -540,6 +567,16 @@ const decodeStageRows = Schema.decodeUnknownEffect(Schema.Array(RawStageRow));
 
 const RawPrFile = Schema.Struct({filename: Schema.String});
 const decodePrFiles = Schema.decodeUnknownEffect(Schema.Array(RawPrFile));
+
+/**
+ * A child as the `sub_issues` endpoint returns it. `number` is what every caller addresses; `id`
+ * is the database id the link endpoint takes, which is NOT the issue number — passing the number
+ * links a different issue, or nothing, and reports success either way.
+ */
+const RawSubIssue = Schema.Struct({number: Schema.Number, title: Schema.String});
+const decodeSubIssues = Schema.decodeUnknownEffect(Schema.Array(RawSubIssue));
+const RawIssueId = Schema.Struct({id: Schema.Number});
+const decodeIssueId = Schema.decodeUnknownEffect(RawIssueId);
 
 const RawCheckRuns = Schema.Struct({
 	check_runs: Schema.Array(
@@ -847,6 +884,41 @@ const listStage = Effect.fn("Tracker.listStage")(function* (repo: string, label:
 		);
 });
 
+/**
+ * The children natively linked to an epic. This is the create-once source: an unreadable result
+ * must reach the caller as a failure, never as an empty list, because "the epic has no children"
+ * is exactly the answer that makes a create-once guard file the duplicate it exists to prevent.
+ */
+const listSubIssues = Effect.fn("Tracker.listSubIssues")(function* (repo: string, parent: number) {
+	const raw = yield* decodeSubIssues(yield* json(listSubIssuesArgs(repo, parent)));
+	return raw.map((c) => ({number: c.number, title: c.title}) satisfies SubIssueRow);
+});
+
+/**
+ * Link an existing issue to an epic as a native sub-issue, and prove the link landed.
+ *
+ * Two steps precede the POST for one reason each. The link endpoint takes the child's **database
+ * id**, not its issue number, so the id is resolved first — passing a number silently links some
+ * other issue or nothing at all, and the endpoint reports success regardless. Then the parent's
+ * children are re-read: a POST that returned without linking would otherwise leave the caller
+ * believing a ledger relationship exists that no reader will ever find.
+ */
+const linkSubIssue = Effect.fn("Tracker.linkSubIssue")(function* (
+	repo: string,
+	parent: number,
+	child: number,
+) {
+	const {id} = yield* decodeIssueId(yield* json(readIssueArgs(repo, child)));
+	yield* json(linkSubIssueArgs(repo, parent, id));
+	const landed = yield* decodeSubIssues(yield* json(listSubIssuesArgs(repo, parent)));
+	if (!landed.some((c) => c.number === child)) {
+		return yield* new TrackerVerifyError({
+			message: `linked #${child} under #${parent} and the read-back does not list it — the link is UNKNOWN, not made`,
+		});
+	}
+	return {_tag: "linked", parent, child} satisfies LinkSubIssueResult;
+});
+
 const listComments = Effect.fn("Tracker.listComments")(function* (repo: string, target: TargetId) {
 	const raw = yield* decodeComments(yield* json(listCommentsArgs(repo, target)));
 	return raw.map(
@@ -1048,6 +1120,13 @@ export class Tracker extends Context.Service<
 		) => Effect.Effect<TriageResult, TrackerErrors>;
 		readonly readIssue: (target: TargetId) => Effect.Effect<ReadIssueResult, TrackerErrors>;
 		readonly listStage: (label: string) => Effect.Effect<ReadonlyArray<StageRow>, TrackerErrors>;
+		readonly listSubIssues: (
+			parent: TargetId,
+		) => Effect.Effect<ReadonlyArray<SubIssueRow>, TrackerErrors>;
+		readonly linkSubIssue: (
+			parent: TargetId,
+			child: TargetId,
+		) => Effect.Effect<LinkSubIssueResult, TrackerErrors | TrackerVerifyError>;
 		readonly listComments: (
 			target: TargetId,
 		) => Effect.Effect<ReadonlyArray<CommentRow>, TrackerErrors>;
@@ -1116,6 +1195,10 @@ export const GithubTrackerLive: Layer.Layer<
 				repo.pipe(Effect.flatMap((r) => withSpawner(applyTriage(r, target, judgment)))),
 			readIssue: (target) => repo.pipe(Effect.flatMap((r) => withSpawner(readIssue(r, target)))),
 			listStage: (label) => repo.pipe(Effect.flatMap((r) => withSpawner(listStage(r, label)))),
+			listSubIssues: (parent) =>
+				repo.pipe(Effect.flatMap((r) => withSpawner(listSubIssues(r, parent)))),
+			linkSubIssue: (parent, child) =>
+				repo.pipe(Effect.flatMap((r) => withSpawner(linkSubIssue(r, parent, child)))),
 			listComments: (target) =>
 				repo.pipe(Effect.flatMap((r) => withSpawner(listComments(r, target)))),
 			openPullRequest: (judgment) =>
