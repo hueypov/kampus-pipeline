@@ -195,6 +195,21 @@ export type CommentResult = {
 };
 
 /**
+ * The `readIssue` result — an entity's current title, body and open/closed state.
+ *
+ * The read half a writing verb needs to PROVE what landed rather than assume it. A create that
+ * reported success while landing a different body is otherwise invisible: the caller sees an
+ * issue number and a URL, and nothing compares them against what was sent.
+ */
+export type ReadIssueResult = {
+	readonly _tag: "issue";
+	readonly target: TargetId;
+	readonly title: string;
+	readonly body: string;
+	readonly closed: boolean;
+};
+
+/**
  * A gate verdict (judgment-as-parameter, the originating work item): which `gate` it decides, whether it `passed`,
  * the `headRef` the verdict binds to (the SHA-bound, one-verdict-per-gate contract), and the verdict `body` prose. Domain vocabulary
  * only — `gate` is the crew's own gate name (`code`/`doc`/`skill`/`design`); the caller never
@@ -255,6 +270,11 @@ export type GraduateResult = {
 // the direct `gh` spawn — no shell, no heredoc, no `-f body=@file`, so the whole local-path
 // leak / concurrent-body-collision class the skills hand-guard against (the originating work item) is structurally
 // absent here, not merely warned against.
+const readIssueArgs = (repo: string, target: number): ReadonlyArray<string> => [
+	"api",
+	`repos/${repo}/issues/${target}`,
+];
+
 const createIssueArgs = (
 	repo: string,
 	title: string,
@@ -329,6 +349,15 @@ const decodeLabels = Schema.decodeUnknownEffect(Schema.Array(RawLabel));
 /** The created issue as the create endpoint returns it; only the ref + locator are read. */
 const RawCreatedIssue = Schema.Struct({number: Schema.Number, html_url: Schema.String});
 const decodeCreatedIssue = Schema.decodeUnknownEffect(RawCreatedIssue);
+
+/** An issue as the read endpoint returns it. `body` is null on an issue filed with none. */
+const RawIssue = Schema.Struct({
+	number: Schema.Number,
+	title: Schema.String,
+	body: Schema.NullOr(Schema.String),
+	state: Schema.String,
+});
+const decodeIssue = Schema.decodeUnknownEffect(RawIssue);
 
 /** The created comment as the create endpoint returns it; only its ref is read. */
 const RawCreatedComment = Schema.Struct({id: Schema.Number});
@@ -569,6 +598,19 @@ const postVerdict = Effect.fn("Tracker.postVerdict")(function* (
  * with (default `needs-triage`, the intake queue); the created ref + locator are
  * Schema-decoded at the REST boundary and returned domain-shaped.
  */
+const readIssue = Effect.fn("Tracker.readIssue")(function* (repo: string, target: number) {
+	const raw = yield* decodeIssue(yield* json(readIssueArgs(repo, target)));
+	return {
+		_tag: "issue",
+		target: raw.number,
+		title: raw.title,
+		// A bodyless issue reads back as an empty string, never null: callers compare text, and a
+		// null forces every one of them to re-handle the same absent case.
+		body: raw.body ?? "",
+		closed: raw.state !== "open",
+	} satisfies ReadIssueResult;
+});
+
 const createIssue = Effect.fn("Tracker.createIssue")(function* (
 	repo: string,
 	judgment: CreateIssueJudgment,
@@ -660,6 +702,7 @@ export class Tracker extends Context.Service<
 			target: TargetId,
 			judgment: TriageJudgment,
 		) => Effect.Effect<TriageResult, TrackerErrors>;
+		readonly readIssue: (target: TargetId) => Effect.Effect<ReadIssueResult, TrackerErrors>;
 		readonly createIssue: (
 			judgment: CreateIssueJudgment,
 		) => Effect.Effect<CreateIssueResult, TrackerErrors>;
@@ -702,6 +745,7 @@ export const GithubTrackerLive: Layer.Layer<
 			readBack: (target) => repo.pipe(Effect.flatMap((r) => withSpawner(readBack(r, target)))),
 			applyTriage: (target, judgment) =>
 				repo.pipe(Effect.flatMap((r) => withSpawner(applyTriage(r, target, judgment)))),
+			readIssue: (target) => repo.pipe(Effect.flatMap((r) => withSpawner(readIssue(r, target)))),
 			createIssue: (judgment) =>
 				repo.pipe(Effect.flatMap((r) => withSpawner(createIssue(r, judgment)))),
 			createComment: (target, judgment) =>

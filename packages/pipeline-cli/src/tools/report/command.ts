@@ -2,10 +2,8 @@
  * The `report` tool — `pipeline-cli report dedup --query "<text>"`.
  *
  * Implements the derived contract at
- * `claude-plugins/kampus-pipeline/skills/report/contract.md`. `dedup` is complete here; `file`
- * and `note` are specified in that contract and not yet built — they need an issue-body read-back
- * the `Tracker` service does not expose, and a verb that skipped it would be the
- * command-shaped stub that silently passes.
+ * `claude-plugins/kampus-pipeline/skills/report/contract.md`. All three verbs are live: `dedup`
+ * here, `file` and `note` in `./write.ts`.
  *
  * What this adds over `intake-dedup check`, whose ranking core it reuses rather than copies:
  *
@@ -22,6 +20,8 @@ import {Command, Flag} from "effect/unstable/cli";
 import {rankCandidates, tokenize} from "../intake-dedup/dedup-match.ts";
 import {canDiscriminate} from "./body.ts";
 import {Github, GithubLive} from "../intake-dedup/github.ts";
+import {GithubTrackerLive} from "../tracker/tracker.ts";
+import {writeSubcommands} from "./write.ts";
 
 const DEFAULT_STAGE = "status:needs-triage";
 const DEFAULT_LIMIT = 20;
@@ -118,9 +118,10 @@ const check = Command.make(
 );
 
 export const reportCommand = Command.make("report").pipe(
-	Command.withSubcommands([check]),
+	Command.withSubcommands([check, ...writeSubcommands]),
 	Command.withDescription(
 		"The intake filing verbs. `dedup` answers whether an observation is already filed, separating a real 'none' from a check that never ran",
 	),
 	Command.provide(GithubLive),
+	Command.provide(GithubTrackerLive),
 );
