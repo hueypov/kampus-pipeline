@@ -2,3 +2,12 @@ node_modules
 dist
 *.tsbuildinfo
 .DS_Store
+# .pipeline
+.claude/crew.config.jsonc
+.claude/crew-run/
+# .gitmodules
+# .glossary
+# .decisions
+# .github
+# .claude
+# .patterns

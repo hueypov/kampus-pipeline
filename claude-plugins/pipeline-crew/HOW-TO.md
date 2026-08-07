@@ -69,9 +69,41 @@ whenever a dimension changes.
    engine `count` — by editing that key in your config and re-standing-up (below). The plugin
    knows nothing of the channel behind a `notification.*.command`, so switching a human from
    iMessage to Slack is a config swap, never a code change.
-4. **Keep the pin optional.** `cliVersion` is the only optional key — omit it for an unpinned
-   launch (so a frequent Claude Code auto-update never fail-closes the boot); set it only to
-   deliberately lock a version.
+4. **Keep the pin optional.** `cliVersion` is optional — omit it for an unpinned launch (so a
+   frequent Claude Code auto-update never fail-closes the boot); set it only to deliberately
+   lock a version.
+5. **Pick a terminal if tmux is not for you.** `terminal` is the other optional key: omit it and
+   the crew stands up in tmux as always, or set `"terminal": "herdr"` to place the same crew in
+   [herdr](https://herdr.dev) instead (its binary must be on `PATH`). Try it once without
+   committing to it by passing `--terminal herdr` to `stand-up`.
+
+## Stand the crew up in herdr instead of tmux
+
+**Goal:** run the same crew without learning tmux.
+
+A multiplexer is only ever a **window manager** to this launcher — the crew coordinates over the
+channel substrate either way — so the backend changes where the panes land and nothing else. The
+roster, the binds, the fail-closed launch, and every command you already run stay identical.
+
+1. Install [herdr](https://herdr.dev) and confirm `herdr status` reports a running server.
+2. Either set `"terminal": "herdr"` in your `.claude/crew.config.jsonc` (the standing answer), or
+   pass `--terminal herdr` for one invocation:
+
+   ```bash
+   "$CLAUDE_PROJECT_DIR/.pipeline/toolkit/bin/pipeline" crew stand-up --terminal herdr
+   ```
+
+   Once the config is filled, `pnpm pipeline init --check` verifies the selected terminal is
+   installed and reports an unsupported value or a missing binary — so a typo or an uninstalled
+   backend surfaces there rather than at your first stand-up.
+
+3. The whole crew comes up as panes of one tab labelled **`pipeline`** — a pane per role, all
+   visible at once, the same shape the tmux path gets from its single tiled `crew` window. A tab
+   per role is deliberately *not* the layout.
+
+`spawn-role` and `retire-role` take the same flag and must be given the SAME backend the crew was
+stood up under — a tmux pane id means nothing to herdr, and vice versa. To switch an already-running
+crew, `stand-down` first, then `stand-up` under the other backend.
 
 ## Watch and use the crew tmux window
 

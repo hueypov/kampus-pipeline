@@ -182,6 +182,23 @@ on-demand role — the cartographer for a `wayfinder chart`, or a scaled-up extr
 the full launcher bind (so the channel is never inert) and boots a HITL role idle. It fails
 closed if no crew is up — `/stand-up` first.
 
+### Choose the terminal — tmux or herdr
+
+The launcher needs somewhere to put the crew on your screen, and that is **all** a multiplexer
+does here: the crew coordinates over the channel substrate either way, so the backend changes
+nothing about the roster, the binds, or the fail-closed launch. The optional `terminal` dimension
+picks it — omit it and you get **tmux**, exactly as before; set `"terminal": "herdr"` to place the
+same crew in [herdr](https://herdr.dev) instead, which is the option to take if tmux's learning
+curve is not one you want. Selecting `herdr` needs its binary on `PATH`; an absent binary aborts
+the stand-up naming it. `--terminal <tmux|herdr>` overrides the config for one invocation, so you
+can try a backend before committing to it.
+
+Either way the whole crew lands in **one container, a pane per role**, so every member stays
+visible at once — a tiled `crew` window under tmux, a `pipeline` tab under herdr. A tab (or
+window) per role is deliberately not the layout. A crew is stood up, spawned into, and retired
+under **one** backend — a tmux pane id means nothing to herdr — so switching means `stand-down`
+then `stand-up`.
+
 ## Layout
 
 ```

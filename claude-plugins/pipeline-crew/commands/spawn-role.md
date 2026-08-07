@@ -1,6 +1,6 @@
 ---
 description: Launch ONE on-demand crew role into the already-running crew — including the human-in-the-loop cartographer, which boots idle — doing the full launcher bind (per-pane channel scope, tmux placement, tier model, agent def), no whole-crew re-boot.
-argument-hint: "<role> [--project-root <path>]"
+argument-hint: "<role> [--project-root <path>] [--terminal <tmux|herdr>]"
 allowed-tools: ["Bash"]
 ---
 
@@ -47,6 +47,12 @@ For example, to bring up the cartographer:
 ```bash
 "$CLAUDE_PROJECT_DIR/.pipeline/toolkit/bin/pipeline" crew spawn-role cartographer
 ```
+
+The new member splits into the running crew's container — the tiled `crew` window under tmux, the
+`pipeline` tab under herdr — chosen by the config's `terminal` dimension, with
+`--terminal <tmux|herdr>` overriding it for one invocation. It must name the SAME backend the crew
+was stood up under: a tmux pane id means nothing to herdr, so a mismatched flag finds no running crew
+and fails closed telling you to stand up first.
 
 The launcher runs, **in order**: assert the pinned CLI version → ensure the per-project
 tracker is up (idempotent — reuses the running one) → derive the single session (a bridge
