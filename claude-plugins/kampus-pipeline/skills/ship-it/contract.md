@@ -28,18 +28,18 @@ Both verbs allocate from one table, so a code means one thing whichever produced
 |---|---|---|
 | 0 | — | every precondition passed (`check`), or the merge landed (`merge`) |
 | 1 | — | usage error, or the verb failed to run |
-| 3 | `NO_VERDICT` | a required gate has no verdict — the PR was never gated |
-| 4 | `VERDICT_FAIL` | a required gate's current verdict is FAIL |
-| 5 | `VERDICT_STALE` | a verdict exists but is bound to a head that is not current |
-| 6 | `CHECKS_RED` | a required check failed |
-| 7 | `CHECKS_PENDING` | a required check has not finished — "not yet", never "no" |
-| 8 | `APPROVAL_MISSING` | repository policy requires an approval this PR does not carry |
-| 9 | `MERGE_UNKNOWN` | the merge was attempted and the outcome could not be confirmed |
-| 10 | `NOT_MERGEABLE` | the provider reports the PR cannot merge (conflicts, closed, draft) |
+| 16 | `GATE_MISSING` | a required gate has no verdict — the PR was never gated |
+| 14 | `GATE_FAIL` | a required gate's current verdict is FAIL |
+| 15 | `GATE_STALE` | a verdict exists but is bound to a head that is not current |
+| 18 | `CHECKS_FAILED` | a required check failed |
+| 9 | `NOT_YET` | a required check has not finished — "not yet", never "no" |
+| 10 | `REFUSED_POLICY` | repository policy requires an approval this PR does not carry |
+| 12 | `WRITE_UNKNOWN` | the merge was attempted and the outcome could not be confirmed |
+| 7 | `ZERO_SCOPE` | the provider reports the PR cannot merge (conflicts, closed, draft) |
 | 11 | `PRECONDITION_UNKNOWN` | a precondition could not be READ — the answer is unknown, not satisfied |
 
-`6` and `7` are separate because their owners differ: red is a defect for the author, pending is
-nobody's yet. `9` and `11` are separate from `1` for the reason the reference implementation
+`18` and `9` are separate because their owners differ: red is a defect for the author, pending is
+nobody's yet. `12` and `11` are separate from `1` for the reason the reference implementation
 states — "the provider refused" must never read as "the binary is broken", and a write whose
 outcome is unknown must not be blindly retried.
 
@@ -109,7 +109,7 @@ $ pipeline cli ship-it check --pr 447
 gates required: code
 gate code            REFUSED  bound to e1db540, not the current head 30e98f4
 $ echo $?
-5
+15
 ```
 
 **Grounding**
@@ -149,14 +149,14 @@ Every code `check` can return, plus:
 | Code | Trigger |
 |---|---|
 | 0 | the merge landed and was read back |
-| 9 | the merge was attempted and could not be confirmed |
+| 12 | the merge was attempted and could not be confirmed |
 
 **Errors**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| *(every `check` refusal, verbatim)* | stderr | 3–8, 10, 11 | refusal |
-| `ship-it merge: #<n> merge attempted; outcome UNCONFIRMED — do not retry blindly, read the PR` | stderr | 9 | refusal |
+| *(every `check` refusal, verbatim)* | stderr | 7, 9–11, 14–16, 18 | refusal |
+| `ship-it merge: #<n> merge attempted; outcome UNCONFIRMED — do not retry blindly, read the PR` | stderr | 12 | refusal |
 
 **Scope**
 

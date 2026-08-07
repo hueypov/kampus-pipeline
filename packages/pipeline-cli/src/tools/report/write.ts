@@ -16,10 +16,9 @@ import {Command, Flag} from "effect/unstable/cli";
 import {redactLeaks} from "../redact-leaks/redact-leaks.ts";
 import {Tracker} from "../tracker/tracker.ts";
 import {assembleBody, checkFileInput, checkNoteInput, composeFooter, hasFooter} from "./body.ts";
+import * as Exit from "../../exit-codes.ts";
 
-const EXIT_REFUSED = 2;
-const EXIT_READBACK = 4;
-const EXIT_UNREACHABLE = 5;
+
 
 const refuse = (verb: string, message: string, code: number): Effect.Effect<never> =>
 	Effect.sync(() => {
@@ -86,7 +85,7 @@ const file = Command.make(
 	Effect.fn(function* ({title, redact, dryRun}) {
 		const raw = readStdin();
 		const refusal = checkFileInput({title, body: raw, redact});
-		if (refusal) return yield* refuse("file", refusal.message, EXIT_REFUSED);
+		if (refusal) return yield* refuse("file", refusal.message, refusal.code);
 
 		// Redaction happens AFTER the guards pass so a `--redact` run still gets the section and
 		// title refusals; masking is about the path class, not a bypass for a malformed body.
@@ -108,7 +107,7 @@ const file = Command.make(
 			return yield* refuse(
 				"file",
 				`read-back mismatch on #${created.target} — created, but the landed body carries no provenance footer`,
-				EXIT_READBACK,
+				Exit.READBACK_MISMATCH,
 			);
 		}
 		yield* Console.log(`report: created #${created.target} — ${created.url}`);
@@ -125,7 +124,7 @@ const note = Command.make(
 	Effect.fn(function* ({issue, redact, dryRun}) {
 		const raw = readStdin();
 		const refusal = checkNoteInput({body: raw, redact});
-		if (refusal) return yield* refuse("note", refusal.message, EXIT_REFUSED);
+		if (refusal) return yield* refuse("note", refusal.message, refusal.code);
 
 		const body = redact ? redactLeaks(raw) : raw;
 		const composed = assembleBody(body, composeFooter(footerContext()));
@@ -144,7 +143,7 @@ const note = Command.make(
 			return yield* refuse(
 				"note",
 				`#${issue} is closed — a note on a closed issue reaches nobody`,
-				EXIT_UNREACHABLE,
+				Exit.ZERO_SCOPE,
 			);
 		}
 		const commented = yield* tracker.createComment(issue, {body: composed});

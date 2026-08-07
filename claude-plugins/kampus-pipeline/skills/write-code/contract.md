@@ -51,15 +51,15 @@ Machine-readable. First stdout line is the outcome: `pick` or `empty`. On `pick`
 | Code | Trigger |
 |---|---|
 | 0 | `pick` — at least one candidate |
-| 3 | `empty` — the stage was read and holds nothing pickable |
-| 4 | the read failed; pickability is UNKNOWN |
+| 7 | `empty` — the stage was read and holds nothing pickable |
+| 11 | the read failed; pickability is UNKNOWN |
 | 1 | usage error |
 
 **Errors**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `write-code next: could not read stage '<name>' (<reason>) — UNKNOWN` | stderr | 4 | refusal |
+| `write-code next: could not read stage '<name>' (<reason>) — UNKNOWN` | stderr | 11 | refusal |
 | `write-code next: --ready-for must be agent, human, or any` | stderr | 1 | usage |
 
 **Scope**
@@ -83,14 +83,14 @@ pick
 $ pipeline cli write-code next --ready-for agent
 empty
 $ echo $?
-3
+7
 ```
 
 **Grounding**
 
 - Today the pick is a query each run composes, so two runs can pick differently from the same queue
   and neither is wrong. A total function over the queue makes the order reviewable.
-- Exit 3 separates "nothing to do" from "could not tell", so an orchestrator does not treat a failed
+- Exit 7 separates "nothing to do" from "could not tell", so an orchestrator does not treat a failed
   read as an idle queue and stop.
 
 ---
@@ -124,20 +124,22 @@ Prose, one line: `write-code: opened #<pr> — closes #<issue> — <url>`.
 | Code | Trigger |
 |---|---|
 | 0 | the PR opened and its closing reference read back resolving to `--issue` |
-| 2 | a guard refused before any write |
-| 4 | opened, but the closing reference did not read back |
-| 5 | `--issue` is not claimed by this session |
+| 3 | stdin held nothing |
+| 4 | the input cannot be used as given |
+| 5 | the description carries a machine-local path |
+| 13 | opened, but the closing reference did not read back |
+| 6 | `--issue` is not claimed by this session |
 | 1 | usage error |
 
 **Errors**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `write-code open-pr: empty description on stdin` | stderr | 2 | refusal |
-| `write-code open-pr: machine-local path in description (<class>)` | stderr | 2 | refusal |
-| `write-code open-pr: #<n> is claimed by session <id>, not this one` | stderr | 5 | refusal |
-| `write-code open-pr: branch '<head>' has no commits ahead of base` | stderr | 2 | refusal |
-| `write-code open-pr: opened #<pr> but its closing reference does not resolve to #<n>` | stderr | 4 | refusal |
+| `write-code open-pr: empty description on stdin` | stderr | 3 | refusal |
+| `write-code open-pr: machine-local path in description (<class>)` | stderr | 5 | refusal |
+| `write-code open-pr: #<n> is claimed by session <id>, not this one` | stderr | 6 | refusal |
+| `write-code open-pr: branch '<head>' has no commits ahead of base` | stderr | 4 | refusal |
+| `write-code open-pr: opened #<pr> but its closing reference does not resolve to #<n>` | stderr | 13 | refusal |
 
 **Scope**
 
@@ -161,7 +163,7 @@ write-code: opened #431 — closes #412 — https://github.com/hueypov/kampus-pi
 
 **Grounding**
 
-- Exit 5 exists because opening a PR against an issue held by another session is how two builders
+- Exit 6 exists because opening a PR against an issue held by another session is how two builders
   land competing PRs for one ticket; the claim check belongs at the write, not only at the pick.
 
 ---
@@ -190,15 +192,15 @@ Machine-readable, one line: `rounds <k> cap <n> <under|at|over>`.
 | Code | Trigger |
 |---|---|
 | 0 | under the cap — another repair round is permitted |
-| 3 | at or over the cap — escalate to a human, do not repair again |
-| 4 | the verdict history could not be read; round count UNKNOWN |
+| 17 | at or over the cap — escalate to a human, do not repair again |
+| 11 | the verdict history could not be read; round count UNKNOWN |
 | 1 | usage error |
 
 **Errors**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `write-code rounds: could not read verdict history for #<n> — count UNKNOWN` | stderr | 4 | refusal |
+| `write-code rounds: could not read verdict history for #<n> — count UNKNOWN` | stderr | 11 | refusal |
 
 **Scope**
 
@@ -209,7 +211,7 @@ by the PASS that follows it. Counting markers therefore yields 0 after any compl
 never exceed 1. `verdict post` maintains a round trailer inside the marker instead — a FAIL
 increments it, a PASS preserves it — and the trailer survives because the comment is patched rather
 than replaced. The cap comes from repository policy; absent
-policy, the default cap is 2. Exit 3 is the escalation signal, and it is the verb's job rather than
+policy, the default cap is 2. Exit 17 is the escalation signal, and it is the verb's job rather than
 the skill's because a bound nobody counts is not a bound — a directly-invoked run with no
 orchestrator can otherwise repair forever.
 
@@ -221,7 +223,7 @@ rounds 1 cap 2 under
 $ pipeline cli write-code rounds --pr 447
 rounds 2 cap 2 at
 $ echo $?
-3
+17
 ```
 
 **Grounding**
@@ -246,13 +248,13 @@ $ echo $?
 
 | Code | Trigger |
 |---|---|
-| 7 | the posting identity authored this PR — a self-verdict, refused |
+| 10 | the posting identity authored this PR — a self-verdict, refused |
 
 **Added error**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `verdict post: #<pr> was authored by this identity — an author may not post a verdict on their own work` | stderr | 7 | refusal |
+| `verdict post: #<pr> was authored by this identity — an author may not post a verdict on their own work` | stderr | 10 | refusal |
 
 **Scope**
 

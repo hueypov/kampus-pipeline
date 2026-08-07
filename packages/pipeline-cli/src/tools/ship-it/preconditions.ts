@@ -1,33 +1,30 @@
+import * as Exit from "../../exit-codes.ts";
+
 /**
- * The pure core for `ship-it`: the exit table, and the order preconditions are evaluated in.
+ * The pure core for `ship-it`: the precondition decisions and the order they are evaluated in.
  *
  * IO-free. The verbs supply facts; this decides what those facts mean and which code says so.
  */
 
 /**
- * The one exit table both verbs allocate from, so a code means one thing whichever produced it.
+ * `ship-it`'s slice of the shared exit table (`src/exit-codes.ts`).
  *
- * `0` and `1` are reserved by the interface convention. Everything from `3` up is a fact the verb
- * PROVED, and the ones that look redundant are not:
- *
- *  - `CHECKS_RED` and `CHECKS_PENDING` differ because their owners differ. Red is a defect for the
- *    author; pending is nobody's yet. Fusing them sends someone to debug a check that never ran.
- *  - `MERGE_UNKNOWN` and `PRECONDITION_UNKNOWN` are separate from `1` because "the provider refused"
- *    must never read as "the binary is broken", and a write whose outcome is unknown must not be
- *    blindly retried.
+ * It allocates from the one table every verb uses rather than numbering its own, so a caller
+ * driving `report`, `triage`, `write-code`, `review-code` and `ship-it` in a sweep reads one
+ * meaning per code (#22).
  */
 export const EXIT = {
-	OK: 0,
-	FAILED: 1,
-	NO_VERDICT: 3,
-	VERDICT_FAIL: 4,
-	VERDICT_STALE: 5,
-	CHECKS_RED: 6,
-	CHECKS_PENDING: 7,
-	APPROVAL_MISSING: 8,
-	MERGE_UNKNOWN: 9,
-	NOT_MERGEABLE: 10,
-	PRECONDITION_UNKNOWN: 11,
+	OK: Exit.OK,
+	FAILED: Exit.FAILED,
+	NO_VERDICT: Exit.GATE_MISSING,
+	VERDICT_FAIL: Exit.GATE_FAIL,
+	VERDICT_STALE: Exit.GATE_STALE,
+	CHECKS_RED: Exit.CHECKS_FAILED,
+	CHECKS_PENDING: Exit.NOT_YET,
+	APPROVAL_MISSING: Exit.REFUSED_POLICY,
+	MERGE_UNKNOWN: Exit.WRITE_UNKNOWN,
+	NOT_MERGEABLE: Exit.ZERO_SCOPE,
+	PRECONDITION_UNKNOWN: Exit.PRECONDITION_UNKNOWN,
 } as const;
 
 export type ExitCode = (typeof EXIT)[keyof typeof EXIT];

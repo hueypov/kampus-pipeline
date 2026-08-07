@@ -57,8 +57,8 @@ in the issue body, and the changed paths. Under `--json`, one object with `head`
 | Code | Trigger |
 |---|---|
 | 0 | a brief was assembled, including at least one criterion |
-| 3 | the PR carries no closing reference — there is nothing to grade against |
-| 4 | the linked issue has no acceptance-criteria section |
+| 7 | the PR carries no closing reference — there is nothing to grade against |
+| 4 | the linked issue has no acceptance-criteria section (unchanged: malformed input) |
 | 11 | a read failed; the brief is UNKNOWN |
 | 1 | usage error |
 
@@ -66,11 +66,11 @@ in the issue body, and the changed paths. Under `--json`, one object with `head`
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `review-code brief: #<n> has no closing reference — nothing to grade against` | stderr | 3 | refusal |
+| `review-code brief: #<n> has no closing reference — nothing to grade against` | stderr | 7 | refusal |
 | `review-code brief: #<n> closes #<m>, which has no acceptance criteria` | stderr | 4 | refusal |
 | `review-code brief: could not read <what> for #<n> — UNKNOWN` | stderr | 11 | refusal |
 
-Exit 3 and 4 are separate because their owners differ: no closing reference is `write-code`'s defect
+Exit 7 and 4 are separate because their owners differ: no closing reference is `write-code`'s defect
 (it opens PRs and owns that seam), while an issue with no criteria is `triage`'s — it enriches
 issues and owns making "done" legible. Fusing them would send the reviewer to the wrong stage, and
 the reviewer is the one party who must not fix either.
@@ -101,7 +101,7 @@ files:
 $ pipeline cli review-code brief --pr 447
 review-code brief: #447 has no closing reference — nothing to grade against
 $ echo $?
-3
+7
 ```
 
 **Grounding**

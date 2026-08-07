@@ -21,12 +21,10 @@ import {Github, GithubLive} from "../intake-dedup/github.ts";
 import {redactLeaks} from "../redact-leaks/redact-leaks.ts";
 import {GithubTrackerLive, Tracker} from "../tracker/tracker.ts";
 import {checkEnrichInput, composeEnriched, preservedOriginal, provenanceOf} from "./body.ts";
+import * as Exit from "../../exit-codes.ts";
 
 const DEFAULT_STAGE = "status:needs-triage";
-const EXIT_REFUSED = 2;
-const EXIT_BACKED_OFF = 3;
-const EXIT_READ_FAILED = 4;
-const EXIT_AMBIGUOUS = 5;
+
 
 const refuse = (verb: string, message: string, code: number): Effect.Effect<never> =>
 	Effect.sync(() => {
@@ -76,11 +74,11 @@ const queue = Command.make(
 			// while the backlog sits untouched — the one outcome this code exists to prevent.
 			Effect.catchTags({
 				"@kampus/intake-dedup/GhCommandError": (e) =>
-					refuse("queue", `could not read stage '${stage}' (gh exited ${e.exitCode}) — contents UNKNOWN`, EXIT_READ_FAILED),
+					refuse("queue", `could not read stage '${stage}' (gh exited ${e.exitCode}) — contents UNKNOWN`, Exit.PRECONDITION_UNKNOWN),
 				"@kampus/intake-dedup/GhParseError": (e) =>
-					refuse("queue", `could not read stage '${stage}' (${e.message}) — contents UNKNOWN`, EXIT_READ_FAILED),
+					refuse("queue", `could not read stage '${stage}' (${e.message}) — contents UNKNOWN`, Exit.PRECONDITION_UNKNOWN),
 				"@kampus/intake-dedup/RepoResolutionError": () =>
-					refuse("queue", "target repo unresolved — contents UNKNOWN", EXIT_READ_FAILED),
+					refuse("queue", "target repo unresolved — contents UNKNOWN", Exit.PRECONDITION_UNKNOWN),
 			}),
 		);
 		if (rows.length === 0) {
@@ -103,7 +101,7 @@ const claim = Command.make(
 			return yield* refuse(
 				"claim",
 				"no session id (set $CLAUDE_CODE_SESSION_ID or pass --session) — refusing an indistinguishable claim",
-				EXIT_REFUSED,
+				Exit.MALFORMED_INPUT,
 			);
 		}
 		const result = yield* (yield* Tracker).claim(target, {session: id});
@@ -114,20 +112,20 @@ const claim = Command.make(
 				return yield* refuse(
 					"claim",
 					`#${target} is held by session ${result.owner.session} since ${result.owner.claimedAt} — back off, do not mutate`,
-					EXIT_BACKED_OFF,
+					Exit.HELD_BY_OTHER,
 				);
 			case "lost":
-				return yield* refuse("claim", `lost the claim race on #${target} — back off, do not mutate`, EXIT_BACKED_OFF);
+				return yield* refuse("claim", `lost the claim race on #${target} — back off, do not mutate`, Exit.HELD_BY_OTHER);
 		}
 	}),
-).pipe(Command.withDescription("Take a sweep-scoped hold (exit 0 = ours; exit 3 = someone else's, back off)"));
+).pipe(Command.withDescription("Take a sweep-scoped hold (exit 0 = ours; exit 6 = someone else's, back off)"));
 
 const release = Command.make(
 	"release",
 	{target: targetArg, session: sessionFlag},
 	Effect.fn(function* ({target, session}) {
 		const id = resolveSession(session);
-		if (id === "") return yield* refuse("release", "no session id — nothing to release", EXIT_REFUSED);
+		if (id === "") return yield* refuse("release", "no session id — nothing to release", Exit.MALFORMED_INPUT);
 		const result = yield* (yield* Tracker).releaseClaim(target, {session: id});
 		yield* Console.log(`triage: released #${target} (${result.retracted} marker(s) retracted).`);
 	}),
@@ -147,19 +145,19 @@ const provenance = Command.make(
 		const who = provenanceOf(issue.body);
 		yield* Console.log(who);
 		if (who === "human") {
-			return yield* refuse("provenance", `#${target} is hand-filed — protected from closure`, EXIT_BACKED_OFF);
+			return yield* refuse("provenance", `#${target} is hand-filed — protected from closure`, Exit.REFUSED_POLICY);
 		}
 		if (who === "ambiguous") {
 			return yield* refuse(
 				"provenance",
 				`#${target} carries an unreadable footer — treat as human`,
-				EXIT_AMBIGUOUS,
+				Exit.PRECONDITION_UNKNOWN,
 			);
 		}
 	}),
 ).pipe(
 	Command.withDescription(
-		"Was this filed by a human or an agent? Prints agent|human|ambiguous; exit 3 = human, 5 = ambiguous — both protected",
+		"Was this filed by a human or an agent? Prints agent|human|ambiguous; exit 10 = human, 11 = ambiguous — both protected",
 	),
 );
 
@@ -172,7 +170,7 @@ const split = Command.make(
 	{target: targetArg, title: titleFlag},
 	Effect.fn(function* ({target, title}) {
 		const body = readStdin();
-		if (body.trim() === "") return yield* refuse("split", "empty body on stdin — nothing to file", EXIT_REFUSED);
+		if (body.trim() === "") return yield* refuse("split", "empty body on stdin — nothing to file", Exit.EMPTY_INPUT);
 		const tracker = yield* Tracker;
 		// The back-reference is composed here, not by the caller: it is the create-once key a retry
 		// is recognised by, and a key only works when the thing that reads it also wrote it.
@@ -224,7 +222,7 @@ const enrich = Command.make(
 			return yield* refuse(
 				"enrich",
 				`read-back on #${target} shows the original was not preserved`,
-				EXIT_READ_FAILED,
+				Exit.READBACK_MISMATCH,
 			);
 		}
 		yield* Console.log(`triage: enriched #${target} — original preserved (${recovered.length} bytes).`);
@@ -257,7 +255,7 @@ const apply = Command.make(
 	{target: targetArg, type: typeFlag, priority: priorityFlag, readyFor: readyForFlag, lane: laneFlag, status: statusFlag},
 	Effect.fn(function* ({target, type, priority, readyFor, lane, status}) {
 		if (readyFor !== "agent" && readyFor !== "human") {
-			return yield* refuse("apply", `--ready-for must be agent or human, got '${readyFor}'`, EXIT_REFUSED);
+			return yield* refuse("apply", `--ready-for must be agent or human, got '${readyFor}'`, Exit.MALFORMED_INPUT);
 		}
 		const result = yield* (yield* Tracker).applyTriage(target, {
 			type,
@@ -282,7 +280,7 @@ const park = Command.make(
 		// Parking in silence is worse than leaving it queued: the issue stops resurfacing and
 		// nobody knows what would unblock it.
 		if (questions.trim() === "") {
-			return yield* refuse("park", "empty body on stdin — parking without questions strands the issue", EXIT_REFUSED);
+			return yield* refuse("park", "empty body on stdin — parking without questions strands the issue", Exit.EMPTY_INPUT);
 		}
 		const tracker = yield* Tracker;
 		yield* tracker.createComment(target, {body: questions});
@@ -309,11 +307,11 @@ const kill = Command.make(
 	{target: targetArg, confirm: confirmFlag, duplicateOf: duplicateOfFlag},
 	Effect.fn(function* ({target, confirm, duplicateOf}) {
 		if (!confirm) {
-			return yield* refuse("kill", "--confirm is required — it attests salvage was attempted", EXIT_REFUSED);
+			return yield* refuse("kill", "--confirm is required — it attests salvage was attempted", Exit.MALFORMED_INPUT);
 		}
 		const reason = readStdin();
 		if (reason.trim() === "") {
-			return yield* refuse("kill", "empty reason on stdin — a kill with no audit trail is unreviewable", EXIT_REFUSED);
+			return yield* refuse("kill", "empty reason on stdin — a kill with no audit trail is unreviewable", Exit.EMPTY_INPUT);
 		}
 		const tracker = yield* Tracker;
 		const issue = yield* tracker.readIssue(target);
@@ -324,7 +322,7 @@ const kill = Command.make(
 			return yield* refuse(
 				"kill",
 				`#${target} is ${who}-filed — park it instead; it may not be closed`,
-				EXIT_BACKED_OFF,
+				Exit.REFUSED_POLICY,
 			);
 		}
 		if (Option.isSome(duplicateOf)) {

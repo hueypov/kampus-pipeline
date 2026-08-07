@@ -30,6 +30,7 @@ import {readFileSync} from "node:fs";
 import {Console, Effect, Option} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
 import {GithubTrackerLive, Tracker} from "../tracker/tracker.ts";
+import * as Exit from "../../exit-codes.ts";
 import {Github, GithubLive} from "./github.ts";
 import {
 	emissionDefect,
@@ -132,7 +133,7 @@ const asFlag = Flag.string("as").pipe(
 	),
 );
 
-const EXIT_SELF_VERDICT = 7;
+
 
 /** Refuse a self-verdict with its own exit code, so it is never confused with a malformed body. */
 const refuseSelfVerdict = (pr: number): Effect.Effect<never> =>
@@ -140,7 +141,7 @@ const refuseSelfVerdict = (pr: number): Effect.Effect<never> =>
 		process.stderr.write(
 			`verdict post: #${pr} was authored by this identity — an author may not post a verdict on their own work\n`,
 		);
-		process.exit(EXIT_SELF_VERDICT);
+		process.exit(Exit.REFUSED_POLICY);
 	});
 
 const post = Command.make(
