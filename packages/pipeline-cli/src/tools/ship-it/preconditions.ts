@@ -1,0 +1,125 @@
+/**
+ * The pure core for `ship-it`: the exit table, and the order preconditions are evaluated in.
+ *
+ * IO-free. The verbs supply facts; this decides what those facts mean and which code says so.
+ */
+
+/**
+ * The one exit table both verbs allocate from, so a code means one thing whichever produced it.
+ *
+ * `0` and `1` are reserved by the interface convention. Everything from `3` up is a fact the verb
+ * PROVED, and the ones that look redundant are not:
+ *
+ *  - `CHECKS_RED` and `CHECKS_PENDING` differ because their owners differ. Red is a defect for the
+ *    author; pending is nobody's yet. Fusing them sends someone to debug a check that never ran.
+ *  - `MERGE_UNKNOWN` and `PRECONDITION_UNKNOWN` are separate from `1` because "the provider refused"
+ *    must never read as "the binary is broken", and a write whose outcome is unknown must not be
+ *    blindly retried.
+ */
+export const EXIT = {
+	OK: 0,
+	FAILED: 1,
+	NO_VERDICT: 3,
+	VERDICT_FAIL: 4,
+	VERDICT_STALE: 5,
+	CHECKS_RED: 6,
+	CHECKS_PENDING: 7,
+	APPROVAL_MISSING: 8,
+	MERGE_UNKNOWN: 9,
+	NOT_MERGEABLE: 10,
+	PRECONDITION_UNKNOWN: 11,
+} as const;
+
+export type ExitCode = (typeof EXIT)[keyof typeof EXIT];
+
+/** One precondition's outcome: satisfied, or refused with the code naming who owns it next. */
+export type Precondition =
+	| {readonly name: string; readonly ok: true; readonly detail: string}
+	| {readonly name: string; readonly ok: false; readonly code: ExitCode; readonly detail: string};
+
+export const ok = (name: string, detail: string): Precondition => ({name, ok: true, detail});
+export const refused = (name: string, code: ExitCode, detail: string): Precondition => ({
+	name,
+	ok: false,
+	code,
+	detail,
+});
+
+/** The state of one required gate, as `verdict read` resolves it. */
+export type GateState =
+	| {readonly _tag: "pass"; readonly sha: string}
+	| {readonly _tag: "fail"}
+	| {readonly _tag: "stale"; readonly sha: string}
+	| {readonly _tag: "none"}
+	| {readonly _tag: "unknown"; readonly reason: string};
+
+/** A gate's outcome as a precondition. Anything but a current-head PASS refuses. */
+export const gatePrecondition = (gate: string, state: GateState): Precondition => {
+	switch (state._tag) {
+		case "pass":
+			return ok(`gate ${gate}`, `PASS @ ${state.sha.slice(0, 7)} (current head)`);
+		case "fail":
+			return refused(`gate ${gate}`, EXIT.VERDICT_FAIL, "FAIL at the current head");
+		case "stale":
+			return refused(
+				`gate ${gate}`,
+				EXIT.VERDICT_STALE,
+				`bound to ${state.sha.slice(0, 7)}, not the current head`,
+			);
+		case "none":
+			return refused(`gate ${gate}`, EXIT.NO_VERDICT, "no verdict — this PR was never gated");
+		case "unknown":
+			return refused(`gate ${gate}`, EXIT.PRECONDITION_UNKNOWN, `could not read: ${state.reason}`);
+	}
+};
+
+/** CI as a precondition. `none` is UNKNOWN, never green — see below. */
+export const checksPrecondition = (checks: {
+	readonly state: "green" | "red" | "pending" | "none";
+	readonly failing: ReadonlyArray<string>;
+	readonly pending: ReadonlyArray<string>;
+}): Precondition => {
+	switch (checks.state) {
+		case "green":
+			return ok("checks", "all required checks green");
+		case "red":
+			return refused("checks", EXIT.CHECKS_RED, `failing: ${checks.failing.join(", ")}`);
+		case "pending":
+			return refused("checks", EXIT.CHECKS_PENDING, `pending: ${checks.pending.join(", ")} — not yet`);
+		case "none":
+			// No check having reported is not the same fact as checks having reported and passed.
+			// Treating it as green is how a merge gate passes vacuously on a repository with no CI,
+			// which is the failure the reference implementation's doctor warns about explicitly.
+			return refused(
+				"checks",
+				EXIT.PRECONDITION_UNKNOWN,
+				"no checks reported for this head — cannot confirm CI, which is not the same as green",
+			);
+	}
+};
+
+/** Whether the provider says the PR can merge at all. */
+export const mergeablePrecondition = (pr: {
+	readonly state: string;
+	readonly draft: boolean;
+	readonly merged: boolean;
+	readonly mergeableState: string | null;
+}): Precondition => {
+	if (pr.merged) return refused("mergeable", EXIT.NOT_MERGEABLE, "already merged");
+	if (pr.state !== "open") return refused("mergeable", EXIT.NOT_MERGEABLE, `state is ${pr.state}`);
+	if (pr.draft) return refused("mergeable", EXIT.NOT_MERGEABLE, "still a draft");
+	if (pr.mergeableState === "dirty")
+		return refused("mergeable", EXIT.NOT_MERGEABLE, "conflicts with the base");
+	return ok("mergeable", pr.mergeableState ?? "clean");
+};
+
+/**
+ * The first refusal in a precondition list, or null when every one passed.
+ *
+ * Evaluation reports one owner at a time on purpose: each code names a different stage, and a wall
+ * of refusals asks the caller to decide which to act on — the judgment this verb exists to remove.
+ */
+export const firstRefusal = (
+	preconditions: ReadonlyArray<Precondition>,
+): Extract<Precondition, {ok: false}> | null =>
+	preconditions.find((p): p is Extract<Precondition, {ok: false}> => !p.ok) ?? null;

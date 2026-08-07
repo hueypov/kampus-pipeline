@@ -61,6 +61,7 @@ import {roadmapCommand} from "./tools/roadmap/command.ts";
 import {roadmapGuardCommand} from "./tools/roadmap-guard/command.ts";
 import {settingsEnvGuardCommand} from "./tools/settings-env-guard/command.ts";
 import {shipDigestCommand} from "./tools/ship-digest/command.ts";
+import {shipItCommand} from "./tools/ship-it/command.ts";
 import {spawnGuardCommand} from "./tools/spawn-guard/command.ts";
 import {splitGuardCommand} from "./tools/split-guard/command.ts";
 import {structuredOutputGuardCommand} from "./tools/structured-output-guard/command.ts";
@@ -171,6 +172,9 @@ export const registeredTools: ReadonlyArray<RegisteredTool> = [
 	// The three execution verbs from skills/write-code/contract.md. open-pr composes AND verifies
 	// the closing reference — the only link the gate, the merge and an epic handoff all read.
 	writeCodeCommand,
+	// The merge authority, derived from skills/ship-it/contract.md. Every precondition is a fact,
+	// and each refusal code names the stage that owns the PR next.
+	shipItCommand,
 	// The the originating work item intake-body composer (the originating initiative): one tested verb that emits the
 	// format-2 sub-issue body of the gh-issue-intake-formats.md prose contract, so a
 	// filer cites it instead of re-deriving the format — and owns the by-value handoff
