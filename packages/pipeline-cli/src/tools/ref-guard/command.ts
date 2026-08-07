@@ -9,7 +9,10 @@ import {readLifecyclePolicy, repositoryRoot, resolvePrimaryTarget} from "../life
 import {decideHeadDetach, decideRefUpdate, decideTransaction, type RefUpdate, ZERO_OID} from "./ref-guard.ts";
 
 export const REFUSE_EXIT_CODE = 3;
-const MARKER = "# kampus-pipeline ref-guard managed hook v1";
+const MARKER_PREFIX = "# kampus-pipeline ref-guard managed hook";
+const MARKER = `${MARKER_PREFIX} v2`;
+/** The v1 marker, kept so a hook this tool wrote earlier is recognised as ours and upgraded. */
+const MARKER_V1 = `${MARKER_PREFIX} v1`;
 
 const rootFlag = Flag.string("root").pipe(Flag.optional, Flag.withDescription("repository root (default: current Git root)"));
 const stateArg = Argument.string("state").pipe(Argument.withDescription("Git reference-transaction state; only prepared may refuse"));
@@ -63,24 +66,111 @@ export const hookPathFor = (root: string): string | null => {
 	return result.ok && result.stdout.trim() ? resolve(root, result.stdout.trim()) : null;
 };
 
+/**
+ * The managed hook body.
+ *
+ * v1 baked the absolute path of the toolkit and of the node binary at INSTALL time, so a
+ * repository that was later moved or re-cloned ran a hook that could not resolve — and `|| status`
+ * swallowed the failure, leaving the guard off while the hook still looked installed.
+ *
+ * v2 resolves at RUN time from the repository root FIRST, and only falls back to the path recorded
+ * at install time. The order is the fix: a moved repository finds its own toolkit and never
+ * consults the stale path, while a repository whose toolkit genuinely lives elsewhere still works.
+ * v1 had the fallback as its only mechanism, which is why moving anything broke it silently.
+ *
+ * When nothing resolves it says so in one line instead of a module-resolution stack trace, and
+ * still exits 0: this is a `reference-transaction` hook, so a non-zero exit aborts the
+ * transaction, and bricking every git operation in a moved clone is a worse failure than the one
+ * being fixed. Loud, not fatal.
+ */
 const cliBin = (): string => fileURLToPath(new URL("../../bin.ts", import.meta.url));
 
-export const renderManagedHook = (bin = cliBin()): string => `#!/bin/sh
+export const renderManagedHook = (recorded = cliBin()): string => `#!/bin/sh
 ${MARKER}
 # Git only aborts a reference transaction for this command's deliberate refusal.
+# The toolkit and interpreter are resolved at run time — see ref-guard/command.ts.
 status=0
-"${process.execPath}" "${bin}" ref-guard reference-transaction "$1" || status=$?
+root=$(git rev-parse --show-toplevel 2>/dev/null) || root=""
+bin=""
+for candidate in \\
+  "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\
+  "$root/packages/pipeline-cli/src/bin.ts" \\
+  "${recorded}"
+do
+  if [ -f "$candidate" ]; then bin="$candidate"; break; fi
+done
+if [ -z "$bin" ]; then
+  echo "ref-guard: no toolkit under '$root' and none at the recorded path — THE GUARD IS NOT RUNNING; re-run pipeline init" >&2
+  exit 0
+fi
+node_bin=$(command -v node 2>/dev/null) || node_bin=""
+if [ -z "$node_bin" ]; then
+  echo "ref-guard: no node on PATH — THE GUARD IS NOT RUNNING" >&2
+  exit 0
+fi
+"$node_bin" "$bin" ref-guard reference-transaction "$1" || status=$?
 [ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1
 exit 0
 `;
 
-export type HookState = "absent" | "installed" | "drifted" | "foreign";
+/**
+ * The exact v1 hook body, for every path this tool could have rendered it with.
+ *
+ * Matching the MARKER alone was not enough: a v1 hook someone had edited by hand still carried the
+ * marker, so it read as ours-and-untouched and `install` overwrote the edit silently — the precise
+ * outcome the `drifted` refusal exists to prevent. Comparing against the rendering distinguishes
+ * "ours, untouched" from "ours, edited", which is what the state names claim to mean.
+ *
+ * v1's body varied only in the two absolute paths it baked, so the comparison is structural: same
+ * shape, any interpreter, any bin.
+ */
+/** v1's invocation line, with the two absolute paths it baked left open. */
+const V1_INVOCATION = /^"[^"]*" "[^"]*" ref-guard reference-transaction "\$1" \|\| status=\$\?$/;
+
+/**
+ * v1's body as a line-by-line shape. A regex over the whole body would say the same thing far less
+ * legibly, and this has to stay readable: it is the predicate deciding whether we may overwrite
+ * somebody's file.
+ */
+const V1_LINES: ReadonlyArray<string | RegExp> = [
+	"#!/bin/sh",
+	MARKER_V1,
+	"# Git only aborts a reference transaction for this command's deliberate refusal.",
+	"status=0",
+	V1_INVOCATION,
+	`[ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1`,
+	"exit 0",
+	"",
+];
+
+/** A hook body this tool wrote in an earlier version, UNEDITED — the only kind `install` replaces. */
+const isKnownManagedHook = (actual: string): boolean => {
+	const lines = actual.split("\n");
+	if (lines.length !== V1_LINES.length) return false;
+	return V1_LINES.every((want, i) => {
+		const got = lines[i] ?? "";
+		return typeof want === "string" ? got === want : want.test(got);
+	});
+};
+
+export type HookState = "absent" | "installed" | "outdated" | "drifted" | "foreign";
+
+/**
+ * Who owns the hook at `path`, and whether we may replace it.
+ *
+ * `outdated` is the state that makes a moved repository repairable: a hook carrying one of OUR
+ * markers, whose body is exactly a rendering this tool produced, is ours to upgrade. A hook that
+ * carries a marker but matches no rendering we know is `drifted` — someone edited it by hand, and
+ * overwriting that would discard their change silently.
+ */
 export const inspectHook = (path: string, expected: string): HookState => {
 	if (!existsSync(path)) return "absent";
 	try {
 		const actual = readFileSync(path, "utf8");
 		if (actual === expected) return "installed";
-		return actual.includes(MARKER) ? "drifted" : "foreign";
+		// Carries one of our markers but is not a rendering we produced ⇒ hand-edited ⇒ refuse.
+		if (!isKnownManagedHook(actual)) return actual.includes(MARKER_PREFIX) ? "drifted" : "foreign";
+		return "outdated";
 	} catch {
 		return "foreign";
 	}
@@ -121,8 +211,14 @@ const install = Command.make(
 		const expected = renderManagedHook();
 		const existing = inspectHook(path, expected);
 		if (existing === "foreign" || existing === "drifted") return yield* fail(`${existing} reference-transaction hook at ${path}; refusing to overwrite it`);
-		if (existing === "absent") writeManagedHook(path, expected);
-		yield* Console.log(`ref-guard: ${existing === "installed" ? "already installed" : "installed"} at ${path}${target.branch === null ? `; primary branch unresolved (${target.reason}), ref protection will activate when Git can resolve it` : ` for refs/heads/${target.branch}`}`);
+		// `outdated` is a hook THIS tool wrote in an earlier version, so it is ours to replace —
+		// and replacing it is what repairs a repository initialized before the hook resolved its
+		// toolkit at run time. Reporting without writing would leave the guard off while claiming
+		// it was installed, which is the same class of silence this whole change exists to remove.
+		if (existing === "absent" || existing === "outdated") writeManagedHook(path, expected);
+		const action =
+			existing === "installed" ? "already installed" : existing === "outdated" ? "upgraded" : "installed";
+		yield* Console.log(`ref-guard: ${action} at ${path}${target.branch === null ? `; primary branch unresolved (${target.reason}), ref protection will activate when Git can resolve it` : ` for refs/heads/${target.branch}`}`);
 	}),
 ).pipe(Command.withDescription("Explicitly install the managed local reference-transaction hook; never overwrites a foreign hook"));
 
