@@ -22,26 +22,37 @@ Silent, and precisely the failure that routes one reviewer's `git diff` at anoth
 writes one reviewer's verdict body over another's.
 
 Prefer passing the value in-process and writing no file at all. When a file is genuinely needed,
-allocate the namespace and name every leaf under it:
+derive the namespace from the session id and name every leaf under it:
 
 ```bash
-RUN_SCRATCH="$(pipeline cli scratchpad open --slug <skill>-<work-item>)" || exit 1
+# open — once, at the start of the run that owns the namespace
+SLUG=<skill>-<work-item>
+[ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || { echo "no session id — refusing a shared scratch path" >&2; exit 1; }
+RUN_SCRATCH="${TMPDIR:-/tmp}/pipeline-run/$CLAUDE_CODE_SESSION_ID/$SLUG"
+rm -rf "$RUN_SCRATCH" && mkdir -p "$RUN_SCRATCH" || exit 1
 ```
 
-In every **later** Bash call, re-derive it — your shell state does not survive between calls, so
-nothing you set carries over:
+In every **later** Bash call, re-derive it without the reset — your shell state does not survive
+between calls, so nothing you set carries over:
 
 ```bash
-RUN_SCRATCH="$(pipeline cli scratchpad path --slug <same-slug>)" || exit 1
+RUN_SCRATCH="${TMPDIR:-/tmp}/pipeline-run/$CLAUDE_CODE_SESSION_ID/$SLUG"
+[ -d "$RUN_SCRATCH" ] || { echo "namespace $SLUG was never opened this session" >&2; exit 1; }
 ```
 
-`open` resets the namespace; `path` never does, which is why the second half of any two-call
-sequence uses `path`. The verb is fail-closed: a missing session id, a namespace another run owns,
-and one this run never opened are each a distinct non-zero exit, never a fallback to a shared path.
+The reset belongs to *open* only. A later call that resets deletes the state it came to read.
+
+**Fail closed on a missing session id.** Without it there is no per-run key, and the only remaining
+choice is a shared path — which is the collision this rule exists to prevent. Refuse instead.
 
 Never park the path in another file to carry it across — that just moves the collision onto that
 file. Never print the path into a shared artifact; an issue body or a PR comment carrying a scratch
 path leaks the machine's layout.
+
+> **No verb backs this.** The recipe above is inline because this repo's CLI has no `scratchpad`
+> tool. It should: a verb owns the fail-closed session check, the open-vs-path distinction, and the
+> "namespace another run owns" case, none of which a copied shell snippet enforces once it has been
+> copied into a tenth skill.
 
 <a id="tracker"></a>
 
