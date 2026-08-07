@@ -22,8 +22,13 @@ so you can follow it end to end from here.
   dependency-install command at the repository root).
   The channel substrate `pipeline-crew-mcp` is a **runtime prerequisite** — it ships in
   the repo and is available on `main` HEAD, so an installed repo already has it.
-- **tmux** — `/stand-up` places each launched session into a `crew` tmux window; the crew runs
-  as a set of live panes you can attach to and watch.
+- **A terminal to place the panes in** — tmux by default: `/stand-up` puts each launched session
+  into a `crew` tmux window, and the crew runs as a set of live panes you can attach to and watch.
+  This lesson assumes tmux throughout. If you would rather not learn tmux, install
+  [herdr](https://herdr.dev) and set `"terminal": "herdr"` in your config (or pass
+  `--terminal herdr`); the crew then comes up as panes of one `pipeline` tab and every step below
+  still holds — only the attach/navigate commands differ. See
+  [HOW-TO → stand the crew up in herdr](HOW-TO.md#stand-the-crew-up-in-herdr-instead-of-tmux).
 - A backlog to drain — at least one **open, `status:triaged`, unassigned** issue on the board.
   If you have none, that is fine: you will still watch the crew come up idle and pull the first
   triaged issue the moment one lands.

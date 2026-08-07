@@ -109,6 +109,7 @@ fills every placeholder. Resolution order:
 | `notification.controlPlaneApprover.command` | string | yes | `<control-plane-approver-notification-command>` |
 | `notification.controlPlaneApprover.handle` | string | yes | `<control-plane-approver-notification-handle>` |
 | `cliVersion` | string (`major.minor.patch[-suffix]`) | **optional** | omit, or `<pinned-claude-code-cli-version>` |
+| `terminal` | `tmux` \| `herdr` | **optional** (default `tmux`) | omit, or `<terminal: tmux \| herdr>` |
 | `channels.mode` | `allowlist` \| `development` | yes | `<channel-mode: allowlist \| development>` |
 | `channels.servers` | string[] (channel refs) | yes | `<channel-server-ref>` |
 | `channels.allowedChannelPlugins` | string[] | yes | `<allowed-channel-plugin>` |
@@ -122,11 +123,21 @@ fills every placeholder. Resolution order:
   every dev channel; local only).
 - `channels.servers` ref grammar — `server:<name>` (a top-level channel MCP server, dev mode
   only) or `plugin:<name>@<marketplace>` (a server contributed by an installed plugin).
+- `terminal` — `tmux` places the crew as panes of one tiled `crew` window; `herdr` places it as
+  panes of one `pipeline` tab (its binary must be on `PATH`). One pane per role either way; a
+  multiplexer is only ever a window manager here, never the crew's transport.
 
-**Optionality.** `cliVersion` is the only optional key (the optional CLI-version rule): omit it for an unpinned
-launch; a present value is a hard exact-match gate asserted before any session starts. Every
-other key is required — the stand-up launcher fails closed on a missing or malformed dimension,
-naming that dimension, never a silent default.
+**Optionality.** Two keys are optional, in different ways. `cliVersion` (the optional CLI-version
+rule) is *exact-optional*: omit it for an unpinned launch; a present value is a hard exact-match gate
+asserted before any session starts. `terminal` is *total*: omitting it is not a distinct variant, it
+decodes to `tmux`. Every other key is required — the stand-up launcher fails closed on a missing or
+malformed dimension, naming that dimension, never a silent default. A present-but-unknown `terminal`
+fails closed too.
+
+**Terminal selection.** `stand-up`, `spawn-role`, and `retire-role` each accept
+`--terminal <tmux|herdr>`, which overrides the config for that invocation. A crew is stood up,
+spawned into, and retired under ONE backend — a tmux pane id means nothing to herdr — so switching
+backends means `stand-down` then `stand-up`.
 
 The full dimension rationale and the consuming def references are in
 [`PERSONALIZATION.md`](PERSONALIZATION.md).

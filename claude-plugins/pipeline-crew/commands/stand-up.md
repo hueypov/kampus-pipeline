@@ -1,6 +1,6 @@
 ---
 description: Stand the whole pipeline crew up from the operator config — tracker + all bridge sessions + N engine sessions, each launched bound to its role lease, fail-loud with no partial crew.
-argument-hint: "[--project-root <path>]"
+argument-hint: "[--project-root <path>] [--terminal <tmux|herdr>]"
 allowed-tools: ["Bash"]
 ---
 
@@ -32,6 +32,15 @@ Invoke the substrate's `stand-up` subcommand (pass through `$ARGUMENTS`, e.g.
 ```bash
 "$CLAUDE_PROJECT_DIR/.pipeline/toolkit/bin/pipeline" crew stand-up $ARGUMENTS
 ```
+
+### Which terminal the panes land in
+
+The crew is placed in the terminal the operator config's `terminal` dimension names — `tmux` (the
+default) or `herdr` — and `--terminal <tmux|herdr>` overrides it for one invocation. A multiplexer is
+only a **window manager** here, so this changes where panes land and nothing else: same roster, same
+binds, same fail-closed launch. Either way the whole crew lands in ONE container, a pane per role, so
+every member stays visible at once — a tiled `crew` window under tmux, a `pipeline` tab under herdr.
+Selecting `herdr` requires its binary on `PATH`; an absent binary aborts the stand-up naming it.
 
 The launcher runs, **in order**: assert the pinned CLI version → ensure the per-project
 tracker is up → derive the roster session set (one per bridge + N engines) → build each

@@ -68,6 +68,7 @@ reference these keys, never a literal.
 | — engine WIP cap | `roles.engineering-manager.wipCap.{productLanes, platformLanes}` | A conductor engine's bounded concurrent-lane count, lane-partitioned — how many product vs platform/pipeline coders one engine drives at once before queueing the rest. The overall cap is the split's sum; the borrow/rebalance behavior is doctrine shipped in the engineering-manager def (the seam carries only the per-install values). | `<wip-cap-product-lanes>`, `<wip-cap-platform-lanes>` |
 | Notification — per recipient | `notification.operator.{command, handle}`, `notification.controlPlaneApprover.{command, handle}` | Per-recipient human notification. The plugin ships **who** gets pinged and **when**; the config supplies **how** — an operator-supplied transport `command` the chief-of-staff invokes, targeting `handle`. The plugin knows nothing of the channel (iMessage/Slack/Discord), so a Discord-bot future is a config swap, not a code change. Any local script path lives only in the operator's config, never in the repo. | `<operator-notification-command>`, `<operator-notification-handle>`, `<control-plane-approver-notification-command>`, `<control-plane-approver-notification-handle>` |
 | Pinned CLI version | `cliVersion` | **Optional** (the optional CLI-version rule). OMIT ⇒ the launcher accepts whatever `claude --version` reports (an "unpinned" launch — so the boot no longer fail-closes on every frequent Claude Code auto-update). Set it ONLY to deliberately lock a version: a present pin (`major.minor.patch`, optional `-suffix`) is a hard exact-match gate asserted before any session starts, so a drifted CLI refuses to launch. | omit, or `<pinned-claude-code-cli-version>` |
+| Terminal backend | `terminal` | **Optional.** Which terminal the crew's panes are placed in — `tmux` (the default) or `herdr`. OMIT ⇒ `tmux`, exactly the path every existing install already runs. Set `herdr` to stand the same crew up in [herdr](https://herdr.dev) instead (its binary must be on `PATH`) — the usual reason being that tmux's learning curve is not one you want to take on. The launcher uses a multiplexer only as a **window manager** — the crew coordinates over the channel substrate either way — so this changes nothing about the roster, the binds, or the fail-closed launch contract. Either backend puts the whole crew in ONE container, a pane per role: a tmux crew is one tiled `crew` window, a herdr crew is one `pipeline` tab. Override per-invocation with `--terminal <tmux\|herdr>`. | omit, or `<terminal: tmux \| herdr>` |
 | Channel registration | `channels.mode`, `channels.servers`, `channels.allowedChannelPlugins` | How each launched session registers its channel MCP servers: `mode` is `allowlist` (`--channels <refs>`) or `development` (`--dangerously-load-development-channels`, local only); `servers` are the refs each session registers (grammar `server:<name>` / `plugin:<name>@<marketplace>`); `allowedChannelPlugins` is the plugin allowlist the `allowlist` mode enforces. | `<channel-mode: allowlist \| development>`, `<channel-server-ref>`, `<allowed-channel-plugin>` |
 
 Adding a new operator-specific dimension is **one row here + one key in the template + one
@@ -84,9 +85,13 @@ consumed by a typed launcher configuration reader,
 `.pipeline/toolkit/packages/pipeline-crew-mcp/src/standup/config.ts`,
 which validates them and **fails closed** — a missing or malformed dimension (an unknown
 channel mode, a channel ref off-grammar, a non-positive engine count, or a present-but-non-version
-CLI pin) stops the launch with an error naming that dimension, never a silent default. The lone
-exception is `cliVersion`, which is optional (the optional CLI-version rule): an OMITTED pin decodes cleanly to an
-unpinned launch — only a present pin is validated and asserted. The launcher
+CLI pin) stops the launch with an error naming that dimension, never a silent default. Two keys are
+optional, and they are optional in *different* ways. `cliVersion` (the optional CLI-version rule) is
+exact-optional: an OMITTED pin decodes cleanly to an unpinned launch — a distinct variant, not a
+default — and only a present pin is validated and asserted. `terminal` is *total*: an omitted key is
+not its own variant, it simply decodes to `tmux`, so every read site sees one resolved value. A
+present-but-unknown terminal still fails closed, so a typo'd backend is reported rather than quietly
+launched somewhere else. The launcher
 children (version-assert, bind-builder, roster, orchestration) consume the reader's typed
 result; they never re-parse the config. Because the template leads the launcher in this
 crew-architecture wave (wayfinder:map the crew-architecture map), reconciling the typed reader to consume the
