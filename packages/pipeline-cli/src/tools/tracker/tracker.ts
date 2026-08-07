@@ -283,12 +283,32 @@ export type OpenPrResult = {
  * A pull request's identity fields. `author` is what the split-role firewall compares against —
  * it is the one fact that decides whether a verdict is a self-verdict.
  */
+/** CI state for a commit, reduced to the three answers a merge gate distinguishes. */
+export type ChecksResult = {
+	readonly _tag: "checks";
+	/** `none` means no required check reported — distinct from green, which means some did and passed. */
+	readonly state: "green" | "red" | "pending" | "none";
+	readonly failing: ReadonlyArray<string>;
+	readonly pending: ReadonlyArray<string>;
+};
+
+/** A merge that was PROVEN to land, read back rather than inferred from the request's acceptance. */
+export type MergeResult = {
+	readonly _tag: "merged";
+	readonly pr: number;
+	readonly sha: string;
+};
+
 export type ReadPrResult = {
 	readonly _tag: "pr";
 	readonly pr: number;
 	readonly author: string;
 	readonly body: string;
 	readonly head: string;
+	readonly state: string;
+	readonly draft: boolean;
+	readonly merged: boolean;
+	readonly mergeableState: string | null;
 };
 
 /**
@@ -389,6 +409,25 @@ const openPrArgs = (
 const readPrArgs = (repo: string, pr: number): ReadonlyArray<string> => [
 	"api",
 	`repos/${repo}/pulls/${pr}`,
+];
+
+const prFilesArgs = (repo: string, pr: number): ReadonlyArray<string> => [
+	"api",
+	`repos/${repo}/pulls/${pr}/files?per_page=100`,
+];
+
+const checkRunsArgs = (repo: string, sha: string): ReadonlyArray<string> => [
+	"api",
+	`repos/${repo}/commits/${sha}/check-runs?per_page=100`,
+];
+
+const mergePrArgs = (repo: string, pr: number, method: string): ReadonlyArray<string> => [
+	"api",
+	"-X",
+	"PUT",
+	`repos/${repo}/pulls/${pr}/merge`,
+	"-f",
+	`merge_method=${method}`,
 ];
 
 const replaceBodyArgs = (repo: string, target: number, body: string): ReadonlyArray<string> => [
@@ -499,12 +538,30 @@ const RawStageRow = Schema.Struct({
 });
 const decodeStageRows = Schema.decodeUnknownEffect(Schema.Array(RawStageRow));
 
+const RawPrFile = Schema.Struct({filename: Schema.String});
+const decodePrFiles = Schema.decodeUnknownEffect(Schema.Array(RawPrFile));
+
+const RawCheckRuns = Schema.Struct({
+	check_runs: Schema.Array(
+		Schema.Struct({
+			name: Schema.String,
+			status: Schema.String,
+			conclusion: Schema.NullOr(Schema.String),
+		}),
+	),
+});
+const decodeCheckRuns = Schema.decodeUnknownEffect(RawCheckRuns);
+
 const RawPr = Schema.Struct({
 	number: Schema.Number,
 	body: Schema.NullOr(Schema.String),
 	user: Schema.NullOr(Schema.Struct({login: Schema.String})),
 	head: Schema.Struct({sha: Schema.String}),
 	html_url: Schema.String,
+	state: Schema.optional(Schema.String),
+	draft: Schema.optional(Schema.Boolean),
+	merged: Schema.optional(Schema.Boolean),
+	mergeable_state: Schema.optional(Schema.NullOr(Schema.String)),
 });
 const decodePr = Schema.decodeUnknownEffect(RawPr);
 
@@ -817,7 +874,47 @@ const readPullRequest = Effect.fn("Tracker.readPullRequest")(function* (repo: st
 		author: raw.user?.login ?? "",
 		body: raw.body ?? "",
 		head: raw.head.sha,
+		state: raw.state ?? "open",
+		draft: raw.draft ?? false,
+		merged: raw.merged ?? false,
+		mergeableState: raw.mergeable_state ?? null,
 	} satisfies ReadPrResult;
+});
+
+const listPrFiles = Effect.fn("Tracker.listPrFiles")(function* (repo: string, pr: number) {
+	const raw = yield* decodePrFiles(yield* json(prFilesArgs(repo, pr)));
+	return raw.map((f) => f.filename);
+});
+
+const readChecks = Effect.fn("Tracker.readChecks")(function* (repo: string, sha: string) {
+	const raw = yield* decodeCheckRuns(yield* json(checkRunsArgs(repo, sha)));
+	const runs = raw.check_runs;
+	const pending = runs.filter((r) => r.status !== "completed").map((r) => r.name);
+	const failing = runs
+		.filter((r) => r.status === "completed" && r.conclusion !== "success" && r.conclusion !== "neutral" && r.conclusion !== "skipped")
+		.map((r) => r.name);
+	// `none` is deliberately distinct from `green`. No check having reported is not the same fact
+	// as checks having reported and passed, and a merge gate that fused them would pass vacuously
+	// on a repository with no CI at all.
+	const state = runs.length === 0 ? "none" : failing.length > 0 ? "red" : pending.length > 0 ? "pending" : "green";
+	return {_tag: "checks", state, failing, pending} satisfies ChecksResult;
+});
+
+const mergePullRequest = Effect.fn("Tracker.mergePullRequest")(function* (
+	repo: string,
+	pr: number,
+	method: string,
+) {
+	yield* json(mergePrArgs(repo, pr, method));
+	// Prove it. The difference between "it merged" and "the API accepted my request" is exactly the
+	// difference this verb exists to make, so the merged state is read back rather than inferred.
+	const landed = yield* decodePr(yield* json(readPrArgs(repo, pr)));
+	if (landed.merged !== true) {
+		return yield* new TrackerVerifyError({
+			message: `merge of #${pr} was accepted but the pull request does not read as merged`,
+		});
+	}
+	return {_tag: "merged", pr, sha: landed.head.sha} satisfies MergeResult;
 });
 
 const releaseClaim = Effect.fn("Tracker.releaseClaim")(function* (
@@ -958,6 +1055,12 @@ export class Tracker extends Context.Service<
 			judgment: OpenPrJudgment,
 		) => Effect.Effect<OpenPrResult, TrackerErrors>;
 		readonly readPullRequest: (pr: number) => Effect.Effect<ReadPrResult, TrackerErrors>;
+		readonly listPrFiles: (pr: number) => Effect.Effect<ReadonlyArray<string>, TrackerErrors>;
+		readonly readChecks: (sha: string) => Effect.Effect<ChecksResult, TrackerErrors>;
+		readonly mergePullRequest: (
+			pr: number,
+			method: string,
+		) => Effect.Effect<MergeResult, TrackerErrors | TrackerVerifyError>;
 		readonly releaseClaim: (
 			target: TargetId,
 			judgment: ClaimJudgment,
@@ -1019,6 +1122,10 @@ export const GithubTrackerLive: Layer.Layer<
 				repo.pipe(Effect.flatMap((r) => withSpawner(openPullRequest(r, judgment)))),
 			readPullRequest: (pr) =>
 				repo.pipe(Effect.flatMap((r) => withSpawner(readPullRequest(r, pr)))),
+			listPrFiles: (pr) => repo.pipe(Effect.flatMap((r) => withSpawner(listPrFiles(r, pr)))),
+			readChecks: (sha) => repo.pipe(Effect.flatMap((r) => withSpawner(readChecks(r, sha)))),
+			mergePullRequest: (pr, method) =>
+				repo.pipe(Effect.flatMap((r) => withSpawner(mergePullRequest(r, pr, method)))),
 			releaseClaim: (target, judgment) =>
 				repo.pipe(Effect.flatMap((r) => withSpawner(releaseClaim(r, target, judgment.session)))),
 			replaceBody: (target, body) =>
