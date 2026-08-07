@@ -34,9 +34,13 @@ import {Github, GithubLive} from "./github.ts";
 import {
 	emissionDefect,
 	GATES,
+	nextRounds,
 	outcomeReason,
+	parseVerdict,
 	type Polarity,
+	roundsOf,
 	type VerdictGate,
+	withRounds,
 } from "./verdict-match.ts";
 
 const FAIL_EXIT_CODE = 1;
@@ -174,7 +178,24 @@ const post = Command.make(
 				`cannot resolve the reviewing identity or #${pr}'s author — refusing rather than posting an ungated verdict`,
 			);
 		}
-		const result = yield* (yield* Github).post(pr, g, body).pipe(
+		// Carry the repair-round count across the upsert. Counting FAIL markers cannot work: one
+		// verdict per gate is upserted, so the FAIL a repair answered is destroyed by the PASS that
+		// follows it (#21). The count lives in the surviving marker and the verb maintains it, so a
+		// reviewer never has to track state it has no way to read.
+		const parsed = parseVerdict(body, g);
+		const prior = roundsOf(
+			(yield* (yield* Tracker).listComments(pr).pipe(
+				Effect.catchTags({
+					"@kampus/gh-io/GhCommandError": () => Effect.succeed([]),
+					"@kampus/gh-io/GhParseError": () => Effect.succeed([]),
+					"@kampus/gh-io/RepoResolutionError": () => Effect.succeed([]),
+				}),
+			)).find((c) => parseVerdict(c.body, g) !== null)?.body ?? "",
+		);
+		const counted = parsed
+			? withRounds(body, nextRounds(prior, parsed.polarity))
+			: body;
+		const result = yield* (yield* Github).post(pr, g, counted).pipe(
 			Effect.catchTag("@kampus/verdict/VerdictInputError", (error) => fail(error.message)),
 			// The landed-comment self-verify (the originating work item): a body that passed the input gate but did not
 			// land as a clean in-namespace, leak-free marker fails the post — never a false success.

@@ -298,3 +298,44 @@ export const emissionDefect = (body: string, gate: VerdictGate): string | null =
 	}
 	return null;
 };
+
+/**
+ * The repair-round trailer a verdict marker carries.
+ *
+ * The round count cannot be derived by counting FAIL markers: one verdict per gate is UPSERTED, so
+ * the FAIL a repair answered is overwritten by the PASS that follows it and the evidence of the
+ * round is destroyed (#21). The count therefore lives inside the surviving marker, where an upsert
+ * carries it forward instead of erasing it.
+ *
+ * It is a comment, not prose: the reviewer writes the verdict, and this is bookkeeping the verb
+ * maintains. A reviewer that hand-wrote a count would be maintaining state it has no way to read.
+ */
+const ROUNDS_RE = /<!--\s*rounds:\s*(\d+)\s*-->/;
+
+/** The round count a marker body carries, or 0 when it carries none (a first verdict). */
+export const roundsOf = (body: string): number => {
+	const m = ROUNDS_RE.exec(body);
+	const n = m ? Number.parseInt(m[1] ?? "0", 10) : 0;
+	return Number.isFinite(n) && n >= 0 ? n : 0;
+};
+
+/**
+ * The body with its round trailer set to `rounds`, replacing any existing one.
+ *
+ * Appended rather than prepended so it never displaces the marker line the matchers anchor on.
+ */
+export const withRounds = (body: string, rounds: number): string => {
+	const trailer = `<!-- rounds: ${rounds} -->`;
+	return ROUNDS_RE.test(body)
+		? body.replace(ROUNDS_RE, trailer)
+		: `${body.replace(/\s+$/, "")}\n\n${trailer}\n`;
+};
+
+/**
+ * The round count after a verdict of `polarity` lands on a marker that previously carried `prior`.
+ *
+ * A FAIL opens a round; a PASS closes the loop without opening one, and must PRESERVE the count so
+ * the history of how many repairs it took survives the verdict that ends them.
+ */
+export const nextRounds = (prior: number, polarity: Polarity): number =>
+	polarity === "FAIL" ? prior + 1 : prior;

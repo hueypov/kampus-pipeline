@@ -74,27 +74,34 @@ describe("closing reference", () => {
 	});
 });
 
-describe("countFailRounds", () => {
+describe("countFailRounds — reads the round trailer, not the FAIL markers (#21)", () => {
 	const c = (body: string) => ({body});
 
-	it("counts one round per FAIL marker across gates", () => {
-		expect(
-			countFailRounds([
-				c("review-code: FAIL @ abc"),
-				c("review-code: PASS @ def"),
-				c("review-doc: FAIL @ ghi"),
-			]),
-		).toBe(2);
+	it("reads the count out of the surviving marker's trailer", () => {
+		expect(countFailRounds([c("review-code: FAIL @ abc\n\n<!-- rounds: 2 -->")])).toBe(2);
+	});
+
+	it("still reads it after the marker flipped to PASS — the whole point of #21", () => {
+		// The upsert overwrites the FAIL with a PASS, so counting FAIL markers reported 0 here.
+		expect(countFailRounds([c("review-code: PASS @ abc\n\n<!-- rounds: 2 -->")])).toBe(2);
+	});
+
+	it("reports 0 for a first verdict carrying no trailer", () => {
+		expect(countFailRounds([c("review-code: FAIL @ abc")])).toBe(0);
 	});
 
 	it("scopes to one gate when asked", () => {
-		expect(
-			countFailRounds([c("review-code: FAIL @ abc"), c("review-doc: FAIL @ ghi")], "code"),
-		).toBe(1);
+		const comments = [
+			c("review-code: PASS @ abc\n<!-- rounds: 1 -->"),
+			c("review-doc: FAIL @ ghi\n<!-- rounds: 3 -->"),
+		];
+		expect(countFailRounds(comments, "code")).toBe(1);
+		expect(countFailRounds(comments, "doc")).toBe(3);
+		expect(countFailRounds(comments)).toBe(3);
 	});
 
-	it("tolerates the emphasised marker form", () => {
-		expect(countFailRounds([c("**review-code: FAIL** @ abc")])).toBe(1);
+	it("ignores a trailer on a comment that is not a verdict marker", () => {
+		expect(countFailRounds([c("just a note\n<!-- rounds: 9 -->")])).toBe(0);
 	});
 
 	it("does not count a marker merely quoted mid-sentence", () => {
