@@ -52,6 +52,7 @@ import {reachabilityGuardCommand} from "./tools/reachability-guard/command.ts";
 import {readmeGuardCommand} from "./tools/readme-guard/command.ts";
 import {redactLeaksCommand} from "./tools/redact-leaks/command.ts";
 import {reportCommand} from "./tools/report/command.ts";
+import {triageCommand} from "./tools/triage/command.ts";
 import {refGuardCommand} from "./tools/ref-guard/command.ts";
 import {resumePolicyCommand} from "./tools/resume-policy/command.ts";
 import {reviewHeadCommand} from "./tools/review-head/command.ts";
@@ -163,6 +164,9 @@ export const registeredTools: ReadonlyArray<RegisteredTool> = [
 	// The intake filing verbs derived from skills/report/contract.md. `dedup` separates a real
 	// "nothing matched" from a check that never ran — the distinction intake-dedup collapses.
 	reportCommand,
+	// The nine triage verbs derived from skills/triage/contract.md. provenance and kill carry the
+	// only protection between a hand-filed issue and machine closure; kill re-resolves it itself.
+	triageCommand,
 	// The the originating work item intake-body composer (the originating initiative): one tested verb that emits the
 	// format-2 sub-issue body of the gh-issue-intake-formats.md prose contract, so a
 	// filer cites it instead of re-deriving the format — and owns the by-value handoff
