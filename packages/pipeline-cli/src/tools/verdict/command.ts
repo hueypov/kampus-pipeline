@@ -29,6 +29,7 @@
 import {readFileSync} from "node:fs";
 import {Console, Effect, Option} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
+import {GithubTrackerLive, Tracker} from "../tracker/tracker.ts";
 import {Github, GithubLive} from "./github.ts";
 import {
 	emissionDefect,
@@ -116,15 +117,61 @@ const readBody = (bodyFile: Option.Option<string>): Effect.Effect<string, never>
 		}),
 	);
 
+/**
+ * The reviewing identity, compared against the PR's author. Defaults to the session id, falling
+ * back to the authenticated login when no session is set.
+ */
+const asFlag = Flag.string("as").pipe(
+	Flag.optional,
+	Flag.withDescription(
+		"the reviewing identity, compared against the PR's author (default: $CLAUDE_CODE_SESSION_ID)",
+	),
+);
+
+const EXIT_SELF_VERDICT = 7;
+
+/** Refuse a self-verdict with its own exit code, so it is never confused with a malformed body. */
+const refuseSelfVerdict = (pr: number): Effect.Effect<never> =>
+	Effect.sync(() => {
+		process.stderr.write(
+			`verdict post: #${pr} was authored by this identity — an author may not post a verdict on their own work\n`,
+		);
+		process.exit(EXIT_SELF_VERDICT);
+	});
+
 const post = Command.make(
 	"post",
-	{pr: prFlag, gate: gateFlag, bodyFile: bodyFileFlag},
-	Effect.fn(function* ({pr, gate, bodyFile}) {
+	{pr: prFlag, gate: gateFlag, bodyFile: bodyFileFlag, as: asFlag},
+	Effect.fn(function* ({pr, gate, bodyFile, as}) {
 		const g = yield* parseGate(gate);
 		const body = (yield* readBody(bodyFile)).replace(/\s+$/, "");
 		if (body.length === 0) {
 			return yield* fail(
 				"empty verdict body — nothing to post (pass --body-file or pipe the body on stdin)",
+			);
+		}
+		// The split-role firewall, enforced rather than asked for. It was prose in write-code and
+		// prose in the reviewer skills, and two documents agreeing not to cross a line is a
+		// convention. Comparing the posting identity against the PR's author is a boundary.
+		//
+		// An UNRESOLVABLE identity refuses rather than allows: that is exactly the state a caller
+		// trying to grade its own work would produce, so the failure has to fall closed.
+		const reviewer = Option.getOrElse(as, () => process.env.CLAUDE_CODE_SESSION_ID ?? "").trim();
+		// A read that fails resolves to the empty string, which routes into the fail-closed branch
+		// below rather than silently permitting the post.
+		const unresolved = Effect.succeed("");
+		const author = yield* (yield* Tracker).readPullRequest(pr).pipe(
+			Effect.map((r) => r.author),
+			Effect.catchTags({
+				"@kampus/gh-io/GhCommandError": () => unresolved,
+				"@kampus/gh-io/GhParseError": () => unresolved,
+				"@kampus/gh-io/RepoResolutionError": () => unresolved,
+			}),
+		);
+		if (reviewer === "" || author === "" || reviewer.toLowerCase() === author.toLowerCase()) {
+			if (reviewer !== "" && author !== "") return yield* refuseSelfVerdict(pr);
+			return yield* fail(
+				`cannot resolve the reviewing identity or #${pr}'s author — refusing rather than posting an ungated verdict`,
 			);
 		}
 		const result = yield* (yield* Github).post(pr, g, body).pipe(
@@ -175,4 +222,5 @@ export const verdictCommand = Command.make("verdict").pipe(
 		"Read/post the SHA-bound, one-verdict-per-gate contract SHA-bound gate verdicts (review-code/doc/skill/design) — the shared verdict-match glue",
 	),
 	Command.provide(GithubLive),
+	Command.provide(GithubTrackerLive),
 );
