@@ -24,16 +24,19 @@ verdict that ends the loop. The full contract is
 
 ## 1 — Pick the next issue
 
-Take the oldest issue at the triaged stage in the highest priority band, skipping any already
-claimed by another session. Read the repository's configured queue before assuming a label name —
-the stage vocabulary is repo-owned, not a literal you carry.
+```bash
+pipeline cli write-code next
+```
 
-Do not pick what triage addressed to a human, and do not re-triage what you pick: a wrong
-classification is routed back, not corrected in flight.
+Highest priority band first, oldest within it, unclaimed, and addressed to an agent — work triage
+sent to a human is excluded by default and is not yours to pick up.
 
-> **No verb backs the pick** (`contract.md` W-G1) — it is a tracker query you compose.
+Exit 3 is `empty`: nothing pickable, and you are done. Exit 4 means the read failed, which is not
+the same answer — do not report an idle queue on it.
 
-Done when you have one issue number and nothing else is competing for it.
+Do not re-triage what you pick. A wrong classification is routed back, not corrected in flight.
+
+Done when you have one issue number.
 
 ## 2 — Claim it before you touch anything
 
@@ -73,18 +76,25 @@ Done when every acceptance criterion is met and the repo's checks pass locally.
 
 ## 4 — Open a PR that closes the issue
 
-The PR body must carry a closing reference — `Fixes #412` — on its own line. That reference is the
-**only** link between the PR and its issue, and every downstream stage reads it: the gate resolves
-the acceptance criteria through it, and the merge closes the issue by it. A PR without one is work
-nobody can trace and nothing can close.
+```bash
+pipeline cli write-code open-pr --issue 412 --head pipeline/412-reaper \
+  --title "Sweep worktrees whose branch was already deleted" <<'EOF'
+…
+EOF
+```
 
-Describe what changed and why, in the repo's prose conventions. State any judgment call a reviewer
-would otherwise have to reverse-engineer — a rejected alternative, a deliberate omission, a place
-you followed an existing pattern you disagree with.
+The verb composes the closing reference and verifies after opening that it resolves to the issue you
+claimed. You never write `Fixes #N` by hand — that reference is the only link three stages read (the
+gate resolves acceptance criteria through it, the merge closes the issue by it, an epic handoff
+traces through it), and a PR missing it looks entirely normal until a merge closes nothing.
 
-> **No verb backs the PR open** (`contract.md` W-G2) — it goes through `gh` directly.
+Your judgment is the description: what changed and why, plus any call a reviewer would otherwise
+reverse-engineer — a rejected alternative, a deliberate omission, a pattern you followed and
+disagree with.
 
-Done when the PR exists and its body's closing reference resolves to the issue you claimed.
+Exit 5 means the issue is claimed by another session. Do not open the PR anyway.
+
+Done when the verb exits 0 and prints the PR and the issue it closes.
 
 ## 5 — Log what you did
 
@@ -122,10 +132,18 @@ and write your disagreement into the log with your reasoning. The reviewer decid
 with your argument in front of them, which is the difference between a disagreement and a
 capitulation.
 
-Re-run the checks, log what changed per finding, and stop. **The re-review is not yours.**
+Re-run the checks, log what changed per finding, and stop. **The re-review is not yours** — and the
+verdict verb will refuse it if you try, because it compares the posting identity against the PR's
+author.
 
-**The loop is bounded.** Past the repair cap the PR escalates to a human rather than cycling. If you
-find yourself on a third round over the same finding, the disagreement is the problem, not the code.
+**The loop is bounded.** Check before you start:
+
+```bash
+pipeline cli write-code rounds --pr 431
+```
+
+Exit 3 means at or over the cap: escalate to a human instead of repairing again. A third round over
+the same finding means the disagreement is the problem, not the code.
 
 ## When you cannot finish
 
