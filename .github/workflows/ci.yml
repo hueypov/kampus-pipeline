@@ -1,0 +1,59 @@
+# The toolkit repository's own build signal.
+#
+# Distinct from everything under `templates/github/workflows/`, which is the payload `pipeline init`
+# writes into an *adopting* repository: those drive `.pipeline/toolkit/bin/pipeline`, a pinned
+# submodule of this repository. Here that path resolves to this repository's own submodule, so a
+# consumer-shaped workflow would install and test a checkout of itself rather than the tree under
+# review — green, and confirming nothing about the diff (#26).
+#
+# This one tests the source in the checkout. It is what makes `ship-it check` answerable: with no
+# workflow at all, no head reports a check run, and the merge gate refuses with
+# PRECONDITION_UNKNOWN rather than reading "nothing ran" as green.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: typecheck and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        # Deliberately no `submodules:` — `.pipeline/toolkit` points back at this repository, and
+        # fetching it would put a second, differently-versioned copy of the tree under test on disk.
+
+      - uses: pnpm/action-setup@v4
+        # Version comes from the root `packageManager` field, so it cannot drift from local.
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: typecheck
+        run: pnpm -r typecheck
+
+      - name: test
+        # One package at a time. `pipeline`'s init suite shells out to `git` and a real `pnpm
+        # install` per fixture, and running it beside the other two suites pushes it past its 20s
+        # per-test timeout — a red build caused by scheduling rather than by the diff. A runner has
+        # fewer cores than a laptop, so this would have failed there first.
+        run: pnpm -r --workspace-concurrency=1 test
+
+      - name: workflow catalogue is current
+        # Generated from the templates; regenerating it here would hide drift rather than report it,
+        # so this asserts it was regenerated in the commit that changed them.
+        run: pnpm --filter pipeline check:workflow-catalog
