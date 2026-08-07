@@ -52,6 +52,7 @@ import {reachabilityGuardCommand} from "./tools/reachability-guard/command.ts";
 import {readmeGuardCommand} from "./tools/readme-guard/command.ts";
 import {redactLeaksCommand} from "./tools/redact-leaks/command.ts";
 import {reportCommand} from "./tools/report/command.ts";
+import {reviewCodeCommand} from "./tools/review-code/command.ts";
 import {triageCommand} from "./tools/triage/command.ts";
 import {writeCodeCommand} from "./tools/write-code/command.ts";
 import {refGuardCommand} from "./tools/ref-guard/command.ts";
@@ -175,6 +176,9 @@ export const registeredTools: ReadonlyArray<RegisteredTool> = [
 	// The merge authority, derived from skills/ship-it/contract.md. Every precondition is a fact,
 	// and each refusal code names the stage that owns the PR next.
 	shipItCommand,
+	// The code gate's one deterministic step, derived from skills/review-code/contract.md.
+	// Grading the diff is judgment and deliberately stayed in the skill.
+	reviewCodeCommand,
 	// The the originating work item intake-body composer (the originating initiative): one tested verb that emits the
 	// format-2 sub-issue body of the gh-issue-intake-formats.md prose contract, so a
 	// filer cites it instead of re-deriving the format — and owns the by-value handoff
