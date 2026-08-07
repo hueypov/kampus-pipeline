@@ -129,6 +129,11 @@ export interface SpawnRoleInput {
 	readonly resolveTargetSession?: () => Effect.Effect<string, TmuxSessionEnsureError>;
 	/** The tmux runner for the window-resolution probe. Default: `runTmux`. */
 	readonly runTmux?: TmuxRunner;
+	/** Resolve the id of the running crew window the new pane splits into. Default: `resolveCrewWindowId` (tmux).
+	 * The herdr backend injects its tab-list equivalent here (terminal.ts). */
+	readonly resolveCrewWindow?: (
+		targetSession: string,
+	) => Effect.Effect<string, CrewWindowNotRunningError>;
 	/** Launch one planned session as a pane. Default: `launchSessionInTmux`. */
 	readonly launch?: (
 		plan: LaunchPlan,
@@ -217,6 +222,8 @@ export const spawnRole = (
 		const runTmuxCommand = input.runTmux ?? runTmux;
 		const resolveTargetSession =
 			input.resolveTargetSession ?? (() => resolveTargetSessionDefault(runTmuxCommand));
+		const resolveCrewWindow =
+			input.resolveCrewWindow ?? ((target: string) => resolveCrewWindowId(target, runTmuxCommand));
 		const launch = input.launch ?? launchSessionInTmux;
 
 		const crewConfigPath = resolveProjectConfigPath(projectRoot);
@@ -256,7 +263,7 @@ export const spawnRole = (
 		});
 
 		const targetSession = yield* resolveTargetSession();
-		const crewWindow = yield* resolveCrewWindowId(targetSession, runTmuxCommand);
+		const crewWindow = yield* resolveCrewWindow(targetSession);
 		// `intoWindow` DEFINED ⇒ launchSessionInTmux splits into the existing crew window + re-tiles, never
 		// opens a new one — the "add a pane without disturbing any other member" path (AC1).
 		const launched = yield* launch(plan, targetSession, crewWindow);
@@ -365,6 +372,14 @@ export interface RetireRoleInput {
 	readonly instance?: string | undefined;
 	/** The tmux runner for the list-panes / kill-pane calls. Default: `runTmux`. */
 	readonly runTmux?: TmuxRunner;
+	/** Find the member's running pane. Default: `findCrewPaneId` (tmux, matching the launch `--name`).
+	 * Both stamped identities are passed because the backends key on different ones (see terminal.ts). */
+	readonly findCrewPane?: (
+		cwdLabel: string,
+		displayName: string,
+	) => Effect.Effect<string, CrewPaneNotFoundError>;
+	/** Close the member's pane. Default: tmux `kill-pane`. The herdr backend injects `pane close` here. */
+	readonly closePane?: (paneId: string) => Effect.Effect<void, CrewPaneKillError>;
 	/** The filesystem artifact cleanup. Default: `productionRetireArtifacts`. */
 	readonly artifacts?: RetireArtifacts;
 }
@@ -441,6 +456,25 @@ export const retireRole = (
 	Effect.gen(function* () {
 		const {projectRoot, role} = input;
 		const runTmuxCommand = input.runTmux ?? runTmux;
+		const findCrewPane =
+			input.findCrewPane ??
+			((_cwdLabel: string, name: string) => findCrewPaneId(name, runTmuxCommand));
+		const closePane =
+			input.closePane ??
+			((paneId: string) =>
+				Effect.gen(function* () {
+					const killed = yield* runTmuxCommand(["kill-pane", "-t", paneId]);
+					if (killed.spawnError !== undefined || killed.code !== 0) {
+						return yield* Effect.fail(
+							new CrewPaneKillError({
+								paneId,
+								reason:
+									killed.spawnError ??
+									`tmux kill-pane -t ${paneId} exited ${killed.code ?? killed.signal}`,
+							}),
+						);
+					}
+				}));
 		const artifacts = input.artifacts ?? productionRetireArtifacts;
 		const kind = kindOf(role);
 
@@ -469,18 +503,8 @@ export const retireRole = (
 		const displayName = displayNameOf(role, instance);
 		const cwdLabel = kind === "engine" ? instance : role;
 
-		const paneId = yield* findCrewPaneId(displayName, runTmuxCommand);
-		const killed = yield* runTmuxCommand(["kill-pane", "-t", paneId]);
-		if (killed.spawnError !== undefined || killed.code !== 0) {
-			return yield* Effect.fail(
-				new CrewPaneKillError({
-					paneId,
-					reason:
-						killed.spawnError ??
-						`tmux kill-pane -t ${paneId} exited ${killed.code ?? killed.signal}`,
-				}),
-			);
-		}
+		const paneId = yield* findCrewPane(cwdLabel, displayName);
+		yield* closePane(paneId);
 
 		yield* artifacts.removeInboxSocket(role, instance);
 		yield* artifacts.removePaneCwd(projectRoot, cwdLabel);

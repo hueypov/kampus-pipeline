@@ -29,6 +29,7 @@ export {
 	CLI_VERSION_RE,
 	CliVersion,
 	DEFAULT_CONFIG_PATH,
+	DEFAULT_TERMINAL,
 	decodeLaunchConfig,
 	EngineCount,
 	LaunchConfig,
@@ -36,8 +37,25 @@ export {
 	parseJsonc,
 	readLaunchConfig,
 	resolveConfigPath,
+	resolveProjectConfigPath,
 	stripJsonc,
+	TERMINAL_KINDS,
+	TerminalKind,
 } from "./config.ts";
+export {
+	closeHerdrPane,
+	CREW_TAB_LABEL,
+	FALLBACK_HERDR_WORKSPACE,
+	findCrewPaneIdInHerdr,
+	type HerdrRun,
+	type HerdrRunner,
+	herdrPaneCommand,
+	herdrResult,
+	launchSessionInHerdr,
+	resolveCrewTabId,
+	resolveTargetHerdrWorkspace,
+	runHerdr,
+} from "./herdr.ts";
 export {
 	ensureTrackerRunning,
 	runStandingTracker,
@@ -128,6 +146,13 @@ export {
 	type SpawnRoleResult,
 	spawnRole,
 } from "./single-role.ts";
+export {
+	herdrBackend,
+	TERMINAL_BACKENDS,
+	type TerminalBackend,
+	terminalBackend,
+	tmuxBackend,
+} from "./terminal.ts";
 export {
 	computeTmuxPlacement,
 	type PlacementTarget,
