@@ -29,10 +29,34 @@ export const acceptanceCriteria = (issueBody: string): ReadonlyArray<string> | n
 	// section and is not something the author agreed to be graded on.
 	const end = /^##+\s+/m.exec(rest);
 	const body = end ? rest.slice(0, end.index) : rest;
-	return body
-		.split("\n")
-		.map((line) => /^\s*[-*]\s*\[[ xX]\]\s*(.+?)\s*$/.exec(line)?.[1])
-		.filter((c): c is string => typeof c === "string" && c.length > 0);
+
+	// A criterion may wrap across lines, and the continuation is folded back in rather than dropped.
+	// Taking only the first line silently truncated any criterion longer than one line — a reviewer
+	// working from the brief graded half a sentence with nothing to show the rest was missing, which
+	// is worse than a missing criterion because a missing one is visible. It also quietly rewarded
+	// writing criteria short enough to fit, on the one artifact that has to be precise.
+	//
+	// The fold matches how the renderer reads it: a non-blank line that is not itself an item and
+	// not a heading belongs to the item above, and a blank line ends the item. So what the brief
+	// prints is what a human sees on the issue.
+	const criteria: string[] = [];
+	let open = false;
+	for (const line of body.split("\n")) {
+		const item = /^\s*[-*]\s*\[[ xX]\]\s*(.*?)\s*$/.exec(line);
+		if (item) {
+			criteria.push(item[1] ?? "");
+			open = true;
+			continue;
+		}
+		if (line.trim() === "" || /^\s*#{1,6}\s/.test(line)) {
+			open = false;
+			continue;
+		}
+		if (open && criteria.length > 0) {
+			criteria[criteria.length - 1] = `${criteria[criteria.length - 1]} ${line.trim()}`.trim();
+		}
+	}
+	return criteria.filter((c) => c.length > 0);
 };
 
 export interface Brief {
