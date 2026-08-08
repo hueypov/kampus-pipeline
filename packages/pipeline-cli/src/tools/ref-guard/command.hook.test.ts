@@ -77,8 +77,44 @@ describe("ref-guard installed hook", () => {
 		// A stash fires several reference transactions, each a cold node start of the hook.
 	}, 30_000);
 
+	it("creates a detached linked worktree from the primary checkout, and still refuses to detach the primary", () => {
+		// `git worktree add --detach` writes the NEW worktree's HEAD, but runs in the primary's
+		// context — identical stdin, cwd, env, and rev-parse answers to a real primary detach. The
+		// guard used to read that context as "the shared checkout is being detached" and abort every
+		// review worktree. Only a real hook invocation shows it, so this case has to drive real git.
+		const review = join(root, "review");
+		expect(() => execFileSync("git", ["worktree", "add", "--detach", "-q", review, base], {cwd: clone, stdio: "pipe"})).not.toThrow();
+		expect(git(review, "rev-parse", "HEAD")).toBe(base);
+		expect(git(clone, "symbolic-ref", "HEAD")).toBe("refs/heads/trunk");
+		// The pair is the point: an allow-list widened until the worktree passes would also let this
+		// through, and the shared checkout would be stranded off its branch.
+		expect(() => execFileSync("git", ["checkout", "--detach", base], {cwd: clone, stdio: "pipe"})).toThrow();
+		expect(git(clone, "symbolic-ref", "HEAD")).toBe("refs/heads/trunk");
+		// The worktree lives under the suite's temp root, so afterAll's rmSync is the only cleanup.
+		// The budget is double its neighbours': `worktree add` and the paired `checkout --detach`
+		// each fire several transactions, and every one is a cold node start that loads the whole
+		// CLI. Measured at 35s on a machine running the other suites beside it, against 30s here.
+	}, 60_000);
+
 	it("allows a raw primary fast-forward without a pipeline caller", () => {
 		expect(() => execFileSync("git", ["update-ref", "refs/heads/trunk", remoteTip], {cwd: clone, stdio: "pipe"})).not.toThrow();
 		expect(git(clone, "rev-parse", "refs/heads/trunk")).toBe(remoteTip);
 	});
+
+	it("packs the primary ref, then still refuses to delete it once packed", () => {
+		// The delete rung allows one deletion-shaped transaction: `pack-refs` dropping the LOOSE copy
+		// of a ref it has just packed, which arrives as `<current> 0000…0` with the ref alive in the
+		// packed store. Both halves are here because the pair is what makes the exception safe.
+		expect(() => execFileSync("git", ["pack-refs", "--all"], {cwd: clone, stdio: "pipe"})).not.toThrow();
+		expect(git(clone, "rev-parse", "refs/heads/trunk")).toBe(remoteTip);
+
+		// The half that matters. A packed-only primary is the exact shape that would fail OPEN if
+		// Git's deletion reporting ever changed: the rung separates a prune from a real delete by the
+		// old value, and if a genuine delete began carrying its real old value it would equal the
+		// packed oid and be ALLOWED. That is why this assertion exists as a test rather than as the
+		// comment in ref-guard.ts asking a future reader to re-measure — on the Git that breaks the
+		// property, this goes red instead of the guard quietly admitting a delete of the primary.
+		expect(() => execFileSync("git", ["update-ref", "-d", "refs/heads/trunk"], {cwd: clone, stdio: "pipe"})).toThrow();
+		expect(git(clone, "rev-parse", "refs/heads/trunk")).toBe(remoteTip);
+	}, 60_000);
 });
