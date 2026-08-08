@@ -192,11 +192,16 @@ and is tested. That is a wiring gap, not a dead skill. Rewriting it belongs with
   `gh-issue-intake-formats.md` (the largest concentration of damage anywhere), plus
   `agents/reviewer.md` ([#40](https://github.com/hueypov/kampus-pipeline/issues/40)). `reviewer`
   should also list `review-trivial`.
-- **Eleven** files are over the 140-line band at this commit — `review-doc` 958, `review-skill` 827,
+- **Twelve** skills are over the 140-line band at this commit — `review-doc` 958, `review-skill` 827,
   `review-design` 768, `wayfinder` 571, `review-plan` 480, `heal-ci` 391, `review-trivial` 326,
-  `canon` 277, `glossary` 198, `triage` 176, `write-code` 152. The last two are already-rewritten
-  stages, so the band is a target the rewrites themselves have not always hit. Being oversized is a
-  rewrite cost, not a deletion reason, and it is most of what is left after this.
+  `architecture-audit` 284, `canon` 277, `glossary` 198, `triage` 176, `write-code` 152. Being
+  oversized is a rewrite cost, not a deletion reason, and it is most of what is left after this.
+
+  Two of them — `triage` and `write-code` — are stages this project already rewrote, so the band is a
+  target the rewrites themselves have not always hit. And an earlier revision of this line said
+  eleven, having counted in a tree that did not yet contain `architecture-audit`: the skill this very
+  change restores. Counting the payload from a checkout that is not the payload is the same mistake
+  as reading the upstream plugin's `doctor` as if it were ours, two sections above.
 - Fixed here: `doctor`'s routing description called this "the private, project-local kampus
   pipeline toolkit" — org branding in the first surface an adopter reads. Also fixed the pointers
   in `canon`, `glossary`, and the formats contract that named the two deleted skills as live routes.
