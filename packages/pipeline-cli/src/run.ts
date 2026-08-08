@@ -16,7 +16,19 @@ import {NodeRuntime, NodeServices} from "@effect/platform-node";
 import {Effect} from "effect";
 import {Command} from "effect/unstable/cli";
 import {registeredTools} from "./registry.ts";
+import {checkVerbPath, refusalMessage, verbTree} from "./verb-path.ts";
 import {VERSION} from "./version.ts";
+
+const ROOT = "pipeline-cli";
+
+// Refuse an unresolvable verb path BEFORE the framework runs. `--help` is processed ahead of parse
+// errors, so a nonexistent path otherwise prints help and exits 0 — leaving every skill that probes
+// with `--help` unable to prove the verb it cites exists. See `verb-path.ts`.
+const refusal = checkVerbPath(verbTree(ROOT, registeredTools), process.argv.slice(2));
+if (refusal) {
+	process.stderr.write(`${refusalMessage(ROOT, refusal)}\n`);
+	process.exit(1);
+}
 
 const cli = Command.make("pipeline-cli").pipe(
 	Command.withSubcommands(registeredTools),
