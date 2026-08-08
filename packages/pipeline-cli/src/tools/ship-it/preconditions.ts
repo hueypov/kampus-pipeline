@@ -1,4 +1,10 @@
 import * as Exit from "../../exit-codes.ts";
+import {
+	type ClassificationPolicy,
+	classifyPaths,
+	requiredNamespaces,
+} from "../class-probe/class-probe.ts";
+import {GATES, type VerdictGate} from "../verdict/verdict-match.ts";
 
 /**
  * The pure core for `ship-it`: the precondition decisions and the order they are evaluated in.
@@ -120,3 +126,41 @@ export const firstRefusal = (
 	preconditions: ReadonlyArray<Precondition>,
 ): Extract<Precondition, {ok: false}> | null =>
 	preconditions.find((p): p is Extract<Precondition, {ok: false}> => !p.ok) ?? null;
+
+/**
+ * The gates a changed-file list requires, derived from the classifier.
+ *
+ * Extracted from the IO path so the decision that used to be wrong is testable without a network
+ * call. `null` means the scope could not be established — an empty file list, which the classifier
+ * cannot attribute — and the caller refuses on it rather than reading it as "no gates required".
+ * That reading is what let an unreviewed pull request pass the merge gate (#60).
+ */
+export const gatesForFiles = (
+	files: ReadonlyArray<string>,
+	policy: ClassificationPolicy,
+): ReadonlyArray<VerdictGate> | null => {
+	if (files.length === 0) return null;
+	const gates = requiredNamespaces(classifyPaths(files, policy).classes).map(
+		(namespace) => namespace.replace(/^review-/, "") as VerdictGate,
+	);
+	return gates.length === 0 ? null : gates;
+};
+
+/**
+ * The gates a `--gates` value names, or null when any token is not a gate.
+ *
+ * Lives here rather than in the command so the parse that let an unreviewed PR through is testable.
+ * It used to FILTER unknown tokens and keep what survived, so `--gates=nonsense` produced an empty
+ * required set and the merge check passed with no review. Not a contrived input: the classification
+ * policy spells these `docs`/`skills` while the gate namespaces are `doc`/`skill`, so the
+ * repository's own vocabulary collapsed the gate to nothing.
+ */
+export const parseGateList = (raw: string): ReadonlyArray<VerdictGate> | null => {
+	const tokens = raw
+		.split(",")
+		.map((g) => g.trim().replace(/^review-/, ""))
+		.filter((g) => g !== "");
+	if (tokens.length === 0) return null;
+	const gates = tokens.filter((g): g is VerdictGate => (GATES as ReadonlyArray<string>).includes(g));
+	return gates.length === tokens.length ? gates : null;
+};
