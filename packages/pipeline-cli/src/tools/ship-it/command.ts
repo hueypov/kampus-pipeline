@@ -11,6 +11,12 @@
  */
 import {Console, Effect, Option} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
+import {
+	classifyPaths,
+	FAIL_CLOSED_POLICY,
+	requiredNamespaces,
+} from "../class-probe/class-probe.ts";
+import {readClassificationPolicy, repositoryRoot} from "../class-probe/policy.ts";
 import {GithubTrackerLive, Tracker} from "../tracker/tracker.ts";
 import {Github as VerdictGithub, GithubLive as VerdictGithubLive} from "../verdict/github.ts";
 import {GATES, type VerdictGate} from "../verdict/verdict-match.ts";
@@ -37,7 +43,7 @@ const prFlag = Flag.integer("pr").pipe(Flag.withDescription("the pull request to
 const gatesFlag = Flag.string("gates").pipe(
 	Flag.optional,
 	Flag.withDescription(
-		"comma-separated gate namespaces this PR requires; default: every gate that has a verdict",
+		"comma-separated gate namespaces this PR requires; default: derived from the PR's changed files",
 	),
 );
 
@@ -102,6 +108,26 @@ const evaluate = (pr: number, gates: ReadonlyArray<VerdictGate>) =>
 		return out;
 	});
 
+/**
+ * Refuse when the review scope itself could not be established.
+ *
+ * Distinct from a gate that is missing a verdict: that is a known requirement nobody met, while this
+ * is not knowing what the requirement IS. Reporting it as "no gates required" is what let an
+ * unreviewed PR pass.
+ *
+ * It shares `PRECONDITION_UNKNOWN` with the other could-not-read refusals, which is exactly what it
+ * is — the scope is a precondition and it could not be read. There is deliberately no separate code
+ * for "the diff genuinely requires no gate", because the classifier never returns that: an unmatched
+ * path classifies as code, so only an empty file list reaches here, and a pull request that changes
+ * nothing is anomalous rather than clean.
+ */
+const unknownScope = (pr: number, why: string): Effect.Effect<never> =>
+	exit(
+		"check",
+		`#${pr} scope: ${why} — which gates this PR requires is UNKNOWN, and unknown is not none`,
+		EXIT.PRECONDITION_UNKNOWN,
+	);
+
 const parseGates = (raw: Option.Option<string>): ReadonlyArray<VerdictGate> => {
 	const supplied = Option.getOrUndefined(raw);
 	if (!supplied) return GATES;
@@ -112,22 +138,52 @@ const parseGates = (raw: Option.Option<string>): ReadonlyArray<VerdictGate> => {
 };
 
 /**
- * Gates with no verdict at all are dropped from the required set when the caller did not name one.
+ * Which gates this PR requires, derived from **what it changes**.
  *
- * A repository that only ever runs `review-code` must not be told it is missing a `review-design`
- * verdict. When `--gates` IS given, every named gate is required and a missing verdict refuses —
- * that is the difference between discovering the requirement and asserting it.
+ * This used to be derived from which gates already had a verdict — keep the gates whose state is not
+ * `none`. That makes the requirement a function of the answer: a PR nobody reviewed has no verdicts,
+ * therefore requires no gates, therefore passes. The merge authority returned exit 0 on an
+ * unreviewed pull request, which is the one thing it exists to refuse (#60).
+ *
+ * The concern that produced it was real — a repository that never touches design must not be told it
+ * is missing a `review-design` verdict — and classifying the diff answers it properly: a repository
+ * with no design changes never classifies as design, so the gate is never required.
+ *
+ * Reading the diff is a precondition like any other here. A file list that cannot be read is UNKNOWN,
+ * and an empty one is not "nothing to review" — a pull request that changes nothing is anomalous, and
+ * treating it as clean is the same vacuous pass in a different costume.
  */
 const requiredGates = (pr: number, named: Option.Option<string>) =>
 	Effect.gen(function* () {
-		const gates = parseGates(named);
-		if (Option.isSome(named)) return gates;
-		const present: Array<VerdictGate> = [];
-		for (const gate of gates) {
-			const state = yield* resolveGate(pr, gate);
-			if (state._tag !== "none") present.push(gate);
+		// An explicit `--gates` is an assertion by the caller, and every named gate is required
+		// whether or not a verdict exists. That is the difference between asserting the requirement
+		// and discovering it.
+		if (Option.isSome(named)) return parseGates(named);
+
+		const files = yield* (yield* Tracker).listPrFiles(pr).pipe(
+			Effect.catchTags({
+				"@kampus/gh-io/GhCommandError": () => unknownScope(pr, "the changed-file list could not be read"),
+				"@kampus/gh-io/GhParseError": () => unknownScope(pr, "the changed-file list did not parse"),
+				"@kampus/gh-io/RepoResolutionError": () => unknownScope(pr, "the target repo did not resolve"),
+				SchemaError: () => unknownScope(pr, "the changed-file list did not decode"),
+			}),
+		);
+		if (files.length === 0) {
+			return yield* unknownScope(pr, "it reports no changed files, so nothing can be classified");
 		}
-		return present;
+
+		const root = repositoryRoot();
+		const policy = root === null ? null : readClassificationPolicy(root, null);
+		// An unreadable policy classifies everything rather than nothing — the classifier's own
+		// fail-closed default, reused here rather than re-decided.
+		const classified = classifyPaths(files, policy?.policy ?? FAIL_CLOSED_POLICY);
+		const gates = requiredNamespaces(classified.classes).map(
+			(namespace) => namespace.replace(/^review-/, "") as VerdictGate,
+		);
+		if (gates.length === 0) {
+			return yield* unknownScope(pr, `${files.length} changed file(s) matched no review namespace`);
+		}
+		return gates;
 	});
 
 const report = (preconditions: ReadonlyArray<Precondition>) =>
