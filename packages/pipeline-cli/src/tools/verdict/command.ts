@@ -197,15 +197,15 @@ const post = Command.make(
 		const unresolved = Effect.succeed("");
 		const authenticated = yield* (yield* Github)
 			.whoAmI()
-			.pipe(Effect.catchTag("@kampus/gh-io/GhCommandError", () => unresolved));
+			.pipe(Effect.catchTag("gh-io/GhCommandError", () => unresolved));
 		// A read that fails resolves to the empty string, which routes into the fail-closed branch
 		// below rather than silently permitting the post.
 		const author = yield* (yield* Tracker).readPullRequest(pr).pipe(
 			Effect.map((r) => r.author),
 			Effect.catchTags({
-				"@kampus/gh-io/GhCommandError": () => unresolved,
-				"@kampus/gh-io/GhParseError": () => unresolved,
-				"@kampus/gh-io/RepoResolutionError": () => unresolved,
+				"gh-io/GhCommandError": () => unresolved,
+				"gh-io/GhParseError": () => unresolved,
+				"gh-io/RepoResolutionError": () => unresolved,
 			}),
 		);
 		const refusal = identityCheck({
@@ -224,9 +224,9 @@ const post = Command.make(
 		// prevent something already caught downstream.
 		const changed = yield* (yield* Tracker).listPrFiles(pr).pipe(
 			Effect.catchTags({
-				"@kampus/gh-io/GhCommandError": () => Effect.succeed([] as ReadonlyArray<string>),
-				"@kampus/gh-io/GhParseError": () => Effect.succeed([] as ReadonlyArray<string>),
-				"@kampus/gh-io/RepoResolutionError": () => Effect.succeed([] as ReadonlyArray<string>),
+				"gh-io/GhCommandError": () => Effect.succeed([] as ReadonlyArray<string>),
+				"gh-io/GhParseError": () => Effect.succeed([] as ReadonlyArray<string>),
+				"gh-io/RepoResolutionError": () => Effect.succeed([] as ReadonlyArray<string>),
 				SchemaError: () => Effect.succeed([] as ReadonlyArray<string>),
 			}),
 		);
@@ -253,9 +253,9 @@ const post = Command.make(
 		const prior = roundsOf(
 			(yield* (yield* Tracker).listComments(pr).pipe(
 				Effect.catchTags({
-					"@kampus/gh-io/GhCommandError": () => Effect.succeed([]),
-					"@kampus/gh-io/GhParseError": () => Effect.succeed([]),
-					"@kampus/gh-io/RepoResolutionError": () => Effect.succeed([]),
+					"gh-io/GhCommandError": () => Effect.succeed([]),
+					"gh-io/GhParseError": () => Effect.succeed([]),
+					"gh-io/RepoResolutionError": () => Effect.succeed([]),
 				}),
 			)).find((c) => parseVerdict(c.body, g) !== null)?.body ?? "",
 		);
@@ -263,10 +263,10 @@ const post = Command.make(
 			? withRounds(body, nextRounds(prior, parsed.polarity))
 			: body;
 		const result = yield* (yield* Github).post(pr, g, counted).pipe(
-			Effect.catchTag("@kampus/verdict/VerdictInputError", (error) => fail(error.message)),
+			Effect.catchTag("verdict/VerdictInputError", (error) => fail(error.message)),
 			// The landed-comment self-verify (the originating work item): a body that passed the input gate but did not
 			// land as a clean in-namespace, leak-free marker fails the post — never a false success.
-			Effect.catchTag("@kampus/verdict/VerdictVerifyError", (error) => fail(error.message)),
+			Effect.catchTag("verdict/VerdictVerifyError", (error) => fail(error.message)),
 		);
 		yield* Console.log(`${result._tag} ${result.commentId}`);
 	}),

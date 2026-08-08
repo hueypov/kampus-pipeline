@@ -1,5 +1,5 @@
 /**
- * `@kampus/worktree-guard` Bash cwd-pin core — pure decision for a worktree
+ * `worktree-guard` Bash cwd-pin core — pure decision for a worktree
  * subagent's `PreToolUse` Bash hook (the originating work item; HEAD-move refusal the originating work item).
  *
  * Same hazard as path-resolve: a worktree subagent's Bash cwd resets to the MAIN

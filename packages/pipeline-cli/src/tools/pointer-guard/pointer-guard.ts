@@ -75,7 +75,7 @@ export const toPathRef = (raw: string): string | null => {
 	if (t === "" || /\s/.test(t)) return null; // a command / prose, not a single path
 	if (SCHEME_RE.test(t)) return null;
 	if (NON_PATH_SYNTAX_RE.test(t)) return null;
-	if (t.startsWith("@")) return null; // an npm scope (`@kampus/web`), not a path
+	if (t.startsWith("@")) return null; // an npm scope (`@acme/web`), not a path
 	if (/(^|\/)\.\.(\/|$)|\w\.\.|\.\.\w/.test(t)) return null; // `..` traversal / `work..` shorthand
 	if (!KNOWN_PREFIX_RE.test(t)) return null;
 	return t.replace(/\/+$/, ""); // normalize a trailing slash so a dir resolves

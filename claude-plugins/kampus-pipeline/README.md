@@ -53,7 +53,7 @@ pnpm pipeline sync
 pnpm pipeline cli <subcommand>
 ```
 
-There is deliberately no `npm install @kampus/...`, `pnpm dlx`, public
+There is deliberately no `npm install` of a published package, no `pnpm dlx`, public
 publishing, global plugin installation, or marketplace catalog in this
 workflow. A clone that already contains the submodule is self-contained.
 

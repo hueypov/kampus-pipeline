@@ -1,5 +1,5 @@
 /**
- * `@kampus/spawn-guard` core — the pure, IO-free decisions for the originating work item:
+ * `spawn-guard` core — the pure, IO-free decisions for the originating work item:
  * the spawn-model allowlist guard, the `WORKFLOW_MODEL` pin resolution, and the
  * per-session cost formatter. No Node, no Effect, no env reads here — `bin.ts`
  * does the IO and hands these pure values to render. Three concerns:

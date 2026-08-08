@@ -87,6 +87,32 @@ const archivedWorkflowFiles = [
 	.filter((file) => !file.includes("/dimensions/vendor/"));
 
 describe("portable toolkit boundary", () => {
+	it("keeps the retired @kampus scope out of the source tree", () => {
+		// The de-scope sweep (#72) is durable only if a guard sees the whole source tree: the
+		// archived-workflow list below covers four payload files and none of the packages, so a
+		// new tool copying an older file's tag shape would reintroduce the scope with nothing
+		// going red. Two deliberate carriers are excluded by path — this file's own forbidden
+		// strings, and CHANNEL-TOOL.md's historical note about the old scoped token.
+		const scope = "@kampus" + "/";
+		const keepers = new Set([
+			join(root, "packages/pipeline/src/portable-audit.test.ts"),
+			join(root, "claude-plugins/pipeline-crew/CHANNEL-TOOL.md"),
+		]);
+		const matches = [
+			"packages/pipeline/src",
+			"packages/pipeline-cli/src",
+			"packages/pipeline-cli/TOOLS.md",
+			"packages/pipeline-crew-mcp/src",
+			"packages/pipeline-crew-mcp/docs",
+			"claude-plugins",
+			"templates",
+		]
+			.flatMap(files)
+			.filter((file) => !keepers.has(file) && !file.includes("/dimensions/vendor/"))
+			.filter((file) => readFileSync(file, "utf8").includes(scope));
+		expect(matches).toEqual([]);
+	});
+
 	it("contains no registry installer or project-specific policy in activated payloads", () => {
 		const matches = portablePaths
 			.flatMap(files)

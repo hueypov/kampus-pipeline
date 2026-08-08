@@ -22,7 +22,7 @@ import {ChildProcess} from "effect/unstable/process";
 
 /** A `gh` invocation exited non-zero (auth, not-found, rate-limit, 422 missing label, …). */
 export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
-	"@kampus/gh-io/GhCommandError",
+	"gh-io/GhCommandError",
 	{
 		args: Schema.Array(Schema.String),
 		exitCode: Schema.Number,
@@ -32,7 +32,7 @@ export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
 
 /** `gh` output was not the JSON the loader expected. */
 export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
-	"@kampus/gh-io/GhParseError",
+	"gh-io/GhParseError",
 	{
 		args: Schema.Array(Schema.String),
 		message: Schema.String,
@@ -41,7 +41,7 @@ export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
 
 /** No `owner/name` target repo could be resolved (no env override, no current repo). */
 export class RepoResolutionError extends Schema.TaggedErrorClass<RepoResolutionError>()(
-	"@kampus/gh-io/RepoResolutionError",
+	"gh-io/RepoResolutionError",
 	{
 		message: Schema.String,
 	},
@@ -118,7 +118,7 @@ export const resolveRepo = Effect.fn("GhIo.resolveRepo")(function* () {
 		".nameWithOwner",
 	]).pipe(
 		Effect.map((out) => out.trim()),
-		Effect.catchTag("@kampus/gh-io/GhCommandError", () => Effect.succeed("")),
+		Effect.catchTag("gh-io/GhCommandError", () => Effect.succeed("")),
 	);
 	if (REPO_RE.test(viewed)) {
 		return viewed;
@@ -215,7 +215,7 @@ export const authorizedAuthors = Effect.fn("GhIo.authorizedAuthors")(function* (
 		(login) =>
 			runGh(permissionArgs(repo, login)).pipe(
 				Effect.map((out) => ({login, permission: out.trim()})),
-				Effect.catchTag("@kampus/gh-io/GhCommandError", () =>
+				Effect.catchTag("gh-io/GhCommandError", () =>
 					Effect.succeed({login, permission: "none"}),
 				),
 			),

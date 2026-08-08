@@ -73,11 +73,11 @@ const queue = Command.make(
 			// A failed read is UNKNOWN. Printing `empty` here would report "nothing left to triage"
 			// while the backlog sits untouched — the one outcome this code exists to prevent.
 			Effect.catchTags({
-				"@kampus/intake-dedup/GhCommandError": (e) =>
+				"intake-dedup/GhCommandError": (e) =>
 					refuse("queue", `could not read stage '${stage}' (gh exited ${e.exitCode}) — contents UNKNOWN`, Exit.PRECONDITION_UNKNOWN),
-				"@kampus/intake-dedup/GhParseError": (e) =>
+				"intake-dedup/GhParseError": (e) =>
 					refuse("queue", `could not read stage '${stage}' (${e.message}) — contents UNKNOWN`, Exit.PRECONDITION_UNKNOWN),
-				"@kampus/intake-dedup/RepoResolutionError": () =>
+				"intake-dedup/RepoResolutionError": () =>
 					refuse("queue", "target repo unresolved — contents UNKNOWN", Exit.PRECONDITION_UNKNOWN),
 			}),
 		);

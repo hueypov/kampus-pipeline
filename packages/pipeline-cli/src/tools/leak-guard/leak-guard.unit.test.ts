@@ -165,12 +165,12 @@ describe("findCommentLeaks — PR/issue comment body scan (#2796, stricter than 
 
 	// the originating work item (Option 1) — the /tmp arm has NO socket carve-out: the comment surface fail-closes on
 	// ANY bare /tmp/…, including the crew-inbox socket glob. The false positive is fixed emit-side
-	// (review-code reviewers write the socket as a bare `kampus-crew-inbox-*.sock` name or fenced),
+	// (review-code reviewers write the socket as a bare `pipeline-crew-inbox-*.sock` name or fenced),
 	// never by weakening scan-pr Step 3.7.
 	it("blocks a bare /tmp/…-*.sock socket glob in a verdict comment (#3492 — guard stays strict)", () =>
 		assert.isTrue(
 			hasCommentLeak(
-				"review-code: PASS — the /tmp/kampus-crew-inbox-*.sock runtime path is the crew inbox socket",
+				"review-code: PASS — the /tmp/pipeline-crew-inbox-*.sock runtime path is the crew inbox socket",
 			),
 		));
 	it("blocks a concrete /tmp scratch path in a verdict comment (#3492)", () =>

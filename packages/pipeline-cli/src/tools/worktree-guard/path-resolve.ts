@@ -1,5 +1,5 @@
 /**
- * `@kampus/worktree-guard` path-resolution core — the pure, IO-free decision an
+ * `worktree-guard` path-resolution core — the pure, IO-free decision an
  * `isolation:worktree` subagent's `PreToolUse` hook makes so a Read/Edit/Write
  * call lands in the agent's WORKTREE, not the main checkout (the originating work item).
  *

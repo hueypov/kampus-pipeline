@@ -54,7 +54,7 @@ type LoopError =
  * tagged error rather than a thrown exception.
  */
 export class RePlanError extends Schema.TaggedErrorClass<RePlanError>()(
-	"@kampus/epic-ledger/RePlanError",
+	"epic-ledger/RePlanError",
 	{
 		epicNumber: Schema.Number,
 		message: Schema.String,
@@ -66,7 +66,7 @@ export class RePlanner extends Context.Service<
 	{
 		readonly rePlan: (epicNumber: number) => Effect.Effect<void, RePlanError>;
 	}
->()("@kampus/epic-ledger/RePlanner") {}
+>()("epic-ledger/RePlanner") {}
 
 /** Why the loop parked, beyond a clean pass. */
 export type StallReason = "repeated-signature" | "non-shrinking" | "ceiling";

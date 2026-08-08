@@ -11,7 +11,7 @@ import {ChildProcess} from "effect/unstable/process";
 
 /** A `git` invocation exited non-zero (an unreachable ref, a worktree-add collision, a detached-primary refusal, …). */
 export class GitCommandError extends Schema.TaggedErrorClass<GitCommandError>()(
-	"@kampus/review-head/GitCommandError",
+	"review-head/GitCommandError",
 	{
 		args: Schema.Array(Schema.String),
 		exitCode: Schema.Number,

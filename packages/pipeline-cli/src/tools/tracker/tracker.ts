@@ -85,7 +85,7 @@ export {GhCommandError, GhParseError, RepoResolutionError} from "./gh-io.ts";
  * any write reaches the tracker.
  */
 export class TrackerInputError extends Schema.TaggedErrorClass<TrackerInputError>()(
-	"@kampus/tracker/TrackerInputError",
+	"tracker/TrackerInputError",
 	{
 		message: Schema.String,
 	},
@@ -99,7 +99,7 @@ export class TrackerInputError extends Schema.TaggedErrorClass<TrackerInputError
  * (the SHA-bound, one-verdict-per-gate contract read-back, the originating work item).
  */
 export class TrackerVerifyError extends Schema.TaggedErrorClass<TrackerVerifyError>()(
-	"@kampus/tracker/TrackerVerifyError",
+	"tracker/TrackerVerifyError",
 	{
 		message: Schema.String,
 	},
@@ -715,7 +715,7 @@ const applyTriage = Effect.fn("Tracker.applyTriage")(function* (
 	if (judgment.lane) add.push(judgment.lane);
 	yield* runGh(addLabelsArgs(repo, target, add));
 	yield* runGh(removeLabelArgs(repo, target, `${LABEL_STATUS_PREFIX}${QUEUE_STATUS}`)).pipe(
-		Effect.catchTag("@kampus/gh-io/GhCommandError", () => Effect.succeed("")),
+		Effect.catchTag("gh-io/GhCommandError", () => Effect.succeed("")),
 	);
 	const labels = yield* decodeLabels(yield* json(listLabelsArgs(repo, target)));
 	const landedStatus = labels
@@ -768,7 +768,7 @@ const verifyLanded = Effect.fn("Tracker.verifyLanded")(function* (
 ) {
 	const landed = yield* runGh(getCommentBodyArgs(repo, id)).pipe(
 		Effect.catchTag(
-			"@kampus/gh-io/GhCommandError",
+			"gh-io/GhCommandError",
 			(cause) =>
 				new TrackerVerifyError({
 					message: `could not re-fetch the just-posted verdict comment #${id} to self-verify it (${cause.stderr.trim() || `exit ${cause.exitCode}`}) — refusing to report success on an unverifiable post (#3019)`,
@@ -1167,7 +1167,7 @@ export class Tracker extends Context.Service<
 			judgment: GraduateJudgment,
 		) => Effect.Effect<GraduateResult, GraduateErrors>;
 	}
->()("@kampus/tracker/Tracker") {}
+>()("tracker/Tracker") {}
 
 /**
  * The live `Tracker` layer over `gh api` REST. The `ChildProcessSpawner` dependency is

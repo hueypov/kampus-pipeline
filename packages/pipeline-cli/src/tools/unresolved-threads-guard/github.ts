@@ -28,19 +28,19 @@ import {isReviewCodeVerdict, type ReviewThread} from "./unresolved-threads-guard
 
 /** A `gh` invocation exited non-zero (auth, not-found, rate-limit, a GraphQL error, …). */
 export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
-	"@kampus/unresolved-threads-guard/GhCommandError",
+	"unresolved-threads-guard/GhCommandError",
 	{args: Schema.Array(Schema.String), exitCode: Schema.Number, stderr: Schema.String},
 ) {}
 
 /** `gh` output was not the JSON the loader expected. */
 export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
-	"@kampus/unresolved-threads-guard/GhParseError",
+	"unresolved-threads-guard/GhParseError",
 	{args: Schema.Array(Schema.String), message: Schema.String},
 ) {}
 
 /** No `owner/name` target repo could be resolved (no env override, no current repo). */
 export class RepoResolutionError extends Schema.TaggedErrorClass<RepoResolutionError>()(
-	"@kampus/unresolved-threads-guard/RepoResolutionError",
+	"unresolved-threads-guard/RepoResolutionError",
 	{message: Schema.String},
 ) {}
 
@@ -118,7 +118,7 @@ const resolveRepo = Effect.fn("Github.resolveRepo")(function* () {
 		".nameWithOwner",
 	]).pipe(
 		Effect.map((out) => out.trim()),
-		Effect.catchTag("@kampus/unresolved-threads-guard/GhCommandError", () => Effect.succeed("")),
+		Effect.catchTag("unresolved-threads-guard/GhCommandError", () => Effect.succeed("")),
 	);
 	if (REPO_RE.test(viewed)) {
 		return viewed;
@@ -247,7 +247,7 @@ const authorizedAuthors = Effect.fn("Github.authorizedAuthors")(function* (
 		(login) =>
 			runGh(permissionArgs(repo, login)).pipe(
 				Effect.map((out) => ({login, permission: out.trim()})),
-				Effect.catchTag("@kampus/unresolved-threads-guard/GhCommandError", () =>
+				Effect.catchTag("unresolved-threads-guard/GhCommandError", () =>
 					Effect.succeed({login, permission: "none"}),
 				),
 			),
@@ -312,7 +312,7 @@ export class Github extends Context.Service<
 			RepoResolutionError | GhCommandError | GhParseError | Schema.SchemaError
 		>;
 	}
->()("@kampus/unresolved-threads-guard/Github") {}
+>()("unresolved-threads-guard/Github") {}
 
 /**
  * The live `Github` layer. The `ChildProcessSpawner` dependency is captured once and

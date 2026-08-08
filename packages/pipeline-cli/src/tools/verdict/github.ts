@@ -55,7 +55,7 @@ export {GhCommandError, GhParseError, RepoResolutionError} from "../tracker/gh-i
 
 /** A malformed request the caller must fix — e.g. a `post` body whose first line is the wrong gate's marker. */
 export class VerdictInputError extends Schema.TaggedErrorClass<VerdictInputError>()(
-	"@kampus/verdict/VerdictInputError",
+	"verdict/VerdictInputError",
 	{
 		message: Schema.String,
 	},
@@ -69,7 +69,7 @@ export class VerdictInputError extends Schema.TaggedErrorClass<VerdictInputError
  * marker (the originating work item). Non-recoverable: the tool exits non-zero rather than report a false success.
  */
 export class VerdictVerifyError extends Schema.TaggedErrorClass<VerdictVerifyError>()(
-	"@kampus/verdict/VerdictVerifyError",
+	"verdict/VerdictVerifyError",
 	{
 		message: Schema.String,
 	},
@@ -127,7 +127,7 @@ const verifyLanded = Effect.fn("Github.verifyLanded")(function* (
 ) {
 	const landed = yield* runGh(getCommentBodyArgs(repo, id)).pipe(
 		Effect.catchTag(
-			"@kampus/gh-io/GhCommandError",
+			"gh-io/GhCommandError",
 			(cause) =>
 				new VerdictVerifyError({
 					message: `could not re-fetch the just-posted verdict comment #${id} to self-verify it (${cause.stderr.trim() || `exit ${cause.exitCode}`}) — refusing to report success on an unverifiable post (#3019)`,
@@ -272,7 +272,7 @@ export class Github extends Context.Service<
 			| Schema.SchemaError
 		>;
 	}
->()("@kampus/verdict/Github") {}
+>()("verdict/Github") {}
 
 /**
  * The live `Github` layer. The `ChildProcessSpawner` dependency is captured once at construction
