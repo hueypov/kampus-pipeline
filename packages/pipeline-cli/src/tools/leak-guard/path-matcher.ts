@@ -21,9 +21,9 @@
  *    config *files* — pass, while any `~/.claude/`-directory descent still flags (the related failure modes).
  *
  * There is deliberately NO `/tmp` carve-out: the `TEMP_PATH_PATTERNS` arm fail-closes on ANY bare
- * `/tmp/…` in a landed comment (including a `/tmp/kampus-crew-inbox-*.sock` socket glob). `/tmp` is
+ * `/tmp/…` in a landed comment (including a `/tmp/pipeline-crew-inbox-*.sock` socket glob). `/tmp` is
  * exactly the machine-local category the guard exists to catch, so the reviewer-verdict false
- * positive is fixed emit-side (review-code reviewers write the socket as the bare `kampus-crew-inbox-*.sock`
+ * positive is fixed emit-side (review-code reviewers write the socket as the bare `pipeline-crew-inbox-*.sock`
  * name or inside a code fence), never by weakening the guard (the originating work item founder ruling — Option 1).
  */
 
@@ -91,7 +91,7 @@ export const TEMP_PATH_PATTERNS: ReadonlyArray<PathPattern> = [
 	},
 	{
 		// The `/tmp/` scratch detector fail-closes on ANY bare `/tmp/…` — including a
-		// `/tmp/kampus-crew-inbox-*.sock` socket glob. `/tmp` is the machine-local category the
+		// `/tmp/pipeline-crew-inbox-*.sock` socket glob. `/tmp` is the machine-local category the
 		// guard exists to catch; the reviewer-verdict false positive is fixed emit-side, never by a
 		// guard carve-out (the originating work item founder ruling — Option 1). No exemption here by design.
 		pattern: /(?<![\w.])\/tmp\/[A-Za-z0-9._/-]+/g,

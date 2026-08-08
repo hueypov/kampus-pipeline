@@ -17,7 +17,7 @@ import {type CiConclusion, extractHealTargets, parseClosingRefs} from "./orphan-
 
 /** A `gh` invocation exited non-zero (auth, not-found, rate-limit, …). */
 export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
-	"@kampus/orphan-heal/GhCommandError",
+	"orphan-heal/GhCommandError",
 	{
 		args: Schema.Array(Schema.String),
 		exitCode: Schema.Number,
@@ -27,7 +27,7 @@ export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
 
 /** `gh` output was not the JSON the loader expected. */
 export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
-	"@kampus/orphan-heal/GhParseError",
+	"orphan-heal/GhParseError",
 	{
 		args: Schema.Array(Schema.String),
 		message: Schema.String,
@@ -36,7 +36,7 @@ export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
 
 /** No `owner/name` target repo could be resolved (no env override, no current repo). */
 export class RepoResolutionError extends Schema.TaggedErrorClass<RepoResolutionError>()(
-	"@kampus/orphan-heal/RepoResolutionError",
+	"orphan-heal/RepoResolutionError",
 	{message: Schema.String},
 ) {}
 
@@ -98,7 +98,7 @@ const resolveRepo = Effect.fn("Github.resolveRepo")(function* () {
 		".nameWithOwner",
 	]).pipe(
 		Effect.map((out) => out.trim()),
-		Effect.catchTag("@kampus/orphan-heal/GhCommandError", () => Effect.succeed("")),
+		Effect.catchTag("orphan-heal/GhCommandError", () => Effect.succeed("")),
 	);
 	if (REPO_RE.test(viewed)) {
 		return viewed;
@@ -295,7 +295,7 @@ export class Github extends Context.Service<
 			readonly labels: ReadonlyArray<string>;
 		}) => Effect.Effect<{readonly number: number; readonly url: string}, GhError>;
 	}
->()("@kampus/orphan-heal/Github") {}
+>()("orphan-heal/Github") {}
 
 export const GithubLive: Layer.Layer<Github, never, ChildProcessSpawner.ChildProcessSpawner> =
 	Layer.effect(Github)(

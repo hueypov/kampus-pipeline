@@ -1,5 +1,5 @@
 /**
- * `@kampus/decisions-index` core — pure, IO-free derivation of the ADR map(s) from the
+ * `decisions-index` core — pure, IO-free derivation of the ADR map(s) from the
  * `.decisions/NNNN-*.md` files. Each file's YAML front-matter (`id`/`title`/`status`/`date`)
  * is the single source of truth; the compact ambient map (`renderCompact`, the on-demand decision-discovery rule) and the
  * legacy markdown table (`renderIndex`) are derived, ordered by `id` ascending. There is no

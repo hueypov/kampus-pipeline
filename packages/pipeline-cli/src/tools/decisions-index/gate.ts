@@ -167,7 +167,7 @@ export const checkIndex = (
 			new CheckFailed({
 				reason:
 					`${target} is stale — it does not match the generated index.\n` +
-					"Run `pnpm --filter @kampus/decisions-index generate` and commit the result\n" +
+					"Run `pnpm pipeline cli decisions-index generate` and commit the result\n" +
 					"(edit the ADR file's front-matter, never index.md by hand — the generated decision-index rule).",
 			}),
 		);

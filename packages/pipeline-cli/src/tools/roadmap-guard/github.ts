@@ -13,7 +13,7 @@ import type {Milestone} from "./roadmap-guard.ts";
 
 /** A `gh` invocation exited non-zero (auth, not-found, rate-limit, …). */
 export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
-	"@kampus/roadmap-guard/GhCommandError",
+	"roadmap-guard/GhCommandError",
 	{
 		args: Schema.Array(Schema.String),
 		exitCode: Schema.Number,
@@ -23,7 +23,7 @@ export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
 
 /** `gh` output was not the JSON the loader expected. */
 export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
-	"@kampus/roadmap-guard/GhParseError",
+	"roadmap-guard/GhParseError",
 	{
 		args: Schema.Array(Schema.String),
 		message: Schema.String,
@@ -32,7 +32,7 @@ export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
 
 /** No `owner/name` target repo could be resolved (no env override, no current repo). */
 export class RepoResolutionError extends Schema.TaggedErrorClass<RepoResolutionError>()(
-	"@kampus/roadmap-guard/RepoResolutionError",
+	"roadmap-guard/RepoResolutionError",
 	{
 		message: Schema.String,
 	},
@@ -101,7 +101,7 @@ const resolveRepo = Effect.fn("Milestones.resolveRepo")(function* () {
 		".nameWithOwner",
 	]).pipe(
 		Effect.map((out) => out.trim()),
-		Effect.catchTag("@kampus/roadmap-guard/GhCommandError", () => Effect.succeed("")),
+		Effect.catchTag("roadmap-guard/GhCommandError", () => Effect.succeed("")),
 	);
 	if (REPO_RE.test(viewed)) {
 		return viewed;
@@ -154,7 +154,7 @@ export class Milestones extends Context.Service<
 			RepoResolutionError | GhCommandError | GhParseError | Schema.SchemaError
 		>;
 	}
->()("@kampus/roadmap-guard/Milestones") {}
+>()("roadmap-guard/Milestones") {}
 
 /**
  * The live `Milestones` layer. The `ChildProcessSpawner` dependency is captured once at

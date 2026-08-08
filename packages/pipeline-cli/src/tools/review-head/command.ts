@@ -42,10 +42,10 @@ const resolve = Command.make(
 	{pr: prFlag},
 	Effect.fn(function* ({pr}) {
 		const head = yield* (yield* ReviewHead).resolve(pr).pipe(
-			Effect.catchTag("@kampus/review-head/UnresolvableHeadError", (e) => fail(e.message)),
+			Effect.catchTag("review-head/UnresolvableHeadError", (e) => fail(e.message)),
 			// A 404 from `gh api pulls/<pr>` is the missing-PR fail-safe at the IO edge (the null-head
 			// case is caught in the core): a clean refusal + non-zero exit, not a raw stack trace.
-			Effect.catchTag("@kampus/gh-io/GhCommandError", (e) =>
+			Effect.catchTag("gh-io/GhCommandError", (e) =>
 				fail(`could not read PR #${pr} (gh exit ${e.exitCode}): ${e.stderr.trim() || "not found"}`),
 			),
 		);
@@ -62,12 +62,12 @@ const materialize = Command.make(
 	{pr: prFlag, worktree: worktreeFlag},
 	Effect.fn(function* ({pr, worktree}) {
 		const result = yield* (yield* ReviewHead).materialize(pr, worktree).pipe(
-			Effect.catchTag("@kampus/review-head/UnresolvableHeadError", (e) => fail(e.message)),
-			Effect.catchTag("@kampus/review-head/HeadMismatchError", (e) => fail(e.message)),
-			Effect.catchTag("@kampus/review-head/GitCommandError", (e) =>
+			Effect.catchTag("review-head/UnresolvableHeadError", (e) => fail(e.message)),
+			Effect.catchTag("review-head/HeadMismatchError", (e) => fail(e.message)),
+			Effect.catchTag("review-head/GitCommandError", (e) =>
 				fail(`git ${e.args.join(" ")} failed (exit ${e.exitCode}): ${e.stderr.trim()}`),
 			),
-			Effect.catchTag("@kampus/gh-io/GhCommandError", (e) =>
+			Effect.catchTag("gh-io/GhCommandError", (e) =>
 				fail(`could not read PR #${pr} (gh exit ${e.exitCode}): ${e.stderr.trim() || "not found"}`),
 			),
 		);

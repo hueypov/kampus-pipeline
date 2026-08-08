@@ -15,7 +15,7 @@ import {ChildProcess, ChildProcessSpawner} from "effect/unstable/process";
 
 /** The head SHA could not be resolved (no git, detached/empty repo, blank `rev-parse`). */
 export class MissingCommitError extends Schema.TaggedErrorClass<MissingCommitError>()(
-	"@kampus/crabbox-manifest/MissingCommitError",
+	"crabbox-manifest/MissingCommitError",
 	{
 		message: Schema.String,
 	},
@@ -34,7 +34,7 @@ export class Git extends Context.Service<
 	{
 		readonly headSha: () => Effect.Effect<string, MissingCommitError>;
 	}
->()("@kampus/crabbox-manifest/Git") {}
+>()("crabbox-manifest/Git") {}
 
 const collect = (stream: Stream.Stream<Uint8Array, unknown>): Effect.Effect<string> =>
 	Stream.decodeText(stream).pipe(

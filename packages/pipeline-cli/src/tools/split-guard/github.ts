@@ -21,7 +21,7 @@ import type {ChildRef} from "./split-match.ts";
 
 /** A `gh` invocation exited non-zero (auth, not-found, rate-limit, …). */
 export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
-	"@kampus/split-guard/GhCommandError",
+	"split-guard/GhCommandError",
 	{
 		args: Schema.Array(Schema.String),
 		exitCode: Schema.Number,
@@ -31,7 +31,7 @@ export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
 
 /** `gh` output was not the JSON the loader expected. */
 export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
-	"@kampus/split-guard/GhParseError",
+	"split-guard/GhParseError",
 	{
 		args: Schema.Array(Schema.String),
 		message: Schema.String,
@@ -40,7 +40,7 @@ export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
 
 /** No `owner/name` target repo could be resolved (no env override, no current repo). */
 export class RepoResolutionError extends Schema.TaggedErrorClass<RepoResolutionError>()(
-	"@kampus/split-guard/RepoResolutionError",
+	"split-guard/RepoResolutionError",
 	{
 		message: Schema.String,
 	},
@@ -107,7 +107,7 @@ const resolveRepo = Effect.fn("Github.resolveRepo")(function* () {
 		".nameWithOwner",
 	]).pipe(
 		Effect.map((out) => out.trim()),
-		Effect.catchTag("@kampus/split-guard/GhCommandError", () => Effect.succeed("")),
+		Effect.catchTag("split-guard/GhCommandError", () => Effect.succeed("")),
 	);
 	if (REPO_RE.test(viewed)) {
 		return viewed;
@@ -161,7 +161,7 @@ export class Github extends Context.Service<
 			RepoResolutionError | GhCommandError | GhParseError | Schema.SchemaError
 		>;
 	}
->()("@kampus/split-guard/Github") {}
+>()("split-guard/Github") {}
 
 /**
  * The live `Github` layer. The `ChildProcessSpawner` dependency is captured once at construction

@@ -147,7 +147,7 @@ const acquire = Effect.fn("Github.acquire")(function* (
 	// "ok" is the label-landed sentinel; a GhCommandError lowers to the label-missing back-off.
 	const labelResult = yield* runGh(addLabelArgs(repo, epic)).pipe(
 		Effect.as<AcquireResult | "ok">("ok"),
-		Effect.catchTag("@kampus/gh-io/GhCommandError", (error) =>
+		Effect.catchTag("gh-io/GhCommandError", (error) =>
 			Effect.succeed<AcquireResult | "ok">({_tag: "label-missing", stderr: error.stderr}),
 		),
 	);
@@ -160,7 +160,7 @@ const acquire = Effect.fn("Github.acquire")(function* (
 				? v
 				: {_tag: "claim-post-failed", stderr: "claim POST did not return a comment id"},
 		),
-		Effect.catchTag("@kampus/gh-io/GhCommandError", (error) =>
+		Effect.catchTag("gh-io/GhCommandError", (error) =>
 			Effect.succeed<number | AcquireResult>({_tag: "claim-post-failed", stderr: error.stderr}),
 		),
 	);
@@ -196,7 +196,7 @@ const release = Effect.fn("Github.release")(function* (
 		mine,
 		(id) =>
 			runGh(deleteCommentArgs(repo, id)).pipe(
-				Effect.catchTag("@kampus/gh-io/GhCommandError", (error) =>
+				Effect.catchTag("gh-io/GhCommandError", (error) =>
 					is404(error.stderr) ? Effect.void : Effect.fail(error),
 				),
 			),
@@ -204,7 +204,7 @@ const release = Effect.fn("Github.release")(function* (
 	);
 	const labelRemoved = yield* runGh(removeLabelArgs(repo, epic)).pipe(
 		Effect.as(true),
-		Effect.catchTag("@kampus/gh-io/GhCommandError", (error) =>
+		Effect.catchTag("gh-io/GhCommandError", (error) =>
 			is404(error.stderr) ? Effect.succeed(false) : Effect.fail(error),
 		),
 	);
@@ -236,7 +236,7 @@ export class Github extends Context.Service<
 			RepoResolutionError | GhCommandError | GhParseError | Schema.SchemaError
 		>;
 	}
->()("@kampus/epic-lock/Github") {}
+>()("epic-lock/Github") {}
 
 /**
  * The live `Github` layer. The `ChildProcessSpawner` dependency is captured once at

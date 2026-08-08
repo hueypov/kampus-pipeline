@@ -86,9 +86,9 @@ const check = Command.make(
 			concurrency: "unbounded",
 		}).pipe(
 			Effect.catchTags({
-				"@kampus/intake-dedup/GhCommandError": (e) => unknown(`gh exited ${e.exitCode}`),
-				"@kampus/intake-dedup/GhParseError": (e) => unknown(e.message),
-				"@kampus/intake-dedup/RepoResolutionError": () => unknown("target repo unresolved"),
+				"intake-dedup/GhCommandError": (e) => unknown(`gh exited ${e.exitCode}`),
+				"intake-dedup/GhParseError": (e) => unknown(e.message),
+				"intake-dedup/RepoResolutionError": () => unknown("target repo unresolved"),
 			}),
 		);
 

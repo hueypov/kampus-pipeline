@@ -28,7 +28,7 @@ import {
 
 /** A `gh` invocation exited non-zero (auth, not-found, rate-limit, …). */
 export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
-	"@kampus/merge-queue-classify/GhCommandError",
+	"merge-queue-classify/GhCommandError",
 	{
 		args: Schema.Array(Schema.String),
 		exitCode: Schema.Number,
@@ -38,7 +38,7 @@ export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
 
 /** `gh` output was not the JSON the reader expected. */
 export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
-	"@kampus/merge-queue-classify/GhParseError",
+	"merge-queue-classify/GhParseError",
 	{
 		args: Schema.Array(Schema.String),
 		message: Schema.String,
@@ -47,7 +47,7 @@ export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
 
 /** No `owner/name` target repo could be resolved (no env override, no current repo). */
 export class RepoResolutionError extends Schema.TaggedErrorClass<RepoResolutionError>()(
-	"@kampus/merge-queue-classify/RepoResolutionError",
+	"merge-queue-classify/RepoResolutionError",
 	{
 		message: Schema.String,
 	},
@@ -127,7 +127,7 @@ const resolveRepo = Effect.fn("Github.resolveRepo")(function* () {
 		".nameWithOwner",
 	]).pipe(
 		Effect.map((out) => out.trim()),
-		Effect.catchTag("@kampus/merge-queue-classify/GhCommandError", () => Effect.succeed("")),
+		Effect.catchTag("merge-queue-classify/GhCommandError", () => Effect.succeed("")),
 	);
 	if (REPO_RE.test(viewed)) {
 		return viewed;
@@ -228,9 +228,9 @@ const readLastMergeQueueEvent = Effect.fn("Github.readLastMergeQueueEvent")(
 	(effect) =>
 		effect.pipe(
 			Effect.catchTags({
-				"@kampus/merge-queue-classify/GhCommandError": () =>
+				"merge-queue-classify/GhCommandError": () =>
 					Effect.succeed<LastMergeQueueEvent>(null),
-				"@kampus/merge-queue-classify/GhParseError": () =>
+				"merge-queue-classify/GhParseError": () =>
 					Effect.succeed<LastMergeQueueEvent>(null),
 				SchemaError: () => Effect.succeed<LastMergeQueueEvent>(null),
 			}),
@@ -267,7 +267,7 @@ export class Github extends Context.Service<
 			RepoResolutionError | GhCommandError | GhParseError | Schema.SchemaError
 		>;
 	}
->()("@kampus/merge-queue-classify/Github") {}
+>()("merge-queue-classify/Github") {}
 
 /**
  * The live `Github` layer. The `ChildProcessSpawner` dependency is captured once at construction

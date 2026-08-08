@@ -19,7 +19,7 @@ import {type ClaimVerdict, claimIsMine} from "./claim-is-mine.ts";
 
 /** A `gh` invocation exited non-zero (auth, not-found, rate-limit, …). */
 export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
-	"@kampus/claim/GhCommandError",
+	"claim/GhCommandError",
 	{
 		args: Schema.Array(Schema.String),
 		exitCode: Schema.Number,
@@ -29,7 +29,7 @@ export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
 
 /** `gh` output was not the JSON the loader expected. */
 export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
-	"@kampus/claim/GhParseError",
+	"claim/GhParseError",
 	{
 		args: Schema.Array(Schema.String),
 		message: Schema.String,
@@ -38,7 +38,7 @@ export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
 
 /** No `owner/name` target repo could be resolved (no env override, no current repo). */
 export class RepoResolutionError extends Schema.TaggedErrorClass<RepoResolutionError>()(
-	"@kampus/claim/RepoResolutionError",
+	"claim/RepoResolutionError",
 	{
 		message: Schema.String,
 	},
@@ -112,7 +112,7 @@ const resolveRepo = Effect.fn("Github.resolveRepo")(function* () {
 		".nameWithOwner",
 	]).pipe(
 		Effect.map((out) => out.trim()),
-		Effect.catchTag("@kampus/claim/GhCommandError", () => Effect.succeed("")),
+		Effect.catchTag("claim/GhCommandError", () => Effect.succeed("")),
 	);
 	if (REPO_RE.test(viewed)) {
 		return viewed;
@@ -179,7 +179,7 @@ const authorizedAuthors = Effect.fn("Github.authorizedAuthors")(function* (
 		(login) =>
 			runGh(permissionArgs(repo, login)).pipe(
 				Effect.map((out) => ({login, permission: out.trim()})),
-				Effect.catchTag("@kampus/claim/GhCommandError", () =>
+				Effect.catchTag("claim/GhCommandError", () =>
 					Effect.succeed({login, permission: "none"}),
 				),
 			),
@@ -228,7 +228,7 @@ export class Github extends Context.Service<
 			RepoResolutionError | GhCommandError | GhParseError | Schema.SchemaError
 		>;
 	}
->()("@kampus/claim/Github") {}
+>()("claim/Github") {}
 
 /**
  * The live `Github` layer. The `ChildProcessSpawner` dependency is captured once at

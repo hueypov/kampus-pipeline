@@ -47,12 +47,12 @@ const check = Command.make(
 		// could not read (the zero-scope fail-closed invariant zero-scope stance — an unreadable channel is not a clean one).
 		const result = yield* (yield* Github).gather(pr).pipe(
 			Effect.catchTags({
-				"@kampus/unresolved-threads-guard/RepoResolutionError": (e) => failClosed(e.message),
-				"@kampus/unresolved-threads-guard/GhCommandError": (e) =>
+				"unresolved-threads-guard/RepoResolutionError": (e) => failClosed(e.message),
+				"unresolved-threads-guard/GhCommandError": (e) =>
 					failClosed(
 						`unresolved-threads-guard: could not read PR #${pr} review-thread state (gh exit ${e.exitCode}: ${e.stderr.trim() || "no stderr"}) — failing closed`,
 					),
-				"@kampus/unresolved-threads-guard/GhParseError": (e) =>
+				"unresolved-threads-guard/GhParseError": (e) =>
 					failClosed(
 						`unresolved-threads-guard: could not parse PR #${pr} review-thread state (${e.message}) — failing closed`,
 					),

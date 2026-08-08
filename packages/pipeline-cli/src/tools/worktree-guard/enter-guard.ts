@@ -1,5 +1,5 @@
 /**
- * `@kampus/worktree-guard` EnterWorktree guard core — pure decision for the
+ * `worktree-guard` EnterWorktree guard core — pure decision for the
  * `PreToolUse` hook on the `EnterWorktree` tool (the originating work item).
  *
  * A subagent that is ALREADY inside an isolated worktree (so `$WORKTREE_ROOT` is
