@@ -22,6 +22,7 @@
  * (operator/notification/wipCap/…) are ignored. There is no config-read tmux dimension —
  * tmux window placement now derives from role identity at launch (tmux-placement.ts), not config.
  */
+import {resolve as resolvePath} from "node:path";
 import {Effect, FileSystem, Schema} from "effect";
 import {CREW_ROLES} from "../crew/index.ts";
 
@@ -79,6 +80,25 @@ export type CliVersion = typeof CliVersion.Type;
  */
 export const ChannelMode = Schema.Literals(["allowlist", "development"]);
 export type ChannelMode = typeof ChannelMode.Type;
+
+/**
+ * Which terminal multiplexer the launcher places the crew's panes in. The launcher uses a multiplexer
+ * only as a WINDOW MANAGER — the crew coordinates over the channels substrate either way — so this is
+ * purely an operator-ergonomics dimension, not a behavioural one: the same roster, binds, and
+ * fail-closed launch contract hold under both backends.
+ *
+ * `tmux` is the default and stays the default for every existing install: the key is optional, and an
+ * omitted key decodes to `tmux`, so no operator config has to change. `herdr` selects the
+ * socket-API-driven backend in `herdr.ts` for operators who would rather not take on tmux's learning
+ * curve. The two are not interchangeable at runtime — a crew stood up under one is found, split, and
+ * retired under the same one — so switching means standing the crew down and back up.
+ */
+export const TERMINAL_KINDS = ["tmux", "herdr"] as const;
+export const TerminalKind = Schema.Literals(TERMINAL_KINDS);
+export type TerminalKind = typeof TerminalKind.Type;
+
+/** The backend an operator config that omits `terminal` launches under — tmux, so the key is purely additive. */
+export const DEFAULT_TERMINAL: TerminalKind = "tmux";
 
 /** How many engine (build) sessions the stand-up starts — at least one. */
 export const EngineCount = Schema.Int.check(
@@ -163,6 +183,12 @@ export const LaunchConfig = Schema.Struct({
 	engineCount: EngineCount,
 	channels: ChannelConfig,
 	/**
+	 * The terminal backend the crew's panes are placed in. Unlike `cliVersion` this is TOTAL, not
+	 * exact-optional: an omitted key is not a distinct "unselected" launch, it simply means the
+	 * default (`tmux`), so the fold resolves it once here and every launcher child reads one value.
+	 */
+	terminal: TerminalKind,
+	/**
 	 * The per-role model tiers (the optional role-tier setting), folded out of the role map into a flat lookup the bind
 	 * constructor consumes by role. A role that omits `tier` is simply absent here — the launcher then
 	 * emits no `--model` for it, preserving the CLI-default boot rather than guessing a tier.
@@ -185,6 +211,7 @@ const RoleTierEntry = Schema.Struct({tier: Schema.optionalKey(Tier)});
  */
 const RawLaunchConfig = Schema.Struct({
 	cliVersion: Schema.optionalKey(CliVersion),
+	terminal: Schema.optionalKey(TerminalKind),
 	roles: Schema.Struct({
 		"chief-of-staff": Schema.optionalKey(RoleTierEntry),
 		cartographer: Schema.optionalKey(RoleTierEntry),
@@ -213,6 +240,17 @@ export const resolveConfigPath = (
 	const override = env.CREW_CONFIG?.trim();
 	return override && override.length > 0 ? override : DEFAULT_CONFIG_PATH;
 };
+
+/**
+ * Resolve the operator config against the project root before a crew pane changes into its
+ * isolated launcher cwd. This is the exact config file stand-up reads and the path each
+ * launched role inherits through `CREW_CONFIG`, so role definitions never fall back to a
+ * pane-relative `.claude/crew.config.jsonc`.
+ */
+export const resolveProjectConfigPath = (
+	projectRoot: string,
+	env: {readonly CREW_CONFIG?: string | undefined} = process.env,
+): string => resolvePath(projectRoot, resolveConfigPath(env));
 
 /**
  * Strip JSONC to strict JSON: line/block comments and trailing commas. String-literal aware,
@@ -302,6 +340,10 @@ export const decodeLaunchConfig = (
 				...(raw.cliVersion !== undefined ? {cliVersion: raw.cliVersion} : {}),
 				engineCount: raw.roles["engineering-manager"].count,
 				channels: raw.channels,
+				// Absence is not a variant here (unlike `cliVersion`): an operator who omits `terminal`
+				// launches under tmux, so the default is resolved once at the fold rather than re-defaulted
+				// at each of the launcher's read sites.
+				terminal: raw.terminal ?? DEFAULT_TERMINAL,
 				roleTiers,
 			};
 		}),

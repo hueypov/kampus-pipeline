@@ -46,13 +46,18 @@ export class ChannelDescribe extends Context.Service<
 	}
 >()("@kampus/pipeline-crew-mcp/edge/ChannelDescribe") {}
 
-/** The one describe tool: no arguments in, the full discoverable channel contract out. */
+/**
+ * The one describe tool: the full discoverable channel contract out. `request` is intentionally
+ * optional, but keeps the MCP input schema a concrete JSON object. Claude Code rejects a
+ * parameterless schema whose emitted `inputSchema.type` is absent, and rejects the entire
+ * server's tool list with it.
+ */
 export const DescribeChannelKinds = Tool.make("channel_kinds", {
 	description:
 		"Resolve the crew channel contract BEFORE sending: every message kind's payload shape (JSON " +
 		"Schema) and each role's sanctioned send/receive kinds. Read this to build a valid `channel_send` " +
 		"body instead of discovering the shape from a send-time reject.",
-	parameters: Schema.Struct({}),
+	parameters: Schema.Struct({request: Schema.optionalKey(Schema.String)}),
 	success: ChannelContractView,
 });
 

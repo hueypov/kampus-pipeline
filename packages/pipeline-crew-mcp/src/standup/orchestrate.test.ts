@@ -614,7 +614,7 @@ describe("standup/orchestrate — launch-liveness + ensure-session (the tmux-hos
 					"-P",
 					"-F",
 					"#{window_id}",
-					...paneClaudeCommand(plan.bind.argv),
+					...paneClaudeCommand(plan.bind.argv, plan.crewConfigPath),
 				]);
 			}),
 	);
@@ -636,7 +636,7 @@ describe("standup/orchestrate — launch-liveness + ensure-session (the tmux-hos
 					"@7",
 					"-c",
 					plan.cwd,
-					...paneClaudeCommand(plan.bind.argv),
+					...paneClaudeCommand(plan.bind.argv, plan.crewConfigPath),
 				]);
 				assert.deepStrictEqual(argvLog[1], ["select-layout", "-t", "@7", "tiled"]);
 			}),
@@ -787,6 +787,11 @@ describe("paneClaudeCommand — the dev-channel dialog shell-wrap (the startup-o
 		// the command string carries claude + every argv token, so the shell re-parses the exact same words.
 		const command = cmd[2] ?? "";
 		for (const token of ["claude", ...argv]) assert.include(command, token);
+	});
+
+	it("passes the resolved crew config through CREW_CONFIG for an isolated pane cwd", () => {
+		const cmd = paneClaudeCommand(["--name", "chief-of-staff"], "/repo/.claude/crew.config.jsonc");
+		assert.include(cmd[2] ?? "", "CREW_CONFIG='/repo/.claude/crew.config.jsonc'");
 	});
 
 	it("single-quotes each token so a value with shell metacharacters survives re-parsing", () => {

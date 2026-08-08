@@ -70,6 +70,19 @@
 		}
 	},
 
+	// OPTIONAL. Which terminal the crew's panes are placed in — "tmux" (the default) or "herdr".
+	// Omit this key and the crew stands up in tmux exactly as before; set "herdr" if you would
+	// rather not take on tmux's learning curve. The launcher uses a multiplexer only as a WINDOW
+	// MANAGER (the crew coordinates over the channel substrate either way), so this changes nothing
+	// about the roster, the binds, or the fail-closed launch contract — only where the panes land.
+	//
+	// Either way the whole crew lands in ONE container, a pane per role, so every member stays
+	// visible at once: a tmux crew is one tiled "crew" window, a herdr crew is one "pipeline" tab.
+	// A crew is stood up, spawned into, and retired under ONE backend, so switching means
+	// `stand-down` then `stand-up`. Override per-invocation with `--terminal <tmux|herdr>`.
+	// "herdr" requires the `herdr` binary on PATH (https://herdr.dev).
+	"terminal": "<terminal: tmux | herdr>",
+
 	// OPTIONAL (the optional CLI-version rule). Omit this key to accept whatever `claude --version` reports (an
 	// "unpinned" launch — the boot no longer fail-closes on every frequent Claude Code
 	// auto-update). Set it ONLY to deliberately lock a version: a present pin is a hard

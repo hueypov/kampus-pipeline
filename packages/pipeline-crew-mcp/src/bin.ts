@@ -53,14 +53,19 @@ import {Argument, Command, Flag} from "effect/unstable/cli";
 
 import {CREW_ROLES, RoleUniquenessError, runCrewSession} from "./crew/index.ts";
 import {
+	CREW_TAB_LABEL,
 	CREW_WINDOW,
 	readLaunchConfig,
 	renderStandUpError,
 	renderTaggedError,
+	resolveProjectConfigPath,
 	retireRole,
 	runStandDown,
 	runStandUp,
 	spawnRole,
+	TERMINAL_KINDS,
+	type TerminalBackend,
+	terminalBackend,
 } from "./standup/index.ts";
 import {isTrackerAddressInUse, launchTracker} from "./tracker/index.ts";
 import {VERSION} from "./version.ts";
@@ -82,6 +87,31 @@ const projectRootFlag = Flag.string("project-root").pipe(
 const instanceFlag = Flag.optional(Flag.string("instance")).pipe(
 	Flag.withDescription("the launcher-assigned per-instance identity an engine session binds"),
 );
+// Which terminal multiplexer the crew's panes are placed in. Optional at the CLI because the operator
+// config's `terminal` dimension is the standing answer — this flag is the per-invocation override
+// (trying herdr once without editing the config, or forcing tmux from a herdr-configured repo).
+const terminalFlag = Flag.optional(Flag.choice("terminal", TERMINAL_KINDS)).pipe(
+	Flag.withDescription(
+		"the terminal to place the crew's panes in (tmux | herdr); overrides the config's `terminal`, which defaults to tmux",
+	),
+);
+
+/**
+ * Resolve the launch config and the terminal backend TOGETHER, from one config read. The membership
+ * commands each need both, and reading twice would let the terminal dimension diverge from the launch
+ * dimensions the same command validates. The flag wins over the config so an operator can try a backend
+ * without editing their config; absent both, `config.terminal` has already defaulted to tmux at decode.
+ */
+const resolveLaunchContext = Effect.fn(function* (
+	projectRoot: string,
+	terminal: Option.Option<(typeof TERMINAL_KINDS)[number]>,
+) {
+	const config = yield* readLaunchConfig({CREW_CONFIG: resolveProjectConfigPath(projectRoot)});
+	const backend: TerminalBackend = terminalBackend(
+		Option.isSome(terminal) ? terminal.value : config.terminal,
+	);
+	return {config, backend};
+});
 
 const session = Command.make(
 	"session",
@@ -132,21 +162,32 @@ const tracker = Command.make(
 
 const standUp = Command.make(
 	"stand-up",
-	{projectRoot: projectRootFlag},
-	Effect.fn(function* ({projectRoot}) {
+	{projectRoot: projectRootFlag, terminal: terminalFlag},
+	Effect.fn(function* ({projectRoot, terminal}) {
 		yield* Console.error(
 			`pipeline-crew-mcp ${VERSION} — standing up the crew from the operator config (project ${projectRoot})`,
 		);
-		// runStandUp reads every launch dimension — including the tmux placement dimension — from the
-		// operator crew config itself (config.ts's typed reader, the registration rule: every launched session registers its channel server with its stable role and instance identity seam 1); nothing to inject here.
-		return yield* runStandUp({projectRoot}).pipe(
-			Effect.flatMap((result) =>
-				Console.error(
-					`crew up: tracker pid ${result.tracker.pid ?? "?"} on ${result.tracker.socketPath}; ${result.launched.length} panes launched in the ${CREW_WINDOW} window (${result.launched
-						.map((s) => `${s.role}→${s.pane}`)
-						.join(", ")})`,
-				),
-			),
+		// runStandUp reads every launch dimension from the operator crew config itself (config.ts's typed
+		// reader, the registration rule: every launched session registers its channel server with its stable role and instance identity seam 1). The ONE thing resolved out here is the terminal
+		// backend, because the `--terminal` override can only be applied at the CLI boundary — so the
+		// config is read once here and handed to runStandUp already decoded, never read twice.
+		return yield* Effect.gen(function* () {
+			const {config, backend} = yield* resolveLaunchContext(projectRoot, terminal);
+			const result = yield* runStandUp({
+				projectRoot,
+				config: Effect.succeed(config),
+				resolveTargetSession: backend.resolveTargetSession,
+				launch: backend.launch,
+			});
+			// Name the backend and the container the panes actually landed in: a tmux crew is one tiled
+			// `crew` window, a herdr crew is one `pipeline` tab — one pane per role either way.
+			const container = backend.kind === "herdr" ? `${CREW_TAB_LABEL} tab` : `${CREW_WINDOW} window`;
+			yield* Console.error(
+				`crew up (${backend.kind}): tracker pid ${result.tracker.pid ?? "?"} on ${result.tracker.socketPath}; ${result.launched.length} panes launched in the ${container} (${result.launched
+					.map((s) => `${s.role}→${s.pane}`)
+					.join(", ")})`,
+			);
+		}).pipe(
 			// Fail-loud, no partial crew: a bad config, a version drift, an unstartable tracker, an inert
 			// channel, or a colliding pane label aborts naming its cause — renderStandUpError surfaces the
 			// tagged error's rich fields (reason/role/pane), not just its tag (the command-surface rule: expose stand-up as a single CLI subcommand).
@@ -230,19 +271,28 @@ const instanceFlagOptional = Flag.optional(Flag.string("instance")).pipe(
 
 const spawnRoleCmd = Command.make(
 	"spawn-role",
-	{projectRoot: projectRootFlag, role: roleArg},
-	Effect.fn(function* ({projectRoot, role}) {
+	{projectRoot: projectRootFlag, role: roleArg, terminal: terminalFlag},
+	Effect.fn(function* ({projectRoot, role, terminal}) {
 		yield* Console.error(
 			`pipeline-crew-mcp ${VERSION} — spawning one "${role}" member into the running crew (project ${projectRoot})`,
 		);
 		// Add ONE member to the running crew without a whole-crew re-boot (the membership rule: add, remove, or respawn one role without restarting the whole crew): reuse the shared
-		// per-role launch step, split into the running crew window, fail-loud if no crew is up.
-		return yield* spawnRole({projectRoot, role}).pipe(
-			Effect.flatMap((result) =>
-				Console.error(
-					`crew member up: ${result.launched.role}→${result.launched.pane} in window ${result.launched.window} (pid ${result.launched.pid ?? "?"})`,
-				),
-			),
+		// per-role launch step, split into the running crew window, fail-loud if no crew is up. The
+		// backend must match the one the crew was stood up under — a tmux pane id means nothing to herdr.
+		return yield* Effect.gen(function* () {
+			const {config, backend} = yield* resolveLaunchContext(projectRoot, terminal);
+			const result = yield* spawnRole({
+				projectRoot,
+				role,
+				config: Effect.succeed(config),
+				resolveTargetSession: backend.resolveTargetSession,
+				resolveCrewWindow: backend.resolveCrewWindow,
+				launch: backend.launch,
+			});
+			yield* Console.error(
+				`crew member up (${backend.kind}): ${result.launched.role}→${result.launched.pane} in ${result.launched.window} (pid ${result.launched.pid ?? "?"})`,
+			);
+		}).pipe(
 			Effect.catch((error) =>
 				Console.error(`spawn-role aborted: ${renderTaggedError(error)}`).pipe(
 					Effect.andThen(Effect.sync(() => process.exit(1))),
@@ -258,23 +308,32 @@ const spawnRoleCmd = Command.make(
 
 const retireRoleCmd = Command.make(
 	"retire-role",
-	{projectRoot: projectRootFlag, role: roleArg, instance: instanceFlagOptional},
-	Effect.fn(function* ({projectRoot, role, instance}) {
+	{
+		projectRoot: projectRootFlag,
+		role: roleArg,
+		instance: instanceFlagOptional,
+		terminal: terminalFlag,
+	},
+	Effect.fn(function* ({projectRoot, role, instance, terminal}) {
 		yield* Console.error(
 			`pipeline-crew-mcp ${VERSION} — retiring one "${role}" member from the running crew (project ${projectRoot})`,
 		);
-		// Tear ONE member down cleanly: kill its pane (its lease frees by TTL), reclaim its inbox socket +
-		// launcher cwd — leaving every other member running (the membership rule: add, remove, or respawn one role without restarting the whole crew).
-		return yield* retireRole({
-			projectRoot,
-			role,
-			...(Option.isSome(instance) ? {instance: instance.value} : {}),
+		// Tear ONE member down cleanly: close its pane (its lease frees by TTL), reclaim its inbox socket +
+		// launcher cwd — leaving every other member running (the membership rule: add, remove, or respawn one role without restarting the whole crew). The pane is found and closed
+		// through the same backend the crew was stood up under.
+		return yield* Effect.gen(function* () {
+			const {backend} = yield* resolveLaunchContext(projectRoot, terminal);
+			const result = yield* retireRole({
+				projectRoot,
+				role,
+				...(Option.isSome(instance) ? {instance: instance.value} : {}),
+				findCrewPane: backend.findCrewPane,
+				closePane: backend.closePane,
+			});
+			yield* Console.error(
+				`crew member retired (${backend.kind}): ${result.role}${result.instance ? `/${result.instance}` : ""} (closed pane ${result.paneId})`,
+			);
 		}).pipe(
-			Effect.flatMap((result) =>
-				Console.error(
-					`crew member retired: ${result.role}${result.instance ? `/${result.instance}` : ""} (killed pane ${result.paneId})`,
-				),
-			),
 			Effect.catch((error) =>
 				Console.error(`retire-role aborted: ${renderTaggedError(error)}`).pipe(
 					Effect.andThen(Effect.sync(() => process.exit(1))),

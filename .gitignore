@@ -5,3 +5,7 @@ dist
 
 # The toolkit's install hook plants these; they point outside the repo (#36).
 **/.claude/.pipeline
+
+# Per-operator crew state: the personalized config and each run's scratch.
+.claude/crew.config.jsonc
+.claude/crew-run/

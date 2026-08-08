@@ -52,8 +52,15 @@ for matching changed files, and adds `review-design` for paths declared in
 list of additional check names that must pass on the same current head.
 
 `pnpm pipeline init --check` verifies the pinned submodule and the generated core
-wiring. It requires Node.js 22.6 or later and pnpm, but not GitHub authentication,
-tmux, or a user-level Claude configuration.
+wiring. It requires Node.js 22.6 or later and pnpm, but not GitHub authentication
+or a user-level Claude configuration.
+
+It also verifies the terminal a crew would launch into, but only once the crew
+config has been personalized: a config that still carries `<placeholders>` is
+skipped, so a repository that never stands a crew up is never asked to install a
+terminal. When the config is filled, the check resolves its `terminal` dimension
+(`tmux` by default, or `herdr`) and reports an unsupported value or a missing
+binary — catching at install time what would otherwise fail the whole stand-up.
 
 `pnpm pipeline status` shows the same local installation contract in a readable
 form; `pnpm pipeline status --json` is the machine-readable form. It distinguishes
