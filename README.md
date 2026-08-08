@@ -120,7 +120,7 @@ Initialization writes no workflow unless the repository asks for one — a check
 nobody chose is still a check nobody chose. Enable them by name:
 
 ```bash
-pipeline enable pipeline-verify
+./.pipeline/toolkit/bin/pipeline enable pipeline-verify
 ```
 
 `pipeline-verify` is the one that completes the pipeline: it runs a
