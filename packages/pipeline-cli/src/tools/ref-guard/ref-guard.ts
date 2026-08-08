@@ -60,7 +60,13 @@ export const decideRefUpdate = (update: RefUpdate, guardedRef: string, facts: Co
 		// for `update-ref -d` and `branch -D`, against a packed-only ref and against a ref holding a
 		// loose and a packed copy at the same oid: every genuine delete zero-filled, the prune did not.
 		// So this branch is unreachable for a genuine delete; it does not rely on a second transaction
-		// in the same command being refused first, nor on any ordering between them.
+		// in the same command being refused first, nor on any ordering between them. That is a
+		// narrower thing to keep true — one observable property of a single transaction, rather than
+		// a sequence across several — but it is still a measured property of Git, not a structural
+		// impossibility. If a future Git reported a genuine delete carrying its real old value, a
+		// delete of a PACKED primary would match the packed oid and be allowed. That is fail-OPEN, so
+		// the measurement above is load-bearing: re-run it before trusting this rung on a Git whose
+		// deletion reporting has changed.
 		if (facts.packedOid !== null && facts.packedOid === update.oldOid) return {kind: "allow", reason: `${guardedRef} survives in packed-refs at ${update.oldOid.slice(0, 12)} (loose-copy prune)`};
 		return {kind: "refuse", reason: `refusing to delete guarded primary ref ${guardedRef}`};
 	}
