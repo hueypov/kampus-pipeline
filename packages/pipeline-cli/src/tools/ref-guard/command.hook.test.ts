@@ -61,10 +61,10 @@ afterAll(() => {
 
 /**
  * Every case here drives real Git against the real installed hook, and each ref transaction is a
- * cold Node start — `git stash push` alone fires several. The generous timeouts are headroom for
- * that, not a symptom: measured, the hook costs about 2.5s per commit and v3 is slightly cheaper
- * than v2 (it stops running the CLI once a candidate has answered). They are here because the
- * default 5s fails on a loaded machine, which reads as a broken guard rather than a busy one.
+ * cold Node start — `git stash push` fires several, and an 81-ref fetch fires 163. The generous
+ * timeouts are headroom for that: measured, the hook costs about 2.4s per commit, the same as v2
+ * did whenever v2 actually ran the guard. They are here because the default 5s fails on a loaded
+ * machine, which reads as a broken guard rather than a busy one.
  */
 const HOOK_TIMEOUT = 60_000;
 
@@ -81,7 +81,11 @@ describe("ref-guard installed hook", () => {
 		// because the failure is in candidate selection, not in any decision.
 		const broken = join(clone, "packages/pipeline-cli/src");
 		mkdirSync(broken, {recursive: true});
-		writeFileSync(join(broken, "bin.ts"), 'import "node:nonexistent/module";\n');
+		// It DRAINS stdin before failing, which is the case the replay exists for and the one a
+		// module-load crash cannot reach: the verb reads stdin first, so any later failure — an
+		// exception, an OOM, a SIGKILL — leaves git's pipe empty for whoever runs next. A candidate
+		// that dies at import time never touches the pipe, so it proves nothing about the replay.
+		writeFileSync(join(broken, "bin.ts"), 'await new Response(process.stdin).text();\nprocess.exit(1);\n');
 		try {
 			// The refusal must still arrive, from the recorded candidate, and the ref must not move.
 			expect(() => execFileSync("git", ["update-ref", "refs/heads/trunk", divergent], {cwd: clone, stdio: "pipe"})).toThrow();
@@ -106,9 +110,14 @@ describe("ref-guard installed hook", () => {
 			expect(result.stderr).not.toContain("ERR_MODULE_NOT_FOUND");
 		} finally {
 			// Rewind BEFORE restoring the hook: putting trunk back is itself a backward move, which
-			// the working guard refuses — correctly, which is the point of the test above it.
-			execFileSync("git", ["update-ref", "refs/heads/trunk", base], {cwd: clone, stdio: "pipe"});
-			writeFileSync(hookPath, installed, {mode: 0o755});
+			// the working guard refuses — correctly, which is the point of the test above it. The
+			// restore must happen even if the rewind fails, or a broken hook would outlive this case
+			// and fail every later one for an unrelated reason.
+			try {
+				execFileSync("git", ["update-ref", "refs/heads/trunk", base], {cwd: clone, stdio: "pipe"});
+			} finally {
+				writeFileSync(hookPath, installed, {mode: 0o755});
+			}
 		}
 	}, HOOK_TIMEOUT);
 

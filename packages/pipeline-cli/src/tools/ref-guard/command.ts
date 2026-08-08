@@ -99,7 +99,18 @@ export const hookPathFor = (root: string): string | null => {
  *
  * Stdin is read once and replayed per attempt: Git delivers the update lines on the pipe, and a
  * first attempt that consumed them would leave every later attempt judging an empty transaction.
- * The verb is read-only, so running it more than once costs nothing but the process.
+ * That is not hypothetical — the verb reads stdin before anything else, so any failure after that
+ * point drains the pipe. The verb is read-only, so running it more than once costs nothing but the
+ * process.
+ *
+ * A candidate is skipped if an earlier one resolved to the same file. In a self-hosting checkout
+ * `.pipeline/toolkit` is a symlink to the repository root, which makes the first two candidates the
+ * SAME `bin.ts` — so a worktree without an install would otherwise pay two identical crashing Node
+ * starts before reaching a toolkit that works, about a fifth of the hook's cost, measured.
+ *
+ * On cost overall: v3 is not cheaper than v2. v2 also ran the CLI exactly once, so v3 can only ever
+ * run it the same number of times or more. What v3 costs is one extra cold Node start in precisely
+ * the case where v2 appeared free because it was doing nothing at all.
  */
 const cliBin = (): string => fileURLToPath(new URL("../../bin.ts", import.meta.url));
 
@@ -114,12 +125,17 @@ if [ -z "$node_bin" ]; then
   exit 0
 fi
 updates=$(cat)
+tried=""
 for candidate in \\
   "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\
   "$root/packages/pipeline-cli/src/bin.ts" \\
   "${recorded}"
 do
   [ -f "$candidate" ] || continue
+  dir=$(CDPATH= cd -- "$(dirname -- "$candidate")" 2>/dev/null && pwd -P) || continue
+  real="$dir/$(basename -- "$candidate")"
+  case "$tried" in *"|$real|"*) continue ;; esac
+  tried="$tried|$real|"
   printf '%s\\n' "$updates" | "$node_bin" "$candidate" ref-guard reference-transaction "$1"
   status=$?
   [ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1
@@ -196,10 +212,51 @@ const V2_LINES: ReadonlyArray<string | RegExp> = [
 	"",
 ];
 
-/** A hook body this tool wrote in an earlier version, UNEDITED — the only kind `install` replaces. */
+/**
+ * The CURRENT version's shape, which the two before it never had.
+ *
+ * Without it a hook this tool wrote is `drifted` — refused as hand-edited — whenever its recorded
+ * path differs from the one we would render now, which is any re-install from a different toolkit
+ * location: a moved checkout, or a version-stamped store directory. The v1 and v2 shapes fix that
+ * retroactively, one version late, every time. This fixes it as it happens.
+ */
+const V3_LINES: ReadonlyArray<string | RegExp> = [
+	"#!/bin/sh",
+	MARKER,
+	"# Git only aborts a reference transaction for this command's deliberate refusal.",
+	"# The toolkit and interpreter are resolved at run time — see ref-guard/command.ts.",
+	'root=$(git rev-parse --show-toplevel 2>/dev/null) || root=""',
+	'node_bin=$(command -v node 2>/dev/null) || node_bin=""',
+	'if [ -z "$node_bin" ]; then',
+	'  echo "ref-guard: no node on PATH — THE GUARD IS NOT RUNNING" >&2',
+	"  exit 0",
+	"fi",
+	"updates=$(cat)",
+	'tried=""',
+	"for candidate in \\",
+	'  "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\',
+	'  "$root/packages/pipeline-cli/src/bin.ts" \\',
+	/^ {2}"[^"]*"$/,
+	"do",
+	'  [ -f "$candidate" ] || continue',
+	'  dir=$(CDPATH= cd -- "$(dirname -- "$candidate")" 2>/dev/null && pwd -P) || continue',
+	'  real="$dir/$(basename -- "$candidate")"',
+	'  case "$tried" in *"|$real|"*) continue ;; esac',
+	'  tried="$tried|$real|"',
+	`  printf '%s\\n' "$updates" | "$node_bin" "$candidate" ref-guard reference-transaction "$1"`,
+	"  status=$?",
+	`  [ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1`,
+	'  [ "$status" -eq 0 ] && exit 0',
+	"done",
+	`echo "ref-guard: no toolkit under '$root' could run the guard — THE GUARD IS NOT RUNNING; run pnpm install here, or re-run pipeline init" >&2`,
+	"exit 0",
+	"",
+];
+
+/** A hook body this tool wrote in ANY version, UNEDITED — the only kind `install` replaces. */
 const isKnownManagedHook = (actual: string): boolean => {
 	const lines = actual.split("\n");
-	return [V1_LINES, V2_LINES].some((shape) =>
+	return [V1_LINES, V2_LINES, V3_LINES].some((shape) =>
 		lines.length === shape.length &&
 		shape.every((want, i) => {
 			const got = lines[i] ?? "";

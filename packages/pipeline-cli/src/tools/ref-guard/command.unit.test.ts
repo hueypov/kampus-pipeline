@@ -116,6 +116,24 @@ describe("ref-guard managed hook contract", () => {
 		expect(inspectHook(tmpHook("#!/bin/sh\necho someone elses hook\n"), expected)).toBe("foreign");
 	});
 
+	it("recognises its own rendering with a different recorded path, rather than calling it drifted", () => {
+		// v1 and v2 both shipped without a shape for themselves, so a re-install from a different
+		// toolkit location — a moved checkout, a version-stamped store directory — read as
+		// hand-edited and had to be deleted by hand. Carrying the current shape fixes that as it
+		// happens instead of one version later.
+		const expected = renderManagedHook();
+		expect(inspectHook(tmpHook(renderManagedHook("/somewhere/else/bin.ts")), expected)).toBe("outdated");
+	});
+
+	it("skips a candidate an earlier one already resolved to", () => {
+		// `.pipeline/toolkit` is a symlink to the repository root when the toolkit hosts itself, so
+		// the first two candidates are the same file — and a worktree without an install would pay
+		// two identical crashing Node starts before reaching one that works.
+		const hook = renderManagedHook("/recorded/at/install/bin.ts");
+		expect(hook).toContain('case "$tried" in *"|$real|"*) continue ;; esac');
+		expect(hook).toContain('real="$dir/$(basename -- "$candidate")"');
+	});
+
 	it("treats a hand-edited v2 hook as drifted, not outdated", () => {
 		const expected = renderManagedHook();
 		const edited = V2_HOOK.replace('  if [ -f "$candidate" ]; then bin="$candidate"; break; fi', "  bin=$candidate");
