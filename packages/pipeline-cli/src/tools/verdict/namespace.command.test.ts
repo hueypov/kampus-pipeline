@@ -5,10 +5,11 @@
  * running from a chosen root can witness which policy actually reached the guard.
  *
  * Unlike `verb-path.command.test.ts`, these need a live PR read (the guard consults the PR's
- * changed files and author), so they require an authenticated `gh`. Without one they SKIP, loudly,
- * with the reason printed — a stated limitation, never a silent pass: the pure seam (`guardPolicy`)
- * is pinned unconditionally in the unit suite, and what this file adds is the proof that the
- * command actually routes through it.
+ * changed files and author), so they require an authenticated `gh` — and, since #53, an identity
+ * that did not author the probe PR, because the split-role firewall refuses ahead of the namespace
+ * check. Without both they SKIP, loudly, with the reason printed — a stated limitation, never a
+ * silent pass: the pure seam (`guardPolicy`) is pinned unconditionally in the unit suite, and what
+ * this file adds is the proof that the command actually routes through it.
  *
  * Probe safety: every body's first line is a non-marker, so a probe that passes the guard stops at
  * the marker check and nothing can ever land on the PR — the design the review used.
@@ -21,8 +22,23 @@ import {fileURLToPath} from "node:url";
 import {afterAll, assert, beforeAll, describe, it} from "@effect/vitest";
 
 const BIN = fileURLToPath(new URL("../../bin.ts", import.meta.url));
-/** A merged PR whose diff classifies to review-code alone, used read-only. */
-const PROBE_PR = "56";
+const REPO = "hueypov/kampus-pipeline";
+/**
+ * Merged PRs whose diffs classify to review-code alone, read-only — one authored by each identity
+ * that runs this suite. The probe is chosen at run time as one the CALLER did not author, because
+ * the split-role firewall runs ahead of the namespace check and would otherwise refuse first. This
+ * file used to pass `--as spawned-test` and so never met the firewall at all; that a namespace test
+ * could name itself a third party is the same defect #53 fixes, seen from the test side.
+ */
+const CANDIDATE_PRS = ["56", "70"] as const;
+
+const readOut = (args: ReadonlyArray<string>): string => {
+	try {
+		return execFileSync("gh", args, {encoding: "utf8", stdio: ["ignore", "pipe", "ignore"]}).trim();
+	} catch {
+		return "";
+	}
+};
 
 const ghAuthed = (): boolean => {
 	try {
@@ -33,6 +49,16 @@ const ghAuthed = (): boolean => {
 	}
 };
 
+/** The authenticated login, and the first candidate PR it did not author — null when neither reads. */
+const me = readOut(["api", "user", "--jq", ".login"]);
+const probe =
+	me === ""
+		? null
+		: (CANDIDATE_PRS.map((pr) => ({
+				pr,
+				author: readOut(["api", `repos/${REPO}/pulls/${pr}`, "--jq", ".user.login"]),
+			})).find((c) => c.author !== "" && c.author.toLowerCase() !== me.toLowerCase()) ?? null);
+
 interface RunResult {
 	readonly code: number;
 	readonly stderr: string;
@@ -42,8 +68,8 @@ const post = (cwd: string, gate: string, bodyFile: string): Promise<RunResult> =
 	new Promise((resolve) => {
 		execFile(
 			"node",
-			[BIN, "verdict", "post", "--pr", PROBE_PR, "--gate", gate, "--as", "spawned-test", "--body-file", bodyFile],
-			{cwd, env: {...process.env, CLAUDE_PIPELINE_REPO: "hueypov/kampus-pipeline"}},
+			[BIN, "verdict", "post", "--pr", probe?.pr ?? "0", "--gate", gate, "--body-file", bodyFile],
+			{cwd, env: {...process.env, CLAUDE_PIPELINE_REPO: REPO}},
 			(error, _stdout, stderr) => {
 				const code =
 					error && typeof (error as {code?: unknown}).code === "number"
@@ -70,15 +96,44 @@ const inCI = process.env.CI === "true" || process.env.CI === "1";
  * coverage is claimed, and a harness that cannot authenticate has removed a witness rather than
  * excused one.
  */
-describe("verdict-namespace guard — spawned witnesses (#66)", () => {
-	it.skipIf(authed || !inCI)("CI must be able to run the live-PR probes", () => {
-		assert.fail(
-			"no authenticated gh in CI, so the spawned namespace witnesses cannot run — set GH_TOKEN on the test step. A skip here would report coverage that does not exist.",
+describe("verdict-namespace guard — the CI-coverage guard (#66)", () => {
+	/**
+	 * What CI can and cannot witness here, asserted rather than assumed.
+	 *
+	 * #70 made a missing `GH_TOKEN` red in CI, because a silent skip reports coverage that does not
+	 * exist. That still holds and is the first assertion. The second states a limitation #53
+	 * introduced and MEASURED, on run 31255176562: `gh auth status` succeeds under
+	 * `secrets.GITHUB_TOKEN`, but `gh api user` does not — an installation token has no user. The
+	 * split-role firewall needs a readable identity to clear, so the live-PR namespace probes cannot
+	 * run in CI at all.
+	 *
+	 * Asserting that, rather than skipping on it, is what keeps it from rotting: the day CI gains a
+	 * token that can read `/user`, this test fails and says to re-enable the witnesses. The guard's
+	 * pure seam (`guardPolicy`) is pinned unconditionally in the unit suite either way, and
+	 * `identity.command.test.ts` does exercise the firewall's fail-closed path in CI.
+	 */
+	it.runIf(inCI)("states exactly which live-PR coverage CI buys, and why", () => {
+		assert.isTrue(
+			authed,
+			"no authenticated gh in CI — set GH_TOKEN on the test step. Without it even the identity witnesses lose their meaning.",
 		);
+		assert.strictEqual(
+			me,
+			"",
+			`CI now reads a user identity ('${me}'), so the spawned namespace witnesses CAN run here — delete this assertion and let them.`,
+		);
+		assert.isNull(probe, "a probe resolved despite no identity, which should be unreachable");
 	});
 });
 
-describe.skipIf(!authed)("verdict-namespace guard — spawned witnesses (#66)", () => {
+if (probe === null) {
+	// eslint-disable-next-line no-console
+	console.error(
+		`namespace.command.test: SKIPPED — ${me === "" ? "no readable gh identity" : `no candidate PR that '${me}' did not author`}, so the live-PR probes cannot run. The guardPolicy seam is still pinned by the unit suite.`,
+	);
+}
+
+describe.skipIf(probe === null)("verdict-namespace guard — spawned witnesses (#66)", () => {
 	let dir: string;
 	let bodyFile: string;
 	const repoRoot = fileURLToPath(new URL("../../../../..", import.meta.url));

@@ -178,6 +178,17 @@ const read = Effect.fn("Github.read")(function* (
 });
 
 /**
+ * The account `gh` is authenticated as — the identity a verdict is actually attributed to.
+ *
+ * `post` has always read this to find its OWN prior marker, which is the tell: the upsert already
+ * trusted this login to decide what "mine" means, while the split-role firewall was deciding
+ * "who am I" from a flag the caller filled in (#53). One read, both jobs.
+ */
+const whoAmI = Effect.fn("Github.whoAmI")(function* () {
+	return (yield* runGh(whoAmIArgs)).trim();
+});
+
+/**
  * Upsert this PR's `gate` verdict (the SHA-bound, one-verdict-per-gate contract rule 2). Three fail-closed emission guards run first:
  * the body's first line must be *this* gate's marker (rejects a cross-namespace body); a
  * polarity-bearing (PASS/FAIL) body must carry a well-formed `@ <sha>` (rejects the unbindable
@@ -200,7 +211,7 @@ const post = Effect.fn("Github.post")(function* (
 	if (defect !== null) {
 		return yield* new VerdictInputError({message: `refusing to post: ${defect}`});
 	}
-	const me = (yield* runGh(whoAmIArgs)).trim();
+	const me = yield* whoAmI();
 	const comments = yield* listComments(repo, pr);
 	const re = namespaceRe(gate);
 	const mine = comments
@@ -245,6 +256,8 @@ export class Github extends Context.Service<
 			ReadResult,
 			RepoResolutionError | GhCommandError | GhParseError | Schema.SchemaError
 		>;
+		/** The authenticated account, for the split-role firewall (#53). Fails rather than guessing. */
+		readonly whoAmI: () => Effect.Effect<string, GhCommandError>;
 		readonly post: (
 			pr: number,
 			gate: VerdictGate,
@@ -278,6 +291,8 @@ export const GithubLive: Layer.Layer<Github, never, ChildProcessSpawner.ChildPro
 			return {
 				read: (pr, gate, expect, headOverride) =>
 					repo.pipe(Effect.flatMap((r) => withSpawner(read(r, pr, gate, expect, headOverride)))),
+				// No repo needed: `gh api user` asks who the token belongs to, not about a repository.
+				whoAmI: () => withSpawner(whoAmI()),
 				post: (pr, gate, body) =>
 					repo.pipe(Effect.flatMap((r) => withSpawner(post(r, pr, gate, body)))),
 			};

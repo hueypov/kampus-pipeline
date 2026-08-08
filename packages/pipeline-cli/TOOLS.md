@@ -293,6 +293,14 @@ made explicit (a SHA-less advisory does **not** satisfy a SHA-bound check; a ver
 stale head does **not** pass; newest-authorized-marker wins). It re-encodes the SHA-bound, one-verdict-per-gate contract match
 semantics; it does **not** change what any gate verifies.
 
+`verdict post` refuses a **self-verdict** (exit 10) over the identity it READS, not one the caller
+declares: `gh api user` names the account the comment will belong to, and a match against the PR's
+author is refused. `--as` survives only as an assertion — a disagreement with the authenticated
+account is itself a refusal (exit 10), and an unreadable identity refuses as `PRECONDITION_UNKNOWN`
+(exit 11) rather than posting an ungated verdict. It previously compared `$CLAUDE_CODE_SESSION_ID`
+against a GitHub login — two kinds of thing that cannot be equal — so the refusal was unreachable
+through every documented invocation (#53).
+
 `verdict post` also refuses a **namespace the diff does not require** (exit 7): the PR's changed
 files are classified through the repository policy, and a `--gate` outside the required set names
 what the diff does require instead of posting. The check needs a TRUSTED policy — from a root
