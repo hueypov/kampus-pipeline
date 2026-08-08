@@ -38,12 +38,17 @@ The token is derived, not guessed: `mcp__` + the server name sanitized
 that class permits, so sanitization is a no-op and the joins are plain double underscores.
 A wrong string fails closed (present-but-uncallable). Single source: [`CHANNEL-TOOL.md`](CHANNEL-TOOL.md).
 
-The **engineering-manager** (the one engine) carries a **second** channel token on top of
-`channel_send` — `mcp__pipeline-crew-mcp__channel_claim` — which claims a tracker
-resource before it opens a lane (cross-engine deconfliction, a real lock rather than a relayed
-message). Only the engine lists it; the three bridges list `channel_send` alone. So when
-reconstructing the engine def from the roster table below, note its `tools:` array is seven
-entries, not six. Why it needs its own tool: [`CHANNEL-TOOL.md`](CHANNEL-TOOL.md).
+Every def carries a **second** token beside it — `mcp__pipeline-crew-mcp__channel_kinds` — the
+discovery tool that returns each message kind's payload schema. A sender reads a kind's shape
+from it before its first send of that kind; without it in the allowlist the tool is
+present-but-uncallable and the sender can only guess the `body`, because `channel_send`'s own
+parameters declare no kind enum and no payload shape.
+
+The **engineering-manager** (the one engine) carries a **third** channel token on top of those
+two — `mcp__pipeline-crew-mcp__channel_claim` — which claims a tracker resource before it opens
+a lane (cross-engine deconfliction, a real lock rather than a relayed message). Only the engine
+lists it; the three bridges carry `channel_send` + `channel_kinds` alone. Why each needs its own
+tool: [`CHANNEL-TOOL.md`](CHANNEL-TOOL.md).
 
 ### Per-def frontmatter values
 
@@ -51,16 +56,15 @@ The exact shipped values, matching each def head:
 
 | Def file | `name` | `color` | `tools` |
 |---|---|---|---|
-| [`agents/crew-cartographer.md`](agents/crew-cartographer.md) | `crew-cartographer` | `green` | `Read`, `Bash`, `Grep`, `Glob`, `Task`, `channel_send` |
-| [`agents/crew-intake-desk.md`](agents/crew-intake-desk.md) | `crew-intake-desk` | `yellow` | `Read`, `Bash`, `Grep`, `Glob`, `Task`, `channel_send` |
-| [`agents/crew-engineering-manager.md`](agents/crew-engineering-manager.md) | `crew-engineering-manager` | `cyan` | `Task`, `Bash`, `Read`, `Grep`, `Glob`, `channel_send`, `channel_claim` |
-| [`agents/crew-chief-of-staff.md`](agents/crew-chief-of-staff.md) | `crew-chief-of-staff` | `magenta` | `Read`, `Bash`, `Grep`, `Glob`, `channel_send` |
+| [`agents/crew-cartographer.md`](agents/crew-cartographer.md) | `crew-cartographer` | `green` | `Read`, `Bash`, `Grep`, `Glob`, `Task`, `channel_send`, `channel_kinds` |
+| [`agents/crew-intake-desk.md`](agents/crew-intake-desk.md) | `crew-intake-desk` | `yellow` | `Read`, `Bash`, `Grep`, `Glob`, `Task`, `channel_send`, `channel_kinds` |
+| [`agents/crew-engineering-manager.md`](agents/crew-engineering-manager.md) | `crew-engineering-manager` | `cyan` | `Task`, `Bash`, `Read`, `Grep`, `Glob`, `channel_send`, `channel_claim`, `channel_kinds` |
+| [`agents/crew-chief-of-staff.md`](agents/crew-chief-of-staff.md) | `crew-chief-of-staff` | `magenta` | `Read`, `Bash`, `Grep`, `Glob`, `channel_send`, `channel_kinds` |
 
-`channel_send` above is the full `mcp__pipeline-crew-mcp__channel_send` token,
-abbreviated in this table for width; `channel_claim` on the engineering-manager row is
-likewise the full `mcp__pipeline-crew-mcp__channel_claim` token. Only the
-engineering-manager (the one engine) carries `channel_claim` — the three bridges list
-`channel_send` alone (see the channel-token subsection above). `model` is `inherit` for all four.
+Each `channel_*` name above is abbreviated for width — the def carries the full
+`mcp__pipeline-crew-mcp__<tool>` token. Every seat carries `channel_send` + `channel_kinds`;
+only the engineering-manager (the one engine) adds `channel_claim` (see the channel-token
+subsection above). `model` is `inherit` for all four.
 
 The `Task` tool marks a role that **spawns subagents**: the three spawning roles
 (cartographer, intake-desk, engineering-manager) carry it; the chief-of-staff, which only
@@ -152,10 +156,14 @@ the **human-notification commands** the chief-of-staff invokes to reach a person
 Every role coordinates over one MCP tool, served by `pipeline-crew-mcp` (wired per
 session via `--channels server:pipeline-crew-mcp`).
 
-- **Signature** — `channel_send {targetRole, kind, body}`. Discovery is implicit: the
-  substrate resolves the target role's inbox; there is no separate discover/claim tool.
+- **Signature** — `channel_send {targetRole, kind, body}`. *Inbox* discovery is implicit: the
+  substrate resolves the target role's inbox, so you never name a session. *Contract*
+  discovery is not — call `channel_kinds` to read a kind's payload schema before your first
+  send of that kind, or `body` is a guess against a decode check.
 - **Results** — success returns an `InboxAck` (delivered-to-inbox + wake enqueued, **never**
-  seen-by-model); an unreachable peer returns a `PeerUnreachableError {target, reason}`.
+  seen-by-model); an unreachable peer returns a `PeerUnreachableError {target, reason}`, and a
+  `body` that fails its kind's schema returns an `InvalidMessageError {kind, reason}` — a
+  rejected send, never a delivered one.
 - **Inbound** — arrives to the recipient as a wake tag
   `<channel from="inbox://<role>" kind="…">…JSON…</channel>`.
 - **Offline behavior** — log and continue. A `PeerUnreachableError` is logged and dropped; no
