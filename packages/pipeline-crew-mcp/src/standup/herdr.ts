@@ -325,18 +325,68 @@ export const launchSessionInHerdr = (
 			pid = split.pid;
 		}
 
+		// ── From here a pane EXISTS, and every failure below must take it back down. ──
+		//
+		// This is where herdr's shape diverges from tmux's and the no-partial-crew contract stops
+		// holding by itself. tmux creates a pane and its process in ONE call, so a guarded failure
+		// cannot strand anything. herdr splits the topology first and types the command in second, so
+		// a failure after the create leaves a pane on the operator's screen hosting an idle shell.
+		//
+		// Leaving it is not cosmetic damage. A stranded pane's cwd still matches
+		// `findCrewPaneIdInHerdr`, so the REAL member becomes unretireable — the lookup finds two and
+		// refuses to close ambiguously. And a retried stand-up runs `tab create --label pipeline`
+		// unconditionally, so a stranded first session leaves two crew tabs for `resolveCrewTabId` to
+		// choose between.
+		//
+		// `launchFailure` is deliberately not reused below: it appends "(no live pane)", which is the
+		// one thing that is false once the create has succeeded.
+		const weOpenedTheTab = intoTab === undefined;
+		const afterCreate = (run: HerdrRun, what: string): StandUpLaunchError =>
+			new StandUpLaunchError({
+				role: session.role,
+				pane: paneLabel,
+				reason: herdrReason(run, `${what} for pane "${paneLabel}"`),
+			});
+
+		/**
+		 * Undo the create, then report the original failure.
+		 *
+		 * Best effort by construction: the failure that got us here is the answer, and a cleanup that
+		 * itself fails must not replace it. An unsuccessful unwind appends to the reason instead, so a
+		 * pane left on screen is named rather than silently abandoned.
+		 */
+		const unwind = (failure: StandUpLaunchError): Effect.Effect<StandUpLaunchError> =>
+			runHerdrCommand(weOpenedTheTab ? ["tab", "close", tabId] : ["pane", "close", paneId]).pipe(
+				Effect.map((undone) =>
+					undone.spawnError === undefined && undone.code === 0
+						? // The unwind succeeded, so the contract every other failure path asserts now holds
+							// again — and saying so is what makes this failure indistinguishable from one that
+							// never created anything, which is the point of unwinding at all.
+							new StandUpLaunchError({
+								role: failure.role,
+								pane: failure.pane,
+								reason: `${failure.reason} (no live pane)`,
+							})
+						: new StandUpLaunchError({
+								role: failure.role,
+								pane: failure.pane,
+								reason: `${failure.reason}; and the ${weOpenedTheTab ? `tab it opened (${tabId})` : `pane it split (${paneId})`} could not be closed — it is STRANDED in herdr and must be closed by hand before standing up again`,
+							}),
+				),
+			);
+
 		// Label the pane with its roster identity. Cosmetic for the operator, but it is also the handle
 		// `retire-role` matches on, so a failure here would leave an unretireable member — fail closed.
 		const renamed = yield* runHerdrCommand(["pane", "rename", paneId, paneLabel]);
 		if (renamed.spawnError !== undefined || renamed.code !== 0) {
-			return yield* Effect.fail(launchFailure(plan, renamed, "pane rename"));
+			return yield* Effect.fail(yield* unwind(afterCreate(renamed, "pane rename")));
 		}
 
 		// Step two of the herdr launch shape: type `claude <argv>` into the pane's interactive shell.
 		// Until this succeeds the pane exists but hosts no session — a half-launch the crew must not count.
 		const ran = yield* runHerdrCommand(["pane", "run", paneId, herdrPaneCommand(bind.argv)]);
 		if (ran.spawnError !== undefined || ran.code !== 0) {
-			return yield* Effect.fail(launchFailure(plan, ran, "pane run"));
+			return yield* Effect.fail(yield* unwind(afterCreate(ran, "pane run")));
 		}
 
 		return {role: session.role, address: session.address, window: tabId, pane: paneLabel, pid};
@@ -362,12 +412,26 @@ export const resolveCrewTabId = (
 				}),
 			);
 		}
-		for (const tab of arrField(result, "tabs")) {
-			if (strField(tab, "label") === CREW_TAB_LABEL) {
+		const crewTabs = arrField(result, "tabs")
+			.filter((tab) => strField(tab, "label") === CREW_TAB_LABEL)
+			.flatMap((tab) => {
 				const id = strField(tab, "tab_id");
-				if (id !== undefined) return id;
-			}
+				return id === undefined ? [] : [id];
+			});
+		// Two crew tabs is ambiguous, and answering it by taking the first is how a member gets split
+		// into a dead one. `tab create --label pipeline` is unconditional, so a stand-up that stranded
+		// a tab leaves exactly this state; refuse it the same way the pane lookup refuses an ambiguous
+		// match, and name both so the operator can tell which to close.
+		if (crewTabs.length > 1) {
+			return yield* Effect.fail(
+				new CrewWindowNotRunningError({
+					targetSession: workspaceId,
+					reason: `${crewTabs.length} tabs labelled "${CREW_TAB_LABEL}" in herdr workspace "${workspaceId}" (${crewTabs.join(", ")}) — refusing to guess which is the crew; close the stale one`,
+				}),
+			);
 		}
+		const only = crewTabs[0];
+		if (only !== undefined) return only;
 		return yield* Effect.fail(
 			new CrewWindowNotRunningError({
 				targetSession: workspaceId,

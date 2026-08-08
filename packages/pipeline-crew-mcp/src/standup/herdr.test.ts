@@ -255,16 +255,53 @@ describe("standup/herdr — launching the crew into ONE tab", () => {
 		}),
 	);
 
-	it.effect("fails closed when the pane was created but the command never ran (the half-launch)", () =>
+	it.effect("closes the tab it opened when the command never ran (the half-launch)", () =>
 		Effect.gen(function* () {
-			const {run} = scripted([
+			// The bug this exists for: every error path was checked and NONE cleaned up, so a failure
+			// here left a focused `pipeline` tab hosting an idle shell. That is not cosmetic — the
+			// stranded pane's cwd still matches the retire lookup, making the real member unretireable,
+			// and the next stand-up adds a second crew tab.
+			const {run, calls} = scripted([
 				ok({tab: {tab_id: "w1:t5"}, root_pane: {pane_id: "w1:p8"}}),
 				ok({}),
 				failed,
+				ok({}),
 			]);
 			const error = yield* Effect.flip(launchSessionInHerdr(PLAN, "w1", undefined, run));
 			assert.include(error.reason, "pane run");
-			assert.include(error.reason, "no live pane");
+			assert.deepStrictEqual(calls.at(-1), ["tab", "close", "w1:t5"], "the tab it opened is closed");
+			assert.include(error.reason, "no live pane", "and the contract holds again once it is");
+		}),
+	);
+
+	it.effect("closes only the pane it split when a later session half-launches", () =>
+		Effect.gen(function* () {
+			// A later member must not take the whole crew tab down with it — the other members are in it.
+			const {run, calls} = scripted([ok({panes: [{pane_id: "w1:p8", tab_id: "w1:t5"}]}), ok({pane: {pane_id: "w1:p9"}}), ok({}), failed, ok({})]);
+			yield* Effect.flip(launchSessionInHerdr(PLAN, "w1", "w1:t5", run));
+			assert.deepStrictEqual(calls.at(-1), ["pane", "close", "w1:p9"]);
+		}),
+	);
+
+	it.effect("unwinds a failed rename too, not only a failed run", () =>
+		Effect.gen(function* () {
+			const {run, calls} = scripted([ok({tab: {tab_id: "w1:t5"}, root_pane: {pane_id: "w1:p8"}}), failed, ok({})]);
+			const error = yield* Effect.flip(launchSessionInHerdr(PLAN, "w1", undefined, run));
+			assert.include(error.reason, "pane rename");
+			assert.deepStrictEqual(calls.at(-1), ["tab", "close", "w1:t5"]);
+		}),
+	);
+
+	it.effect("names the stranded tab when the unwind itself fails", () =>
+		Effect.gen(function* () {
+			// Best effort: the original failure still surfaces, but a pane left on screen is named
+			// rather than silently abandoned.
+			const {run} = scripted([ok({tab: {tab_id: "w1:t5"}, root_pane: {pane_id: "w1:p8"}}), ok({}), failed, failed]);
+			const error = yield* Effect.flip(launchSessionInHerdr(PLAN, "w1", undefined, run));
+			assert.include(error.reason, "pane run", "the original failure is still the answer");
+			assert.include(error.reason, "STRANDED");
+			assert.include(error.reason, "w1:t5");
+			assert.notInclude(error.reason, "no live pane", "because there is one");
 		}),
 	);
 
@@ -292,6 +329,21 @@ describe("standup/herdr — finding the running crew again", () => {
 			const {run} = scripted([ok({tabs: [{tab_id: "w1:t1", label: "1"}]})]);
 			const error = yield* Effect.flip(resolveCrewTabId("w1", run));
 			assert.include(error.reason, "run stand-up first");
+		}),
+	);
+
+	it.effect("refuses to guess between two crew tabs rather than taking the first", () =>
+		Effect.gen(function* () {
+			// Taking the first is how spawn-role splits a member into a dead tab. `tab create --label
+			// pipeline` is unconditional, so any stranded stand-up leaves exactly this state; both ids
+			// are named so the operator can tell which to close.
+			const {run} = scripted([
+				ok({tabs: [{tab_id: "w1:t5", label: CREW_TAB_LABEL}, {tab_id: "w1:t9", label: CREW_TAB_LABEL}]}),
+			]);
+			const error = yield* Effect.flip(resolveCrewTabId("w1", run));
+			assert.include(error.reason, "refusing to guess");
+			assert.include(error.reason, "w1:t5");
+			assert.include(error.reason, "w1:t9");
 		}),
 	);
 
