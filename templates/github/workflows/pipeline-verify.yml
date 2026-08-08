@@ -31,8 +31,11 @@ permissions:
   contents: read
 
 concurrency:
+  # A superseded run on the same ref is waste. `github.ref` is a full ref (`refs/heads/x`) and would
+  # never equal a bare default-branch name, so a comparison against one is dead code dressed as a
+  # guard — and a merge_group gets its own unique ref, so a queued merge is never cancelled anyway.
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != github.event.repository.default_branch }}
+  cancel-in-progress: true
 
 jobs:
   verify:

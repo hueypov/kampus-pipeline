@@ -101,10 +101,11 @@ const enabledPrimaryIndexGuardPolicy = JSON.stringify({
 });
 
 describe("pipeline init", () => {
-	// The trailing timeout goes 20s -> 90s below. This one runs `git init`, a real `pnpm install`,
-	// and two full installs per fixture, and it grew again when `pipeline-verify` joined the payload.
-	// Raised because the WORK grew, not to accommodate a scheduling problem — a test that walks the
-	// whole install twice is legitimately slow, and the assertion is about what lands on disk.
+	// The trailing timeout below is 90s of headroom, not a 90s test: measured, this runs in about
+	// 14s, and adding `pipeline-verify` to the payload did not change that. It is slow because it
+	// drives real `git` through two full installs per fixture, and it once crossed the old 20s limit
+	// while sharing the machine with this package's other test file. The margin absorbs that
+	// variance. It is not covering a regression, and the assertion is unchanged.
 	it("creates project-local wiring, preserves settings, and is idempotent", () => {
 		const {consumer, mockBin} = fixture();
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);

@@ -127,8 +127,9 @@ after advancing the submodule pointer.
 The generated pack deliberately excludes Phoenix deployment, application-path,
 Cloudflare, release, and approval-topology workflows. It contains only:
 
-- `pipeline-toolkit.yml` — checks out the consumer with its submodule, installs
-  the pinned toolkit workspace, and runs the toolkit package test suites.
+- `pipeline-verify.yml` — runs the adopting repository's own `.pipeline/verify.sh`,
+  and fails when that script is absent rather than passing. It deliberately detects
+  no stack: a wrong guess reports green while verifying the wrong thing.
 - `pipeline-doc-safety.yml` — validates ADR filename/frontmatter consistency
   and scans changed Markdown, ADR, pattern, and glossary files for
   machine-local-path leaks using the pinned local CLI.

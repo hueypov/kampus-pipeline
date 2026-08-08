@@ -36,8 +36,7 @@ export const CORE_AGENT_SKILL_NAMES: Readonly<Record<string, ReadonlyArray<strin
  *
  * `pipeline-verify` is first because it is the one that makes the pipeline complete. Without a
  * check reporting on a head, `ship-it` refuses every merge with PRECONDITION_UNKNOWN, so an adopter
- * who enables nothing else still has to enable this one to finish a run. `doctor` reports its
- * absence as a Tier-2 gap for that reason.
+ * who enables nothing else still has to enable this one to finish a run.
  */
 const GENERATED_WORKFLOWS = [
 	["pipeline-verify", ".github/workflows/pipeline-verify.yml"],
