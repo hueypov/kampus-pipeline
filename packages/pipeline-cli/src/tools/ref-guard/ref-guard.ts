@@ -12,10 +12,31 @@ export interface RefUpdate {
 export interface ComparisonFacts {
 	readonly comparisonOid: string | null;
 	readonly comparisonIsAncestorOfNew: boolean;
+	/** What the guarded ref resolves to right now, independent of the old value the caller asserted. */
+	readonly currentOid: string | null;
 }
 
 export interface CheckoutContext {
-	readonly isPrimaryCheckout: boolean;
+	/**
+	 * The value Git has staged for the shared primary checkout's OWN `HEAD` in THIS transaction, or
+	 * `null` when the shared HEAD is not the ref being written.
+	 *
+	 * The question is whose HEAD is under transaction — NOT which checkout invoked Git. Asking the
+	 * second is what refused `git worktree add --detach` from the primary: that command writes the
+	 * NEW worktree's HEAD, yet runs in the primary's context. Asking merely whether the shared HEAD
+	 * is locked is not enough either, because Git locks it for every write that dereferences through
+	 * it — `commit`, `reset --hard`, `stash push` — so an unrelated concurrent one would refuse the
+	 * same worktree add all over again. Carrying the staged VALUE is what scopes the fact to this
+	 * transaction; see `sharedHeadPending` in `command.ts` for how each ref backend answers it.
+	 */
+	readonly sharedHeadPending: string | null;
+	/**
+	 * Whether the shared checkout is mid-`rebase`/`bisect`. Git detaches the shared HEAD itself to
+	 * replay commits and reattaches it in the same command, so those detaches strand nobody — but on
+	 * stdin the first one is indistinguishable from `git checkout <sha>`. Refusing it aborted an
+	 * everyday `git rebase` AND left `.git/rebase-merge` behind for the operator to clean up.
+	 */
+	readonly operationInProgress: boolean;
 }
 
 export type RefDecision =
@@ -34,6 +55,13 @@ export const decideRefUpdate = (update: RefUpdate, guardedRef: string, facts: Co
 	// the prepared hook fires, and a caller that asserts no old value arrives zero-filled — such a
 	// write stays on the strict ancestry path below, fail-closed.
 	if (update.newOid === update.oldOid) return {kind: "allow", reason: `${guardedRef} is unchanged (same-value write)`};
+	// The same standstill, measured against the ref store rather than against the caller's assertion.
+	// `git pack-refs` (so `git gc`, so the `gc --auto` inside `commit`/`fetch`/`merge`/`pull`) migrates
+	// a loose ref into `packed-refs` by writing it at its OWN current value with a ZERO-filled old
+	// value — `0000…0 <current> refs/heads/<primary>` — which sails past the test above and, on a
+	// merely-BEHIND primary, is read as a rewrite one rung down. Nothing is moving, so nothing can
+	// diverge (measured on git 2.50.1).
+	if (facts.currentOid !== null && update.newOid === facts.currentOid) return {kind: "allow", reason: `${guardedRef} already points at ${update.newOid.slice(0, 12)} (standstill)`};
 	if (facts.comparisonOid === null) return {kind: "allow", reason: `comparison ref is unavailable; allowing ${guardedRef} update`};
 	if (update.newOid === facts.comparisonOid) return {kind: "allow", reason: `${guardedRef} matches its comparison ref`};
 	if (facts.comparisonIsAncestorOfNew) return {kind: "allow", reason: `${guardedRef} is a fast-forward of its comparison ref`};
@@ -45,11 +73,20 @@ export const decideRefUpdate = (update: RefUpdate, guardedRef: string, facts: Co
 
 /** Detect a bare primary-checkout detach across Git versions without refusing an attached commit or branch switch. */
 export const decideHeadDetach = (updates: ReadonlyArray<RefUpdate>, context: CheckoutContext): RefDecision => {
-	if (!context.isPrimaryCheckout) return {kind: "allow", reason: "linked worktree HEAD is not the shared primary checkout"};
+	// Only the shared checkout's own HEAD is in scope. A linked worktree's HEAD — whether it is
+	// being created detached or detached later — is a different ref in a different ref store, and
+	// detaching it strands nobody. A same-value write is deliberately NOT excused here, because
+	// `git update-ref --no-deref HEAD <oid> <oid>` on an attached primary reports the resolved oid
+	// as its old value and still detaches (measured on git 2.50.1).
+	if (context.sharedHeadPending === null) return {kind: "allow", reason: "the shared primary checkout's HEAD is not the ref under transaction"};
+	if (context.operationInProgress) return {kind: "allow", reason: "the shared checkout is mid-rebase/bisect; Git reattaches its own transient detach"};
 	const branchTargets = new Set(updates.filter((update) => update.refName.startsWith("refs/heads/") && update.newOid !== ZERO_OID).map((update) => update.newOid));
 	for (const update of updates) {
 		if (update.refName !== HEAD_REF || update.newOid === ZERO_OID) continue;
 		if (update.newOid.startsWith(SYMREF_VALUE_PREFIX) || branchTargets.has(update.newOid)) continue;
+		// The staged value has to be THIS line's, or the evidence belongs to somebody else's
+		// in-flight write and says nothing about whether the shared checkout is being detached.
+		if (update.newOid !== context.sharedHeadPending) continue;
 		return {kind: "refuse", reason: `refusing a bare HEAD detach on the shared primary checkout (${update.newOid.slice(0, 12)})`};
 	}
 	return {kind: "allow", reason: "no bare primary-checkout HEAD detach"};

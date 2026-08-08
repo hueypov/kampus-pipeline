@@ -1,35 +1,69 @@
 import {describe, expect, it} from "vitest";
-import {decideHeadDetach, decideRefUpdate, decideTransaction, HEAD_REF, type RefUpdate, ZERO_OID} from "./ref-guard.ts";
+import {type CheckoutContext, type ComparisonFacts, decideHeadDetach, decideRefUpdate, decideTransaction, HEAD_REF, type RefUpdate, ZERO_OID} from "./ref-guard.ts";
 
 const OID_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OID_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const guarded = "refs/heads/trunk";
 const update = (over: Partial<RefUpdate> = {}): RefUpdate => ({oldOid: OID_A, newOid: OID_B, refName: guarded, ...over});
+const facts = (over: Partial<ComparisonFacts> = {}): ComparisonFacts => ({comparisonOid: null, comparisonIsAncestorOfNew: false, currentOid: null, ...over});
+const detach = (over: Partial<CheckoutContext> = {}): CheckoutContext => ({sharedHeadPending: null, operationInProgress: false, ...over});
 
 describe("ref-guard pure decisions", () => {
 	it("allows off-primary updates and a proven primary fast-forward", () => {
-		expect(decideRefUpdate(update({refName: "refs/heads/feature"}), guarded, {comparisonOid: OID_A, comparisonIsAncestorOfNew: false}).kind).toBe("allow");
-		expect(decideRefUpdate(update(), guarded, {comparisonOid: OID_A, comparisonIsAncestorOfNew: true}).kind).toBe("allow");
+		expect(decideRefUpdate(update({refName: "refs/heads/feature"}), guarded, facts({comparisonOid: OID_A})).kind).toBe("allow");
+		expect(decideRefUpdate(update(), guarded, facts({comparisonOid: OID_A, comparisonIsAncestorOfNew: true})).kind).toBe("allow");
 	});
 
 	it("refuses primary deletes and divergence but allows a missing comparison ref", () => {
-		expect(decideRefUpdate(update({newOid: ZERO_OID}), guarded, {comparisonOid: null, comparisonIsAncestorOfNew: false}).kind).toBe("refuse");
-		expect(decideRefUpdate(update(), guarded, {comparisonOid: OID_A, comparisonIsAncestorOfNew: false}).kind).toBe("refuse");
-		expect(decideRefUpdate(update(), guarded, {comparisonOid: null, comparisonIsAncestorOfNew: false}).kind).toBe("allow");
+		expect(decideRefUpdate(update({newOid: ZERO_OID}), guarded, facts()).kind).toBe("refuse");
+		expect(decideRefUpdate(update(), guarded, facts({comparisonOid: OID_A})).kind).toBe("refuse");
+		expect(decideRefUpdate(update(), guarded, facts()).kind).toBe("allow");
 	});
 
 	it("allows a same-value write of a merely-behind primary", () => {
 		// git stash push / reset --hard HEAD re-write the branch at its current oid. With origin
 		// ahead (comparison not an ancestor of new), the write moves nothing and must pass — the
 		// standstill is not a rewrite, and refusing it aborts the stash that precedes a catch-up pull.
-		expect(decideRefUpdate(update({newOid: OID_A}), guarded, {comparisonOid: OID_B, comparisonIsAncestorOfNew: false}).kind).toBe("allow");
+		expect(decideRefUpdate(update({newOid: OID_A}), guarded, facts({comparisonOid: OID_B})).kind).toBe("allow");
+	});
+
+	it("allows a standstill whose old value arrived zero-filled", () => {
+		// `git pack-refs` (so `git gc`, so the `gc --auto` in commit/fetch/merge/pull) migrates a loose
+		// ref into packed-refs as `0000…0 <current> <ref>`. The caller asserts no old value, so the
+		// same-value test above cannot fire, and a merely-BEHIND primary then reads the standstill as
+		// a rewrite one rung down and aborts the whole pack-refs run.
+		expect(decideRefUpdate(update({oldOid: ZERO_OID, newOid: OID_A}), guarded, facts({comparisonOid: OID_B, currentOid: OID_A})).kind).toBe("allow");
+		// A ref that really is moving stays on the strict ancestry path.
+		expect(decideRefUpdate(update({oldOid: ZERO_OID, newOid: OID_B}), guarded, facts({comparisonOid: OID_A, currentOid: OID_A})).kind).toBe("refuse");
 	});
 
 	it("refuses only an unpaired concrete HEAD move on the primary", () => {
-		expect(decideHeadDetach([{oldOid: OID_A, newOid: OID_B, refName: HEAD_REF}], {isPrimaryCheckout: true}).kind).toBe("refuse");
-		expect(decideHeadDetach([{oldOid: OID_A, newOid: OID_B, refName: HEAD_REF}, update()], {isPrimaryCheckout: true}).kind).toBe("allow");
-		expect(decideHeadDetach([{oldOid: OID_A, newOid: "ref:refs/heads/trunk", refName: HEAD_REF}], {isPrimaryCheckout: true}).kind).toBe("allow");
-		expect(decideHeadDetach([{oldOid: OID_A, newOid: OID_B, refName: HEAD_REF}], {isPrimaryCheckout: false}).kind).toBe("allow");
+		expect(decideHeadDetach([{oldOid: OID_A, newOid: OID_B, refName: HEAD_REF}], detach({sharedHeadPending: OID_B})).kind).toBe("refuse");
+		expect(decideHeadDetach([{oldOid: OID_A, newOid: OID_B, refName: HEAD_REF}, update()], detach({sharedHeadPending: OID_B})).kind).toBe("allow");
+		expect(decideHeadDetach([{oldOid: OID_A, newOid: "ref:refs/heads/trunk", refName: HEAD_REF}], detach({sharedHeadPending: OID_B})).kind).toBe("allow");
+		expect(decideHeadDetach([{oldOid: OID_A, newOid: OID_B, refName: HEAD_REF}], detach()).kind).toBe("allow");
+	});
+
+	it("scopes the rung to the HEAD under transaction, not to the checkout that invoked git", () => {
+		// `git worktree add --detach` from the primary sends a bare-oid HEAD line from the primary's
+		// own context; only the ref store Git locked says the write lands on the new worktree's HEAD.
+		expect(decideHeadDetach([{oldOid: ZERO_OID, newOid: OID_B, refName: HEAD_REF}], detach()).kind).toBe("allow");
+		// A same-value bare write still detaches an attached primary — `update-ref --no-deref HEAD
+		// <oid> <oid>` reports the resolved oid as its old value — so it stays refused.
+		expect(decideHeadDetach([{oldOid: OID_B, newOid: OID_B, refName: HEAD_REF}], detach({sharedHeadPending: OID_B})).kind).toBe("refuse");
+	});
+
+	it("ignores shared-HEAD evidence staged for somebody else's transaction", () => {
+		// A concurrent `commit`/`reset --hard`/`stash` in the primary holds the shared HEAD lock while
+		// this hook runs. Reading the value Git staged there — rather than merely observing the lock —
+		// is what keeps that from refusing an unrelated worktree add all over again, intermittently.
+		expect(decideHeadDetach([{oldOid: ZERO_OID, newOid: OID_B, refName: HEAD_REF}], detach({sharedHeadPending: OID_A})).kind).toBe("allow");
+	});
+
+	it("allows the transient detach Git drives during rebase and bisect", () => {
+		// `git rebase` detaches the shared HEAD onto the upstream tip and reattaches it in the same
+		// command; refusing it also stranded the operator in a half-started `.git/rebase-merge`.
+		expect(decideHeadDetach([{oldOid: OID_A, newOid: OID_B, refName: HEAD_REF}], detach({sharedHeadPending: OID_B, operationInProgress: true})).kind).toBe("allow");
 	});
 
 	it("makes a transaction all-or-nothing", () => {

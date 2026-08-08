@@ -487,9 +487,15 @@ shared-primary hazards before Git changes any ref:
    pipeline-initiated sync.
 2. **A bare HEAD-detaching checkout on the shared primary** — `git checkout <sha>`,
    `checkout FETCH_HEAD`, or `switch --detach` that strands the human's shared checkout off its
-   branch. The guard is scoped to the primary checkout (`git-dir == git-common-dir`); a linked
-   worktree's own detach remains allowed. Symbolic HEAD retargets and attached commits paired with
-   a branch update are also allowed across Git's differing transaction representations.
+   branch. The guard is scoped to the transaction that **writes the shared checkout's own `HEAD`**,
+   which is not the same as the transaction a primary-checkout *caller* started: `git worktree add
+   --detach` runs from the primary but writes the **new** worktree's HEAD, so it is allowed, as is a
+   linked worktree's own later detach. Creating or detaching a linked worktree is the normal state
+   for review worktrees and strands nobody. A detach Git performs as a step of a multi-step operation
+   it is itself driving — `rebase`, `pull --rebase`, `bisect` — is likewise allowed: Git reattaches
+   the shared HEAD in the same command, so nothing is stranded. Symbolic HEAD retargets and attached
+   commits paired with a branch update are also allowed across Git's differing transaction
+   representations.
 
 **Why this is a Git hook, not an agent hook.** `worktree-guard` regulates managed agent tool calls.
 Git's transaction boundary also sees a human shell, raw `git update-ref`, another hook, and every
@@ -500,12 +506,36 @@ Safe by construction (the pure `ref-guard.ts` decides; `command.ts` only gathers
 
 - Updates outside the resolved primary ref are untouched. A delete of the primary is refused; a
   same-value write is allowed (a standstill moves nothing — git validates an asserted old value
-  before the hook fires, and an unasserted one arrives zero-filled and stays on the strict path);
-  an equal-tip or provable fast-forward is allowed; an identified primary divergence, including an
-  unprovable ancestry probe, is refused.
+  before the hook fires); an equal-tip or provable fast-forward is allowed; an identified primary
+  divergence, including an unprovable ancestry probe, is refused.
+- A standstill is measured against the **ref store** as well as against the caller's assertion,
+  because the two disagree. `git pack-refs` — so `git gc`, so the `gc --auto` inside
+  `commit`/`fetch`/`merge`/`pull` — migrates a loose ref into `packed-refs` by writing it at its own
+  current value with a **zero-filled** old value, which passes the asserted-old-value rung above and,
+  on a primary that is merely *behind* its comparison ref, reads as a rewrite one rung down. So a
+  write whose new oid already equals what the ref resolves to is allowed on that ground alone.
 - A missing comparison ref allows a non-delete update: a fresh clone has no remote tip from which
   to diverge. An unresolvable primary branch is a no-op rather than an implicit `main`/`origin`
   assumption.
+- The HEAD rung fires only when the **value Git has staged for the shared checkout's own `HEAD`** is
+  this transaction's. Git reports a linked worktree's HEAD write with the same refname, the same
+  zero-filled old value, and the same environment as the primary's, so no fact about the *caller*
+  separates them; a ref lives in exactly one store, the primary's rooted at `$GIT_COMMON_DIR` and a
+  linked worktree's at `$GIT_COMMON_DIR/worktrees/<name>`, so the store is what does. Under the
+  `files` backend the guard **reads** `$GIT_COMMON_DIR/HEAD.lock` rather than stat-ing it: mere
+  existence is the wrong question, because Git holds that lock for every write that dereferences
+  through HEAD — `commit`, `reset --hard`, `stash push` — and a stale one outlives any interrupted
+  Git, either of which would refuse an unrelated `worktree add --detach` all over again. Git writes
+  the pending value into the lock before renaming it over `HEAD`, so requiring it to equal the new
+  oid on stdin scopes the fact to this transaction; the residual overlap is a concurrent primary
+  detach to the very same oid, which fails closed. Under `reftable` there is no per-ref lock or
+  staged value, only a whole-stack lock every ref write from any worktree takes, so there the rung
+  fires when the shared stack is locked and no linked worktree's is — which at worst stands down
+  while a linked worktree happens to be writing. The backend is read from the store's shape rather
+  than `git rev-parse --show-ref-format` (Git >= 2.45).
+- A *same-value* HEAD write is **not** excused as it is on the branch rung above: `git update-ref
+  --no-deref HEAD <oid> <oid>` reports the resolved oid as its old value and still detaches an
+  attached primary.
 - The command uses a dedicated refusal exit code (`3`). The installed wrapper turns only that code
   into a Git abort; missing Node, an unpacked toolkit, or another runtime failure fails open and
   cannot wedge every ref transaction in the repository.
@@ -523,8 +553,8 @@ pipeline cli ref-guard status
 The installer writes only an empty hook slot or an exact prior managed hook. It refuses a foreign or
 modified `reference-transaction` hook, never changes `core.hooksPath` or global Git configuration,
 and removes only its exact wrapper through `pipeline cli ref-guard uninstall`. The shared hook
-location covers the primary checkout and linked worktrees, while the runtime preserves their distinct
-HEAD contexts.
+location covers the primary checkout and linked worktrees, and the runtime keeps their HEADs
+distinct by the value staged in the shared ref store, not by which checkout invoked Git.
 
 Git passes `<old> <new> <ref>` lines on stdin and honors a refusal only in `prepared`; `committed`
 and `aborted` drain/no-op. The manual shape is:
