@@ -70,6 +70,47 @@ describe("acceptanceCriteria", () => {
 	it("is case-insensitive on the heading", () => {
 		expect(acceptanceCriteria("## ACCEPTANCE CRITERIA\n- [ ] x")).toEqual(["x"]);
 	});
+
+	it("folds a wrapped criterion back into one, rather than truncating it", () => {
+		// The defect: only the first line was captured, so a reviewer graded half a sentence with
+		// nothing to indicate the rest existed. Reproduced from issue #44's real body.
+		const b = [
+			"## Acceptance criteria",
+			"",
+			"- [ ] a child with no acceptance criterion, no spec section, or no story trace is refused, each with",
+			"      its own exit code",
+			"- [ ] filing the same child twice reuses the first rather than creating a twin",
+		].join("\n");
+		expect(acceptanceCriteria(b)).toEqual([
+			"a child with no acceptance criterion, no spec section, or no story trace is refused, each with its own exit code",
+			"filing the same child twice reuses the first rather than creating a twin",
+		]);
+	});
+
+	it("folds a criterion wrapped across three lines", () => {
+		const b = "## Acceptance criteria\n- [ ] one\n  two\n  three\n";
+		expect(acceptanceCriteria(b)).toEqual(["one two three"]);
+	});
+
+	it("does not fold a following paragraph separated by a blank line", () => {
+		// A blank line ends the item, exactly as the renderer reads it.
+		const b = "## Acceptance criteria\n- [ ] the criterion\n\nAn unrelated note.\n";
+		expect(acceptanceCriteria(b)).toEqual(["the criterion"]);
+	});
+
+	it("does not fold prose that precedes the first item", () => {
+		const b = "## Acceptance criteria\n\nSome framing.\n\n- [ ] the real one\n";
+		expect(acceptanceCriteria(b)).toEqual(["the real one"]);
+	});
+
+	it("does not fold a sub-heading into the criterion above it", () => {
+		const b = "## Acceptance criteria\n- [ ] the criterion\n### Notes\nprose\n";
+		expect(acceptanceCriteria(b)).toEqual(["the criterion"]);
+	});
+
+	it("still drops an item whose text is empty even after folding", () => {
+		expect(acceptanceCriteria("## Acceptance criteria\n- [ ] \n\n- [ ] real\n")).toEqual(["real"]);
+	});
 });
 
 describe("renderBrief", () => {
