@@ -127,11 +127,16 @@ SKILL.md carries — not the verbs.
 
 **Never put a set inside the skill directory** (ADR 0001). Installing a skill is linking its
 directory, so a set inside one is installed with it, and a graded run handed the skill can read the
-assertions it is about to be graded against — measured: a spawned run read one unprompted. The
-separation is enforced, not asked for: `evals-placement.test.ts` fails on any `evals.json` reachable
-from the skill tree, including a symlinked one.
+assertions it is about to be graded against — measured: a spawned run read one unprompted.
 
-Three rules, the first structural and the other two learned the hard way:
+The separation is enforced, not asked for: `evals-placement.test.ts` fails on any `evals.json`
+**inside the repository** that is reachable from the skill tree, whether it was authored there, or
+reached through a symlinked file or a symlinked directory. A link whose target lies *outside* the
+repository is not caught — the walk drops out-of-root targets by design — so it is worth saying
+plainly that the guard bounds the repository's own content and not the filesystem a grading run
+happens to sit on (#103).
+
+Then two rules learned the hard way:
 
 **An eval must separate the arms.** A repo whose ambient guidance already states the behavior would
 satisfy a naive assertion in both arms, grading the repo instead of the skill. Read each assertion
