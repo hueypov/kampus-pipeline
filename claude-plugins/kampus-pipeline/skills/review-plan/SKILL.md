@@ -195,6 +195,12 @@ Given an epic number it fetches the `EpicLedger` via the `Github` capability, ru
 FAIL verdict and flips **nothing**. It returns a structured `GateVerdict`
 (`{_tag: "pass", flipped}` or `{_tag: "fail", defects, signature}`).
 
+**Through the CLI, that verdict is the exit status**: 0 on a clean ledger, **14** (`GATE_FAIL`) on
+≥1 hard defect — for the real run and `--dry-run` alike. Both branches used to exit 0 and report the
+FAIL on stdout only, so `$GATE <n> && next-step` ran `next-step` on a failing gate. Branch on the
+status; the defect list on stdout tells you what to fix. If you are calling `runGate` in-process
+rather than through the CLI, the `GateVerdict` `_tag` is the same answer.
+
 **Guarded-emit scope note (the emit-side mandate, gh-issue-intake-formats.md).** Unlike the four
 PR gates, `review-plan` **never hand-posts** its verdict comment: `runGate` emits it deterministically
 through the `epic-ledger` action's `Github` capability, so there is no free-form `gh api …/comments` /
