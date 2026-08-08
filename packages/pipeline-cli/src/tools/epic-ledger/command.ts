@@ -16,6 +16,7 @@
  */
 import {Console, Effect} from "effect";
 import {Argument, Command, Flag} from "effect/unstable/cli";
+import * as Exit from "../../exit-codes.ts";
 import type {Defect} from "./Defect.ts";
 import {runGate} from "./gate.ts";
 import {Github, GithubLive} from "./github.ts";
@@ -30,6 +31,21 @@ const printDefects = (defects: ReadonlyArray<Defect>) =>
 		concurrency: 1,
 		discard: true,
 	});
+
+/**
+ * Fail the gate through the exit status, which is the only channel a caller can branch on.
+ *
+ * Both branches printed `✗ … FAIL` and exited 0, so `epic-ledger 39 && release-the-lock` released
+ * the lock on a failing gate and `plan-epic`'s SKILL.md carried a prose warning — "do not chain it"
+ * — standing in for the missing code. Everywhere else in this toolkit the exit status is the answer
+ * and stdout is commentary; `ship-it check` exits 11 rather than printing a refusal and exiting 0.
+ *
+ * This applies to the real run too, not only `--dry-run`. The argument for leaving that one at 0 was
+ * that the label flip is the outcome — but the flip is not something the chaining caller can see, so
+ * "FAIL, nothing flipped" and "PASS, flipped three" were the same observation to it. One defect, two
+ * branches.
+ */
+const failGate = Effect.sync(() => process.exit(Exit.GATE_FAIL));
 
 const epicArg = Argument.integer("epic").pipe(
 	Argument.withDescription("the epic issue number whose ledger to gate"),
@@ -64,7 +80,7 @@ export const epicLedgerCommand = Command.make(
 
 			yield* Console.log(`✗ epic #${epic} — FAIL (${defects.length} hard defect(s)) [dry-run]`);
 			yield* printDefects(defects);
-			return;
+			return yield* failGate;
 		}
 
 		const verdict = yield* runGate(epic);
@@ -80,6 +96,7 @@ export const epicLedgerCommand = Command.make(
 		);
 		yield* printDefects(verdict.defects);
 		yield* Console.log(`  signature: ${verdict.signature}`);
+		return yield* failGate;
 	}),
 ).pipe(
 	Command.withDescription("Run the review-plan structural gate over an epic's ledger"),
