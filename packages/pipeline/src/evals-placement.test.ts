@@ -66,6 +66,29 @@ describe("ADR 0001 — no eval set inside a skill directory", () => {
 		]);
 	});
 
+	it("does NOT catch a link whose target escapes the repository — the documented bound (#103)", () => {
+		// A characterization test, not an endorsement. `collectPayloadFiles` drops out-of-root targets
+		// by design — correct for the payload audit it was written for (#36), where an escape is
+		// genuinely not payload — and this guard inherits that. The link still resolves and the file
+		// is still readable, so on the grading machine the exposure is real; #103 carries the question.
+		//
+		// It is pinned so the limitation cannot drift away from the sentence that states it: whoever
+		// closes #103 reds this test, and the same commit has to update authoring-conventions.md §7.
+		// A disclosed hole that nothing asserts is a sentence waiting to become false.
+		scratch = mkdtempSync(join(tmpdir(), "evals-placement-escape-"));
+		const outside = mkdtempSync(join(tmpdir(), "evals-placement-outside-"));
+		try {
+			const skill = join(scratch, SKILLS_ROOT, "report");
+			mkdirSync(skill, {recursive: true});
+			writeFileSync(join(skill, "SKILL.md"), "---\nname: report\n---\n");
+			writeFileSync(join(outside, "evals.json"), '{"skill_name":"report","evals":[]}');
+			symlinkSync(join(outside, "evals.json"), join(skill, "evals.json"));
+			assert.deepStrictEqual(evalSetsReachableFromSkills(scratch), []);
+		} finally {
+			rmSync(outside, {recursive: true, force: true});
+		}
+	});
+
 	it("does not flag a file that merely ends in evals.json", () => {
 		// Review measured the false red: the filter was a suffix test, so `not-evals.json` inside a
 		// skill was reported as a violation. Nothing about ADR 0001 forbids that file.
