@@ -1,0 +1,76 @@
+{
+	"skill_name": "review-code",
+	"notes": "Grades the JUDGMENT layer of skills/review-code/SKILL.md — specifically the run-don't-read discipline, which exists because one authoring session produced nine false claims and every one was caught by a reviewer who executed the check instead of trusting the sentence. Same two authoring rules as the other sets:\n\n1. An assertion must SEPARATE the arms. A run with no skill loaded will still 'review carefully'; what it will not reliably do is run the new tests against the parent commit, treat an unmoved suite total as evidence of absent tests, or classify the diff before choosing a verdict namespace. Every assertion names one of those skill-carried moves or a judgment the ambient context does not reach. This repository tracks no CLAUDE.md, so the ambient confound is small, but the assertions are written as if it existed.\n\n2. A prompt must be plain task text — never a /review-code invocation, or the without-skill arm cannot run — and its premise must be true or unverifiable. These prompts describe synthetic PRs whose facts are stated in the prompt itself, so the run cannot refute them against the tree.\n\nCases 1–3 are the three real misses from the session that earned the discipline section, restated as scenarios. Case 4 is the false-refusal direction. Case 5 is the wrong-namespace defect behind #60.",
+	"evals": [
+		{
+			"id": 1,
+			"name": "a-suite-total-that-did-not-move-is-treated-as-absent-tests",
+			"grounding": "SKILL.md 'The discipline — run, don't read': a suite count that did not move did not run; the PR body is a claim under review, not context.",
+			"prompt": "Review PR #83. Its body says it adds an unwind guard for half-launched panes plus six unit tests pinning the cleanup calls, with a table describing each test. CI is green. The full suite on this branch reports 1443 tests; the same suite on main also reports 1443.",
+			"expected_output": "A FAIL (or blocking finding) stating the claimed tests are not in the commit, derived from the unmoved suite total and confirmed by listing the PR's changed files — not a PASS on the strength of green CI and a persuasive table.",
+			"files": [],
+			"assertions": [
+				"Treats the identical suite totals as evidence the claimed tests are absent, not as a passing detail",
+				"Confirms by listing the diff's actual files rather than accepting the body's table",
+				"Does NOT pass the PR on green CI alone",
+				"The verdict names the specific claimed-but-absent tests so the author can act"
+			]
+		},
+		{
+			"id": 2,
+			"name": "a-new-test-that-passes-against-the-parent-pins-nothing",
+			"grounding": "SKILL.md 'The discipline': a new test must fail against the parent commit — a test asserting the absence of a call that never existed stays green over the very bug it was written for.",
+			"prompt": "Review PR #84. It fixes a resource-cleanup bug and adds five tests. Running the PR's new test file against the parent commit, every one of the five passes there too.",
+			"expected_output": "The run performs (or explicitly demands) the parent-commit check, concludes the five tests pin nothing about the fix, and blocks on that — naming which cases are vacuous and what observable each should assert instead.",
+			"files": [],
+			"assertions": [
+				"Runs or demands the new tests against the parent commit, not only against the PR head",
+				"Concludes that new tests passing on the parent pin nothing",
+				"Blocks the PR on the vacuous tests rather than noting them as advisory",
+				"Names which cases are vacuous rather than reporting 'weak tests' generically",
+				"Does NOT rewrite the tests itself — the finding goes to the author"
+			]
+		},
+		{
+			"id": 3,
+			"name": "the-diff-the-api-serves-outranks-the-diff-the-body-describes",
+			"grounding": "SKILL.md 'The discipline': the PR body is a claim under review — including when the diff the API serves is not the diff the body describes.",
+			"prompt": "Review PR #85. The body describes an extracted helper function and a six-case test table. Fetching the diff shows exactly one changed file, and the helper's name appears nowhere in the repository.",
+			"expected_output": "The divergence between narrative and diff is itself reported as a blocking finding; the review grades only what the API serves.",
+			"files": [],
+			"assertions": [
+				"Grades the diff the API serves, not the body's description of it",
+				"Reports the body/diff divergence explicitly as a finding rather than silently reviewing what exists",
+				"Does NOT credit any acceptance criterion on the strength of the body's table alone"
+			]
+		},
+		{
+			"id": 4,
+			"name": "a-guard-is-attacked-in-the-direction-its-author-did-not-test",
+			"grounding": "SKILL.md 'The discipline': attack both failure directions — a guard that refuses legitimate work breaks the pipeline as surely as one that passes defects. And: distrust your own probe.",
+			"prompt": "Review PR #86, which adds a guard that refuses unknown CLI verb paths before the framework runs. Its test file covers eleven invalid invocations, all refused correctly. The repository's CLI has several verbs taking variadic file operands and several boolean flags.",
+			"expected_output": "The run executes a sweep of legitimate invocations — variadic operands, flags with values, help forms — hunting false refusals, and treats a single false refusal as blocking even though the defect direction is fully covered. A surprising probe result is re-verified before being reported.",
+			"files": [],
+			"assertions": [
+				"Executes legitimate invocations against the guard rather than only reading the walk",
+				"The sweep includes variadic-operand forms",
+				"The sweep includes flag-carrying forms, not only bare verbs",
+				"Treats one false refusal of legitimate work as blocking despite full coverage of the invalid direction",
+				"Re-verifies its own probe before reporting a refusal that surprises it"
+			]
+		},
+		{
+			"id": 5,
+			"name": "the-verdict-lands-in-the-namespace-the-diff-requires",
+			"grounding": "SKILL.md step 4, the pre-post checks: classify the diff and post in every namespace it requires; verify the authenticated identity is not the author. The defect class behind #60 — two merges carried a verdict in a namespace their diffs did not require.",
+			"prompt": "Review PR #87. Its changed files are a skill's SKILL.md under claude-plugins and one file under docs/. You have most recently been reviewing code diffs.",
+			"expected_output": "Before posting, the run classifies the changed paths, finds the diff requires the skill and doc namespaces rather than code, and posts there; it also checks which identity is authenticated before posting.",
+			"files": [],
+			"assertions": [
+				"Runs the classifier over the changed paths before choosing a verdict namespace",
+				"Posts in the namespace(s) the diff classifies to, not review-code by habit",
+				"Checks the authenticated login against the PR author before posting, rather than trusting a flag"
+			]
+		}
+	]
+}
