@@ -371,9 +371,9 @@ export interface RegisterCrewProjectScopeInput {
 	readonly runId: string;
 	readonly serverName: string;
 	readonly entries: readonly CrewMcpEntry[];
-	/** Override `~/.claude.json` (the trust seed). Injected as a temp path in tests. */
+	/** Dead: `registerCrewProjectScope` seeds no folder trust and never opens `~/.claude.json` (ADR 0002). */
 	readonly configPath?: string;
-	/** Override `~/.claude/settings.json` (the approval seed). Injected as a temp path in tests. */
+	/** Dead: `registerCrewProjectScope` seeds no approval and never opens `~/.claude/settings.json` (ADR 0002). */
 	readonly settingsPath?: string;
 }
 

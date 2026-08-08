@@ -86,18 +86,42 @@ still without diagnosing infra yourself.
 
 A permanent absence and the boot window are indistinguishable from a seat, so the re-check above
 can only ever end in "wait more or report". **One** bounded command separates them, and it is the
-only infra call this doc sanctions:
+only infra call this doc sanctions.
+
+Your session's channel server runs as
+`<node> <…>/bin.ts session --role <role> --project-root <root> [--instance <id>]`. **Probe for your
+own seat, not for your role.** `--role` and `--project-root` are shared: the engine pool runs at
+`roles.engineering-manager.count` = 3, so a role-keyed probe run by a channel-less engine matches a
+healthy sibling and tells you to keep waiting for a connect that is never coming. Only `--instance`
+is unique.
+
+You can recover your own instance id without asking anyone: your pane's launch cwd is
+`<repo>/.claude/crew-run/<run id>/<pane label>`, and for an engine that last segment **is** the
+`--instance` id the launcher baked into your argv.
+
+**As an engine** (`engineering-manager` — the only role that runs at count > 1):
+
+```
+pgrep -f "instance $(basename "$PWD")"
+```
+
+**As a bridge** (chief-of-staff, cartographer, intake-desk — one seat each, and no `--instance` in
+their argv at all), your role is already unique, so match on it:
 
 ```
 pgrep -f "session --role <your role>"
 ```
 
-Your session's channel server runs as `<node> <…>/bin.ts session --role <your role> …`. A match
-means a server exists and the toolset is genuinely mid-connect — re-check as above. **No match
-means no server was ever started for your session, and none will be**: the channel is gated on host
-state read once at your pane's boot, so nothing arrives later and further waiting is pure cost. Run
-this probe once, act on the answer, and stop — reading crew-mcp source is still the ~44k-token burn
-this document exists to prevent.
+A match means your own server process exists and the toolset is genuinely mid-connect — re-check as
+above. **No match means no server was ever started for your session, and none will be**: the channel
+is gated on host state read once at your pane's boot, so nothing arrives later and further waiting is
+pure cost.
+
+One caveat, stated so you can trust the answer: if you have moved out of your launch cwd, the engine
+probe's `basename "$PWD"` is no longer your instance id and the probe returns no match. That errs
+toward "report", never toward waiting forever, so still act on it as a no-match — but say which
+directory you ran it from. Run this probe once, act on the answer, and stop — reading crew-mcp source
+is still the ~44k-token burn this document exists to prevent.
 
 On no match, report it and then **carry on over the board**. Everything a channel-less seat needs
 is already board-visible: an engine posts its lane as the issue assignee plus a claim comment naming
