@@ -98,7 +98,7 @@ export const decodeEpicLedger = (input: unknown): Effect.Effect<EpicLedger, Sche
 
 /** A `gh` invocation exited non-zero (auth, not-found, rate-limit, …). */
 export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
-	"@kampus/epic-ledger/GhCommandError",
+	"epic-ledger/GhCommandError",
 	{
 		args: Schema.Array(Schema.String),
 		exitCode: Schema.Number,
@@ -108,7 +108,7 @@ export class GhCommandError extends Schema.TaggedErrorClass<GhCommandError>()(
 
 /** `gh` output was not the JSON the loader expected. */
 export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
-	"@kampus/epic-ledger/GhParseError",
+	"epic-ledger/GhParseError",
 	{
 		args: Schema.Array(Schema.String),
 		message: Schema.String,
@@ -117,7 +117,7 @@ export class GhParseError extends Schema.TaggedErrorClass<GhParseError>()(
 
 /** No `owner/name` target repo could be resolved (no env override, no current repo). */
 export class RepoResolutionError extends Schema.TaggedErrorClass<RepoResolutionError>()(
-	"@kampus/epic-ledger/RepoResolutionError",
+	"epic-ledger/RepoResolutionError",
 	{
 		message: Schema.String,
 	},
@@ -192,7 +192,7 @@ const resolveRepo = Effect.fn("Github.resolveRepo")(function* () {
 		".nameWithOwner",
 	]).pipe(
 		Effect.map((out) => out.trim()),
-		Effect.catchTag("@kampus/epic-ledger/GhCommandError", () => Effect.succeed("")),
+		Effect.catchTag("epic-ledger/GhCommandError", () => Effect.succeed("")),
 	);
 	if (REPO_RE.test(viewed)) {
 		return viewed;
@@ -293,7 +293,7 @@ export class Github extends Context.Service<
 			epicNumber: number,
 		) => Effect.Effect<void, RepoResolutionError | GhCommandError>;
 	}
->()("@kampus/epic-ledger/Github") {}
+>()("epic-ledger/Github") {}
 
 const json = Effect.fn("Github.json")(function* (args: ReadonlyArray<string>) {
 	return yield* parseJson(args, yield* runGh(args));
@@ -311,7 +311,7 @@ const is404 = (stderr: string): boolean => /404|not found/i.test(stderr);
 const issueExists = Effect.fn("Github.issueExists")(function* (repo: string, n: number) {
 	return yield* runGh(issueArgs(repo, n)).pipe(
 		Effect.as(true),
-		Effect.catchTag("@kampus/epic-ledger/GhCommandError", (error) =>
+		Effect.catchTag("epic-ledger/GhCommandError", (error) =>
 			is404(error.stderr) ? Effect.succeed(false) : Effect.fail(error),
 		),
 	);
@@ -349,7 +349,7 @@ const resolveExternalRefs = Effect.fn("Github.resolveExternalRefs")(function* (
 const cycleDocPresent = Effect.fn("Github.cycleDocPresent")(function* (repo: string) {
 	return yield* runGh(cycleDocArgs(repo)).pipe(
 		Effect.as(true),
-		Effect.catchTag("@kampus/epic-ledger/GhCommandError", (error) =>
+		Effect.catchTag("epic-ledger/GhCommandError", (error) =>
 			is404(error.stderr) ? Effect.succeed(false) : Effect.fail(error),
 		),
 	);

@@ -53,13 +53,13 @@ describe("MACHINE_LOCAL_PATH_PATTERNS — home/absolute arm", () => {
 
 describe("TEMP_PATH_PATTERNS — fail-close on ANY bare /tmp (no carve-out, #3492 Option 1)", () => {
 	it("flags the socket glob (#3492 — the fix is emit-side, the guard stays strict)", () => {
-		assert.isTrue(hitsTemp("the inbox is /tmp/kampus-crew-inbox-*.sock"));
+		assert.isTrue(hitsTemp("the inbox is /tmp/pipeline-crew-inbox-*.sock"));
 		assert.isTrue(hitsTemp("bind /tmp/some-service-*.sock for the fan-out"));
 	});
 	it("flags a concrete /tmp/<name> scratch path", () => {
 		assert.isTrue(hitsTemp("staged at /tmp/alice-scratch/verdict.md"));
 		assert.isTrue(hitsTemp("wrote /tmp/write-code-progress.md"));
-		assert.isTrue(hitsTemp("bound /tmp/kampus-crew-inbox.sock"));
+		assert.isTrue(hitsTemp("bound /tmp/pipeline-crew-inbox.sock"));
 	});
 	it("flags the mktemp roots (/var/folders, /private/tmp)", () => {
 		assert.isTrue(hitsTemp("/var/folders/8f/T/tmp.abc"));

@@ -49,13 +49,13 @@ const classifyCmd = Command.make(
 		// null = a fail-closed branch already printed `pending`; every read fault folds to it, so
 		// an unresolvable repo / unreadable PR state can only ever keep the reconcile polling.
 		const signals = yield* (yield* Github).signals(pr, Option.getOrUndefined(repo)).pipe(
-			Effect.catchTag("@kampus/merge-queue-classify/RepoResolutionError", () =>
+			Effect.catchTag("merge-queue-classify/RepoResolutionError", () =>
 				Effect.as(pending("could not resolve repo — pending."), null),
 			),
 			Effect.catchTags({
-				"@kampus/merge-queue-classify/GhCommandError": () =>
+				"merge-queue-classify/GhCommandError": () =>
 					Effect.as(pending("could not read PR state — pending."), null),
-				"@kampus/merge-queue-classify/GhParseError": () =>
+				"merge-queue-classify/GhParseError": () =>
 					Effect.as(pending("could not read PR state — pending."), null),
 				SchemaError: () => Effect.as(pending("could not read PR state — pending."), null),
 			}),

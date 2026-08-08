@@ -68,11 +68,11 @@ const dryRunFlag = Flag.boolean("dry-run").pipe(
  * the epic's children" be acted on as "the epic has no children".
  */
 const unreadable = (verb: string, what: string) => ({
-	"@kampus/gh-io/GhCommandError": () =>
+	"gh-io/GhCommandError": () =>
 		refuse(verb, `could not read ${what} — the read failed, so the answer is UNKNOWN`, Exit.PRECONDITION_UNKNOWN),
-	"@kampus/gh-io/GhParseError": () =>
+	"gh-io/GhParseError": () =>
 		refuse(verb, `could not parse ${what} — the answer is UNKNOWN`, Exit.PRECONDITION_UNKNOWN),
-	"@kampus/gh-io/RepoResolutionError": () =>
+	"gh-io/RepoResolutionError": () =>
 		refuse(verb, `target repo unresolved — ${what} is UNKNOWN`, Exit.PRECONDITION_UNKNOWN),
 	SchemaError: () =>
 		refuse(verb, `${what} did not decode — the answer is UNKNOWN`, Exit.PRECONDITION_UNKNOWN),
@@ -80,9 +80,9 @@ const unreadable = (verb: string, what: string) => ({
 
 /** The same set, routed to WRITE_UNKNOWN: a write whose outcome could not be read is not a failure. */
 const unconfirmed = (verb: string, what: string) => ({
-	"@kampus/gh-io/GhCommandError": () => refuse(verb, `${what} — the outcome is UNKNOWN`, Exit.WRITE_UNKNOWN),
-	"@kampus/gh-io/GhParseError": () => refuse(verb, `${what} — the outcome is UNKNOWN`, Exit.WRITE_UNKNOWN),
-	"@kampus/gh-io/RepoResolutionError": () => refuse(verb, `${what} — the outcome is UNKNOWN`, Exit.WRITE_UNKNOWN),
+	"gh-io/GhCommandError": () => refuse(verb, `${what} — the outcome is UNKNOWN`, Exit.WRITE_UNKNOWN),
+	"gh-io/GhParseError": () => refuse(verb, `${what} — the outcome is UNKNOWN`, Exit.WRITE_UNKNOWN),
+	"gh-io/RepoResolutionError": () => refuse(verb, `${what} — the outcome is UNKNOWN`, Exit.WRITE_UNKNOWN),
 	SchemaError: () => refuse(verb, `${what} — the outcome is UNKNOWN`, Exit.WRITE_UNKNOWN),
 });
 
@@ -185,7 +185,7 @@ const child = Command.make(
 		const filed = `filed #${created.target} and the link is UNKNOWN. The issue EXISTS — re-running is safe (create-once matches on the title) and will retry the link`;
 		yield* tracker.linkSubIssue(epic, created.target).pipe(
 			Effect.catchTags({
-				"@kampus/tracker/TrackerVerifyError": (e: {readonly message: string}) =>
+				"tracker/TrackerVerifyError": (e: {readonly message: string}) =>
 					refuse(
 						"child",
 						`filed #${created.target} and ${e.message}. The issue EXISTS — re-running is safe (create-once matches on the title) and will retry the link.`,

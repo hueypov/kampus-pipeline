@@ -281,8 +281,8 @@ const postVerdict = Command.make(
 			.pipe(
 				// A malformed judgment (unknown gate, unbindable/non-40-hex @ <sha>, a leaked local path)
 				// and a failed post-write self-verify both fail loud, never a false success.
-				Effect.catchTag("@kampus/tracker/TrackerInputError", (error) => backOff(error.message)),
-				Effect.catchTag("@kampus/tracker/TrackerVerifyError", (error) => backOff(error.message)),
+				Effect.catchTag("tracker/TrackerInputError", (error) => backOff(error.message)),
+				Effect.catchTag("tracker/TrackerVerifyError", (error) => backOff(error.message)),
 			);
 		yield* reportVerdict(target, posted);
 	}),
@@ -324,7 +324,7 @@ const graduate = Command.make(
 		});
 		const result = yield* (yield* Tracker).graduate(target, judgment).pipe(
 			// A close that did not land `state=closed` fails loud, never a false graduation.
-			Effect.catchTag("@kampus/tracker/TrackerVerifyError", (error) => backOff(error.message)),
+			Effect.catchTag("tracker/TrackerVerifyError", (error) => backOff(error.message)),
 		);
 		yield* reportGraduated(target, result);
 	}),

@@ -8,8 +8,8 @@
  * catchable, so the bin can print a remediation instead of a raw stack. Keeping
  * the wiring here (not in `bin.ts`) keeps that boundary clean.
  *
- * Wired per effect-smol's CLI guidance (mirrors `@kampus/decisions-index` /
- * `@kampus/epic-ledger`): `effect/unstable/cli` for the typed subcommands, the
+ * Wired per effect-smol's CLI guidance (mirrors `decisions-index` /
+ * `epic-ledger`): `effect/unstable/cli` for the typed subcommands, the
  * Node platform over `NodeServices.layer`, run via `NodeRuntime.runMain`.
  */
 import {NodeRuntime, NodeServices} from "@effect/platform-node";

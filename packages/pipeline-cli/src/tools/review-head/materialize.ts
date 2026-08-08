@@ -41,13 +41,13 @@ import {
 
 /** The PR could not be resolved to a bindable head (missing/closed PR, deleted/partial head SHA). */
 export class UnresolvableHeadError extends Schema.TaggedErrorClass<UnresolvableHeadError>()(
-	"@kampus/review-head/UnresolvableHeadError",
+	"review-head/UnresolvableHeadError",
 	{message: Schema.String},
 ) {}
 
 /** The fetched per-run ref did not resolve to the head SHA REST reported — a moved/raced head; abort rather than review the wrong tree. */
 export class HeadMismatchError extends Schema.TaggedErrorClass<HeadMismatchError>()(
-	"@kampus/review-head/HeadMismatchError",
+	"review-head/HeadMismatchError",
 	{message: Schema.String},
 ) {}
 
@@ -179,7 +179,7 @@ export class ReviewHead extends Context.Service<
 			| Schema.SchemaError
 		>;
 	}
->()("@kampus/review-head/ReviewHead") {}
+>()("review-head/ReviewHead") {}
 
 /**
  * The live `ReviewHead` layer. The `ChildProcessSpawner` dependency is captured once and provided

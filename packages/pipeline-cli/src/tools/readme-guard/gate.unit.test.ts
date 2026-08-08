@@ -31,7 +31,7 @@ const writeWorkspace = (globs: ReadonlyArray<string> = ["packages/*", "apps/*", 
 const mkPackage = (name: string, opts: {pkgJson?: boolean; readme?: boolean}) => {
 	const dir = join(root, "packages", name);
 	mkdirSync(dir, {recursive: true});
-	if (opts.pkgJson) writeFileSync(join(dir, "package.json"), `{"name":"@kampus/${name}"}`, "utf8");
+	if (opts.pkgJson) writeFileSync(join(dir, "package.json"), `{"name":"@acme/${name}"}`, "utf8");
 	if (opts.readme) writeFileSync(join(dir, "README.md"), `# ${name}\n`, "utf8");
 };
 

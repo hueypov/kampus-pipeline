@@ -1,5 +1,5 @@
 /**
- * `@kampus/structured-output-guard` core — the pure, IO-free decision that makes a
+ * `structured-output-guard` core — the pure, IO-free decision that makes a
  * subagent's final `StructuredOutput` call conform first-try and self-correct in one
  * retry on a miss (the originating work item, the originating initiative). Kills the mined ~55 schema-mismatch
  * subagent tool-errors with no model-behavior change.

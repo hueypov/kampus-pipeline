@@ -186,13 +186,13 @@ const merge = Command.make(
 			EXIT.MERGE_UNKNOWN,
 		);
 		const merged = yield* tracker.mergePullRequest(pr, method).pipe(
-			Effect.catchTag("@kampus/tracker/TrackerVerifyError", (e) =>
+			Effect.catchTag("tracker/TrackerVerifyError", (e) =>
 				exit("merge", `${e.message} — do not retry blindly, read the PR`, EXIT.MERGE_UNKNOWN),
 			),
 			Effect.catchTags({
-				"@kampus/gh-io/GhCommandError": () => unconfirmed,
-				"@kampus/gh-io/GhParseError": () => unconfirmed,
-				"@kampus/gh-io/RepoResolutionError": () => unconfirmed,
+				"gh-io/GhCommandError": () => unconfirmed,
+				"gh-io/GhParseError": () => unconfirmed,
+				"gh-io/RepoResolutionError": () => unconfirmed,
 			}),
 		);
 		yield* Console.log(`ship-it: merged #${pr} as ${merged.sha.slice(0, 7)}`);

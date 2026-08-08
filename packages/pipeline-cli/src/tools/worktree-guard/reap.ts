@@ -1,5 +1,5 @@
 /**
- * `@kampus/worktree-guard` reap-decision core — pure decision for the
+ * `worktree-guard` reap-decision core — pure decision for the
  * `SubagentStop` reaper that reclaims leaked agent worktrees (the originating work item).
  *
  * The load-bearing safety rule (MEMORY "Safe worktree prune", and the originating work item's AC): a

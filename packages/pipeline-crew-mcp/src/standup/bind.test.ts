@@ -68,8 +68,8 @@ describe("standup/bind — per-session bind constructor", () => {
 			Effect.gen(function* () {
 				const channels: ChannelConfig = {
 					mode: "allowlist",
-					servers: ["server:pipeline-crew", "plugin:kampus:sozluk"],
-					allowedChannelPlugins: ["kampus"],
+					servers: ["server:pipeline-crew", "plugin:acme:sozluk"],
+					allowedChannelPlugins: ["acme"],
 				};
 				const bind = yield* build({
 					role: ROLE,
@@ -87,7 +87,7 @@ describe("standup/bind — per-session bind constructor", () => {
 				assert.deepStrictEqual(bind.channelArg, [
 					ALLOWLIST_CHANNEL_FLAG,
 					"server:pipeline-crew",
-					"plugin:kampus:sozluk",
+					"plugin:acme:sozluk",
 				]);
 
 				// AC2: the argv boots the role persona (--plugin-dir + --agent, the role-persona rule: launch each pane with the crew plugin and its crew-role agent definition), registers the channel,
@@ -100,7 +100,7 @@ describe("standup/bind — per-session bind constructor", () => {
 					`crew-${ROLE}`,
 					ALLOWLIST_CHANNEL_FLAG,
 					"server:pipeline-crew",
-					"plugin:kampus:sozluk",
+					"plugin:acme:sozluk",
 					NAME_FLAG,
 					ROLE,
 					BOOT_PROMPT,
@@ -562,7 +562,7 @@ describe("standup/bind — per-session bind constructor", () => {
 			const channels: ChannelConfig = {
 				mode: "allowlist",
 				servers: ["server:pipeline-crew", "plugin:untrusted:evil"],
-				allowedChannelPlugins: ["kampus"],
+				allowedChannelPlugins: ["acme"],
 			};
 			const error = yield* build({
 				role: ROLE,
@@ -574,7 +574,7 @@ describe("standup/bind — per-session bind constructor", () => {
 			assert.instanceOf(error, ChannelPluginNotAllowedError);
 			assert.strictEqual(error.plugin, "untrusted");
 			assert.strictEqual(error.ref, "plugin:untrusted:evil");
-			assert.deepStrictEqual([...error.allowedChannelPlugins], ["kampus"]);
+			assert.deepStrictEqual([...error.allowedChannelPlugins], ["acme"]);
 		}),
 	);
 });

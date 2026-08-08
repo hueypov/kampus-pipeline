@@ -77,8 +77,8 @@ describe("findCrewLeaks — match classes", () => {
 				"ops+ci@mail.example.co.uk",
 			);
 		});
-		it("does NOT flag an npm scope (@kampus) or a fictional handle (@robin)", () => {
-			expect(classes(findCrewLeaks("install pipeline-crew@kampus"))).not.toContain("email");
+		it("does NOT flag an npm scope (@acme) or a fictional handle (@robin)", () => {
+			expect(classes(findCrewLeaks("install pipeline-crew@acme"))).not.toContain("email");
 			expect(classes(findCrewLeaks('"handle": "@robin"'))).not.toContain("email");
 		});
 	});
