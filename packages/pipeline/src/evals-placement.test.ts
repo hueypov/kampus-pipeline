@@ -66,6 +66,16 @@ describe("ADR 0001 — no eval set inside a skill directory", () => {
 		]);
 	});
 
+	it("does not flag a file that merely ends in evals.json", () => {
+		// Review measured the false red: the filter was a suffix test, so `not-evals.json` inside a
+		// skill was reported as a violation. Nothing about ADR 0001 forbids that file.
+		const root = build("none");
+		const dir = join(root, SKILLS_ROOT, "report");
+		writeFileSync(join(dir, "not-evals.json"), "{}");
+		writeFileSync(join(dir, "sample-evals.json"), "{}");
+		assert.deepStrictEqual(evalSetsReachableFromSkills(root), []);
+	});
+
 	it("this repository has no eval set inside a skill directory", () => {
 		// The assertion ADR 0001 exists for, against the real tree. It reds on the pre-move tree —
 		// five findings — so it is not a test that could only ever pass.

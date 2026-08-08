@@ -21,6 +21,7 @@
  * same semantics that made it the fix for #36, for the same reason.
  */
 import {realpathSync} from "node:fs";
+import {basename} from "node:path";
 import {collectPayloadFiles} from "./portable-files.ts";
 
 /** The tree a skill is installed from; anything here is installed when the skill is linked. */
@@ -48,7 +49,11 @@ export const evalSetsReachableFromSkills = (root: string): ReadonlyArray<string>
 	// reported findings whose paths were sliced mid-string.
 	const real = realpathSync(root);
 	return collectPayloadFiles(root, SKILLS_ROOT)
-		.filter((absolute) => absolute.endsWith("evals.json"))
+		// Whole filename, not a suffix: `endsWith("evals.json")` also matched `not-evals.json` and
+		// `sample-evals.json`, which are not eval sets. A false red is safer than a false green, but
+		// it is not harmless — a guard that refuses something legitimate is a guard someone edits to
+		// make their build pass, and then it is weaker for the real case too.
+		.filter((absolute) => basename(absolute) === "evals.json")
 		.map((absolute) => absolute.slice(real.length + 1))
 		.sort();
 };
