@@ -44,12 +44,17 @@ const issue = (number: number, body: string, labels: ReadonlyArray<string>) => (
 /**
  * A ledger that validates clean, verified by running the gate against it rather than by assuming.
  *
- * Every part of both bodies is load-bearing and each was added because the gate refused without it:
- * the epic needs `### User stories` (a `**Stories:**` field is the CHILD's form and leaves the epic
- * MISSING_STORIES_SECTION) and a `## Dependencies` section listing the child under a `### Phase`
- * heading (a bare mermaid block parses to zero nodes, so the child reads as an ORPHAN_CHILD); the
- * child needs an `### Acceptance criteria` checkbox, a `**Stories:**` ref, and a `**Containment:**`
- * marker.
+ * Nearly every part of both bodies is load-bearing, each verified by knocking it out and watching
+ * the named defect fire: the epic needs `### User stories` (a `**Stories:**` field is the CHILD's
+ * form and leaves the epic MISSING_STORIES_SECTION) and a `## Dependencies` section listing the
+ * child under a `### Phase` heading (a bare mermaid block parses to zero nodes, so the child reads
+ * as an ORPHAN_CHILD, and dropping the section entirely is MISSING_DEPS_SECTION); the child needs an
+ * `### Acceptance criteria` checkbox (ZERO_AC), a `**Stories:**` ref (MISSING_STORY +
+ * UNCOVERED_STORY) and its labels (MISSING_LABEL).
+ *
+ * The exception is `**Containment:** exempt`, which review measured as NOT load-bearing here: the
+ * shim 404s the cycle doc, so `MISSING_CONTAINMENT` no-ops and removing the line still passes. It is
+ * kept because it is what a real child body carries, but it is documentation, not an assertion.
  */
 const CLEAN = {
 	100: issue(100, "### User stories\n\n1. the one story\n\n## Dependencies\n\n### Phase 1\n\n- #101 — the one child\n", [
@@ -189,10 +194,31 @@ process.exit(64);
 		assert.strictEqual(code, 0);
 	}, 60_000);
 
-	it("an unanticipated gh request refuses rather than grading a partial ledger", async () => {
-		// Pins the shim's own honesty: if a future change makes the gate call something this file
-		// does not serve, these tests must fail rather than silently grade less than they claim to.
+	it("an epic the fixture does not contain refuses rather than grading an empty ledger", async () => {
+		// This exercises the shim's 404 branch, NOT its unhandled-request fallthrough — review proved
+		// the difference by neutering the fallthrough to an empty success and watching all five
+		// witnesses stay green. The name says what it checks now.
 		const {code} = await run(clean, ["999", "--dry-run"]);
 		assert.notStrictEqual(code, 0, "a ledger the shim cannot serve must not read as a clean gate");
 	}, 60_000);
+
+	it("the shim refuses any request it was not built to answer", async () => {
+		// The fallthrough, pinned directly, because no gate invocation reaches it. It is what stops a
+		// future `gh` call this fixture does not serve from being answered with an empty success and
+		// quietly grading a ledger with a hole in it — so if it stops refusing, this must red.
+		const {code} = await new Promise<RunResult>((resolve) => {
+			execFile(
+				join(dir, "clean", "gh"),
+				["api", "repos/fixture/repo/pulls/1"],
+				(error, stdout, stderr) => {
+					const c =
+						error && typeof (error as {code?: unknown}).code === "number"
+							? (error as {code: number}).code
+							: 0;
+					resolve({code: c, stdout, stderr});
+				},
+			);
+		});
+		assert.strictEqual(code, 64, "an unserved request must refuse, never return an empty success");
+	}, 30_000);
 });
