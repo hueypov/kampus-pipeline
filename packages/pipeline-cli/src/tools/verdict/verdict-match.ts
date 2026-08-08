@@ -115,10 +115,19 @@ export const isBoundToHead = (sha: string | null | undefined, head: string): boo
 	return a.startsWith(b) || b.startsWith(a);
 };
 
-/** The resolved verdict for a (PR, gate) — exactly one of four states against the current head. */
+/** The resolved verdict for a (PR, gate) — exactly one of five states against the current head. */
 export type VerdictOutcome =
 	/** No authorized PASS/FAIL marker exists in this namespace (or the authorized set was empty). */
 	| {readonly _tag: "none"}
+	/**
+	 * The only marker in this namespace was posted by the PR's own author — inert, never a gate.
+	 *
+	 * Distinguished from `none` because the two look identical to a machine and opposite to a human:
+	 * the PR visibly carries a PASS, so "never gated" reads as a bug in the reader rather than as the
+	 * refusal it is. Carries no polarity on purpose — a self-issued marker has no verdict weight to
+	 * report, whichever way it points (#135).
+	 */
+	| {readonly _tag: "self-verdict"; readonly commentId: number; readonly author: string}
 	/** The latest authorized marker carries no `@ <sha>` (a pre-0058 legacy marker) — refuse. */
 	| {readonly _tag: "sha-less"; readonly commentId: number; readonly polarity: Polarity}
 	/** The latest authorized marker is bound to a different (stale) head — refuse. */
@@ -143,32 +152,59 @@ export interface ResolveVerdictInput {
 	readonly gate: VerdictGate;
 	/** The PR's current head SHA every verdict must be bound to (the SHA-bound, one-verdict-per-gate contract rule 3). */
 	readonly headSha: string;
+	/**
+	 * The PR's own author login — the split-role firewall's read-side input (V5, #135). Empty means
+	 * it could not be established, which resolves NO verdict rather than crediting one.
+	 */
+	readonly prAuthor: string;
 }
+
+const sameLogin = (a: string, b: string): boolean =>
+	a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /**
  * Resolve the (PR, gate) verdict against the current head, re-encoding the SHA-bound, one-verdict-per-gate contract rule 3
- * exactly: author-gate to write+ collaborators (a forged marker is invisible), keep only
- * PASS/FAIL markers in this namespace, take the **newest** by `(createdAt, id)` (latest-wins,
- * so a newer FAIL vetoes an older PASS and a re-review overwrites), then classify by the
- * SHA-staleness test — `current` iff its `@ <sha>` prefix-matches the head, else `stale`;
- * `sha-less` when the newest marker carries no `@ <sha>`; `none` when the authorized candidate
- * set is empty. Fail-closed everywhere: an empty authorized set is `none`, never a false win.
+ * exactly: author-gate to write+ collaborators (a forged marker is invisible), drop any marker the
+ * PR's own author posted (V5 — a self-issued verdict is not a gate), keep only PASS/FAIL markers in
+ * this namespace, take the **newest** by `(createdAt, id)` (latest-wins, so a newer FAIL vetoes an
+ * older PASS and a re-review overwrites), then classify by the SHA-staleness test — `current` iff
+ * its `@ <sha>` prefix-matches the head, else `stale`; `sha-less` when the newest marker carries no
+ * `@ <sha>`; `self-verdict` when the namespace holds nothing but the author's own marker; `none`
+ * when the authorized candidate set is empty. Fail-closed everywhere: an empty authorized set is
+ * `none`, never a false win.
+ *
+ * The V5 drop lives HERE, on the read, rather than only in `verdict post`'s `identityCheck`, because
+ * a guard that sits only on one emit path is enforced by whoever remembers to use that path — and
+ * the shipped reviewer agent card did not, so self-issued PASS verdicts accumulated on live PRs
+ * while the firewall was "present and fail-closed" (#135). A marker the reader refuses to count has
+ * no bypass to document: hand-rolling it, or posting it from an unguarded harness, buys nothing.
  */
 export const resolveVerdict = (input: ResolveVerdictInput): VerdictOutcome => {
 	const authorized = new Set(input.authorizedAuthors);
 	const re = polarityRe(input.gate);
-	const candidates = input.comments.filter(
+	// An unestablished PR author cannot be told apart from an independent reviewer, so no marker can
+	// be credited: the read fails closed rather than resolving a verdict it could not attribute.
+	if (input.prAuthor.trim() === "") return {_tag: "none"};
+	const inNamespace = input.comments.filter(
 		(comment) => authorized.has(comment.author) && re.test(comment.body),
 	);
-	candidates.sort((a, b) =>
-		a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id - b.id,
-	);
+	const byRecency = (a: VerdictComment, b: VerdictComment): number =>
+		a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id - b.id;
+	const candidates = inNamespace
+		.filter((comment) => !sameLogin(comment.author, input.prAuthor))
+		.sort(byRecency);
 	const latest = candidates[candidates.length - 1];
 	// `latest` is absent only for an empty candidate set, and `parseVerdict` is null only for a
 	// non-PASS/FAIL body — but polarityRe already filtered candidates to PASS/FAIL markers, so both
-	// guards collapse to the same fail-closed `none` (no consumable verdict in this namespace).
+	// guards collapse to the same fail-closed outcome (no consumable verdict in this namespace).
 	const parsed = latest ? parseVerdict(latest.body, input.gate) : null;
-	if (latest === undefined || parsed === null) return {_tag: "none"};
+	if (latest === undefined || parsed === null) {
+		const own = inNamespace.filter((comment) => sameLogin(comment.author, input.prAuthor)).sort(byRecency);
+		const ownLatest = own[own.length - 1];
+		return ownLatest === undefined
+			? {_tag: "none"}
+			: {_tag: "self-verdict", commentId: ownLatest.id, author: ownLatest.author};
+	}
 	if (parsed.sha === null) {
 		return {_tag: "sha-less", commentId: latest.id, polarity: parsed.polarity};
 	}
@@ -195,6 +231,8 @@ export const outcomeReason = (outcome: VerdictOutcome, expect: Polarity): string
 	switch (outcome._tag) {
 		case "none":
 			return "no authorized verdict in this namespace";
+		case "self-verdict":
+			return `ungated: the only verdict in this namespace was posted by the PR's own author (${outcome.author}) — an author may not gate their own work (V5)`;
 		case "sha-less":
 			return "unverified (verdict not bound to current head): latest marker is SHA-less (pre-0058)";
 		case "stale":
