@@ -87,6 +87,43 @@ labels, boards, or approval policy are implied.
 pnpm pipeline cli <tool> ...
 ```
 
+## Self-hosting (this repository)
+
+This repository runs the pipeline on itself. Instead of a pinned submodule,
+`.pipeline/toolkit` is a relative symlink back to the repository root, so every
+consumer-shaped path — hooks, skills, managed links, `pnpm pipeline` — resolves
+through it to the live working tree:
+
+```bash
+# From the repository root. The link target resolves relative to `.pipeline/`,
+# so the repository root is `..`, not `../..`.
+mkdir -p .pipeline && ln -s .. .pipeline/toolkit
+git add .pipeline/toolkit
+git commit -m "Self-host the pipeline toolkit"
+./bin/pipeline init
+```
+
+Committing the symlink is part of the bootstrap, not an optional tidy-up. Git
+tracks it as a symlink, so every linked worktree checks it out, and `..`
+resolves to that worktree's own live tree. An untracked symlink is absent from
+every worktree — and with no `.gitmodules` there is no submodule for the
+worktree-create hook to initialize instead — so the toolkit's own
+agent-worktree workflow would find no pipeline at all. For the same reason,
+commit the surfaces `init` materializes (`.pipeline/pipeline.json`,
+`.claude/settings.json`, the managed links, the `pipeline` script in
+`package.json`), exactly as adopters commit theirs, so `pipeline check` holds
+inside a fresh worktree too.
+
+Initialization installs the full consumer payload — agents, skills, hooks, and
+the document surfaces — with no self-host-only minimal mode. The submodule
+assertion is the one check that does not apply, because a repository cannot be
+its own submodule; everything else behaves exactly as in an adopter. The
+optional workflow templates are never materialized here: `pipeline enable`
+refuses them, `init`/`sync` refuse a policy that enables one, and `check`
+reports an enabled one as drift — a consumer-shaped workflow in this repository
+would test a checkout of itself, green and confirming nothing. This
+repository's build signal is `.github/workflows/ci.yml`.
+
 ## Clone an adopting repository
 
 When cloning a repository that already uses this toolkit, clone its pinned

@@ -1,7 +1,7 @@
 import {execFileSync, spawnSync} from "node:child_process";
-import {chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
+import {chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {basename, join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
 import {CORE_AGENT_NAMES, CORE_SKILL_NAMES, CORE_WORKFLOW_SUPPORT_FILES} from "./payload.ts";
 
@@ -20,11 +20,10 @@ const command = (cwd: string, args: string[], path: string) =>
 		env: {...process.env, PATH: `${path}:${process.env.PATH}`},
 	});
 
-const fixture = (): {consumer: string; mockBin: string} => {
+const toolkitFixture = (): {root: string; toolkit: string; mockBin: string} => {
 	const root = mkdtempSync(join(tmpdir(), "pipeline-init-"));
 	roots.push(root);
 	const toolkit = join(root, "toolkit-source");
-	const consumer = join(root, "consumer");
 	const mockBin = join(root, "mock-bin");
 	mkdirSync(mockBin, {recursive: true});
 	write(join(toolkit, "package.json"), '{"name":"fixture-toolkit","private":true,"type":"module"}\n');
@@ -70,6 +69,12 @@ const fixture = (): {consumer: string; mockBin: string} => {
 	execFileSync("git", ["config", "user.name", "fixture"], {cwd: toolkit});
 	execFileSync("git", ["add", "."], {cwd: toolkit});
 	execFileSync("git", ["commit", "-qm", "toolkit"], {cwd: toolkit});
+	return {root, toolkit, mockBin};
+};
+
+const fixture = (): {consumer: string; mockBin: string} => {
+	const {root, toolkit, mockBin} = toolkitFixture();
+	const consumer = join(root, "consumer");
 	mkdirSync(consumer);
 	execFileSync("git", ["init", "-q"], {cwd: consumer});
 	execFileSync("git", ["config", "user.email", "fixture@example.invalid"], {cwd: consumer});
@@ -294,6 +299,99 @@ describe("pipeline init", () => {
 		expect(result.stderr).toContain("refusing to replace existing .pipeline/workflow-catalog.json");
 		expect(readFileSync(join(consumer, ".pipeline/workflow-catalog.json"), "utf8")).toBe("adopter catalogue\n");
 	});
+
+	// Self-hosting: in the toolkit repository itself, `.pipeline/toolkit` is a symlink back to the
+	// repository root. A repository cannot be its own submodule, so the pinning probe is the one
+	// assertion init must skip there; everything else is the full consumer payload.
+	it("initializes the toolkit repository itself when .pipeline/toolkit points back at its root", () => {
+		const {toolkit, mockBin} = toolkitFixture();
+		mkdirSync(join(toolkit, ".pipeline"));
+		// The target resolves relative to `.pipeline/`, so the repository root is `..`, not `../..`.
+		symlinkSync("..", join(toolkit, ".pipeline/toolkit"), "dir");
+		expect(command(toolkit, ["init"], mockBin).status).toBe(0);
+		expect(existsSync(join(toolkit, ".pipeline/pipeline.json"))).toBe(true);
+		// Managed links keep the consumer-shaped lexical target and resolve through both hops:
+		// .claude/... -> ../../.pipeline/toolkit/... -> the live tree.
+		const reviewer = join(toolkit, ".claude/agents/reviewer.md");
+		expect(lstatSync(reviewer).isSymbolicLink()).toBe(true);
+		expect(readlinkSync(reviewer)).toBe("../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/reviewer.md");
+		expect(readFileSync(reviewer, "utf8")).toBe("# reviewer\n");
+		for (const skill of CORE_SKILL_NAMES) expect(existsSync(join(toolkit, ".claude/skills", skill))).toBe(true);
+		for (const file of CORE_WORKFLOW_SUPPORT_FILES) expect(existsSync(join(toolkit, ".claude/skills", file))).toBe(true);
+		expect(readFileSync(join(toolkit, "CLAUDE.md"), "utf8")).toBe("# Fixture guidance\n");
+		// `cli` forwarding resolved the real tree through the symlink: init's ref-guard install
+		// reached the stub pipeline-cli, which logs beside the real bin/pipeline.
+		expect(readFileSync(join(toolkit, "bin/pipeline.calls"), "utf8")).toContain("ref-guard install");
+		// A consumer-shaped workflow in this repository would test a checkout of itself (#26).
+		for (const name of ["pipeline-verify", "pipeline-doc-safety", "pipeline-delivery-gate", "pipeline-gitleaks", "pipeline-doc-links", "pipeline-settings-env-guard", "pipeline-unresolved-threads"]) {
+			expect(existsSync(join(toolkit, `.github/workflows/${name}.yml`))).toBe(false);
+		}
+		expect(command(toolkit, ["init", "--check"], mockBin).status).toBe(0);
+		expect(JSON.parse(command(toolkit, ["status", "--json"], mockBin).stdout)).toMatchObject({ok: true});
+		// `enable` refuses before touching the policy, so nothing is queued for a later `sync`.
+		const enable = command(toolkit, ["enable", "pipeline-gitleaks"], mockBin);
+		expect(enable.status).toBe(1);
+		expect(enable.stderr).toContain("this repository hosts the toolkit itself");
+		expect(existsSync(join(toolkit, ".github/workflows/pipeline-gitleaks.yml"))).toBe(false);
+		expect(readFileSync(join(toolkit, ".pipeline/optional-workflow-policy.json"), "utf8")).toBe('{"schemaVersion":1,"workflows":{}}\n');
+		expect(command(toolkit, ["init", "--check"], mockBin).status).toBe(0);
+		// The policy file is plain JSON, and hand-edit-then-`sync` is the supported flow exercised
+		// above for consumers — so the refusal must guard the materialization site, not just `enable`.
+		writeFileSync(
+			join(toolkit, ".pipeline/optional-workflow-policy.json"),
+			'{"schemaVersion":1,"workflows":{"pipeline-gitleaks":{"enabled":true}}}\n',
+		);
+		const sync = command(toolkit, ["sync"], mockBin);
+		expect(sync.status).toBe(1);
+		expect(sync.stderr).toContain("this repository hosts the toolkit itself");
+		expect(existsSync(join(toolkit, ".github/workflows/pipeline-gitleaks.yml"))).toBe(false);
+		// And `check` reds on the enabled flag itself: the state cannot sit green while violating #26.
+		const checkResult = command(toolkit, ["init", "--check"], mockBin);
+		expect(checkResult.status).toBe(1);
+		expect(checkResult.stderr).toContain("consumer-shaped workflow is enabled in the self-hosted toolkit repository: pipeline-gitleaks");
+		writeFileSync(join(toolkit, ".pipeline/optional-workflow-policy.json"), '{"schemaVersion":1,"workflows":{}}\n');
+		expect(command(toolkit, ["init", "--check"], mockBin).status).toBe(0);
+	}, 30_000);
+
+	it("still refuses a toolkit directory that is neither a submodule nor the repository itself", () => {
+		const {root, toolkit, mockBin} = toolkitFixture();
+		const consumer = join(root, "consumer");
+		mkdirSync(consumer);
+		execFileSync("git", ["init", "-q"], {cwd: consumer});
+		execFileSync("git", ["config", "user.email", "fixture@example.invalid"], {cwd: consumer});
+		execFileSync("git", ["config", "user.name", "fixture"], {cwd: consumer});
+		write(join(consumer, "README.md"), "# Consumer\n");
+		execFileSync("git", ["add", "."], {cwd: consumer});
+		execFileSync("git", ["commit", "-qm", "base"], {cwd: consumer});
+		// A plain copy passes every structural existence check while being neither pinned nor the
+		// repository itself — the self-host seam must not have widened what the probe accepts.
+		cpSync(toolkit, join(consumer, ".pipeline/toolkit"), {recursive: true, filter: (source) => basename(source) !== ".git"});
+		const result = command(consumer, ["init"], mockBin);
+		expect(result.status).toBe(1);
+		expect(result.stderr).toContain(".pipeline/toolkit must be an initialized Git submodule");
+		// A symlink that resolves somewhere OTHER than the repository root is the discriminating
+		// case: symlink-ness alone must not select the self-host seam — only a toolkit that IS the
+		// project root does — or any adopter could unpin with `ln -s ../../some-checkout`.
+		rmSync(join(consumer, ".pipeline/toolkit"), {recursive: true, force: true});
+		symlinkSync(join("..", "..", "toolkit-source"), join(consumer, ".pipeline/toolkit"), "dir");
+		const linked = command(consumer, ["init"], mockBin);
+		expect(linked.status).toBe(1);
+		expect(linked.stderr).toContain(".pipeline/toolkit must be an initialized Git submodule");
+	}, 20_000);
+
+	it("refuses to treat a consumer's pinned checkout as self-hosted even with the self symlink present", () => {
+		const {consumer, mockBin} = fixture();
+		// Committing the self symlink ships it inside every pin, where it points at the pin's own
+		// root — realpath equality alone cannot tell that apart from the toolkit repository. Running
+		// init from inside the pin must stay a hard failure, not a payload written into the pinned
+		// tree; the superproject probe is what discriminates.
+		const pin = join(consumer, ".pipeline/toolkit");
+		mkdirSync(join(pin, ".pipeline"));
+		symlinkSync("..", join(pin, ".pipeline/toolkit"), "dir");
+		const result = command(pin, ["init"], mockBin);
+		expect(result.status).toBe(1);
+		expect(result.stderr).toContain(".pipeline/toolkit must be an initialized Git submodule");
+	}, 20_000);
 
 	it("installs an explicit shared pre-commit wrapper and blocks only exit 3", () => {
 		const {consumer, mockBin} = fixture();

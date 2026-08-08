@@ -44,6 +44,15 @@ The command that owns this setup is:
 - **Pinned upgrades.** A consumer updates the submodule commit deliberately,
   commits that pointer, and runs `pipeline sync`. Nothing silently updates from
   a remote registry or branch.
+- **Self-hosting exception.** In this repository itself, `.pipeline/toolkit` is
+  a relative symlink to the repository root rather than a pinned submodule: the
+  toolkit runs its own development on the live working tree, with the full
+  consumer payload and no minimal mode. Only the submodule assertion is skipped,
+  and the consumer-shaped CI workflow templates are never materialized here —
+  they would test a checkout of itself (#26): `enable` refuses, `init`/`sync`
+  refuse a policy that enables one, and `check` reports the enabled flag as
+  drift. The symlink and the materialized surfaces are committed, so linked
+  worktrees carry their own live toolkit. Consumers remain pinned.
 - **Preserve consumer ownership.** Initialization merges pipeline-owned hooks
   into existing `.claude/settings.json`, records managed links in
   `.pipeline/pipeline.json`, and refuses to overwrite unknown files. `--force`

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import {spawnSync} from "node:child_process";
-import {chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
+import {chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {basename, dirname, join, relative, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {CORE_AGENT_NAMES, CORE_AGENT_SKILL_NAMES, CORE_SKILL_DEPENDENCIES, CORE_SKILL_NAMES, CORE_WORKFLOW_SUPPORT_FILES, renderWorkflowCatalog} from "./payload.ts";
@@ -87,6 +87,24 @@ const findProjectRoot = (requested?: string): string => {
 
 const toolkitRootFor = (projectRoot: string): string => resolve(projectRoot, TOOLKIT_RELATIVE_PATH);
 
+/**
+ * Whether `.pipeline/toolkit` is the repository itself rather than a pinned copy. In the toolkit
+ * repository, the path is a symlink back to its own root, so the live working tree serves as its
+ * own toolkit — the one layout where a submodule cannot exist, because a repository cannot be its
+ * own submodule. Both sides are realpathed: `git rev-parse` reports physical paths while the
+ * toolkit path is a lexical join, and on macOS even the temp directory is itself a symlink.
+ */
+const isSelfHostedToolkit = (projectRoot: string): boolean => {
+	const toolkit = toolkitRootFor(projectRoot);
+	if (!existsSync(toolkit) || realpathSync(toolkit) !== realpathSync(projectRoot)) return false;
+	// The committed symlink ships inside every consumer's pinned checkout, where it points at that
+	// checkout's own root — the same realpath shape. Only a repository that is nobody's submodule
+	// is the toolkit hosting itself; `init` run from inside an adopter's pin must keep hard-failing
+	// rather than writing the payload into the pinned tree.
+	const superproject = spawnSync("git", ["rev-parse", "--show-superproject-working-tree"], {cwd: projectRoot, encoding: "utf8"});
+	return superproject.status === 0 && superproject.stdout.trim() === "";
+};
+
 const assertToolkit = (projectRoot: string): string => {
 	const toolkit = toolkitRootFor(projectRoot);
 	if (!existsSync(join(toolkit, "package.json"))) fail(`missing initialized toolkit at ${TOOLKIT_RELATIVE_PATH}`);
@@ -102,6 +120,11 @@ const assertToolkit = (projectRoot: string): string => {
 	for (const template of GITHUB_WORKFLOW_TEMPLATES) {
 		if (!existsSync(join(toolkit, template.source))) fail(`toolkit is missing ${template.source}`);
 	}
+	// Self-hosting: every structural check above resolved through the symlink to the live tree, and
+	// only the pinning probe below cannot hold. The LEXICAL path is returned on purpose — managed
+	// link targets and `check`'s expectations are computed from it, and a realpath here would drift
+	// every one of them.
+	if (isSelfHostedToolkit(projectRoot)) return toolkit;
 	const submodule = spawnSync("git", ["submodule", "status", "--", TOOLKIT_RELATIVE_PATH], {
 		cwd: projectRoot,
 		encoding: "utf8",
@@ -816,6 +839,15 @@ const check = (projectRoot: string): string[] => {
 	} catch {
 		errors.push("missing or invalid .pipeline/optional-workflow-policy.json");
 	}
+	// The refusal `init` enforces, reported as drift: under self-host an enabled consumer-shaped
+	// workflow can never be reconciled (#26), so the flag itself is the error. The resolved set is
+	// then emptied — a materialized copy reds below as installed without valid enablement.
+	if (enabledWorkflowFiles.size > 0 && isSelfHostedToolkit(projectRoot)) {
+		for (const name of enabledWorkflowFiles) {
+			errors.push(`consumer-shaped workflow is enabled in the self-hosted toolkit repository: ${name} (#26)`);
+		}
+		enabledWorkflowFiles = new Set();
+	}
 	if (!Array.isArray(config.managedPaths) || !config.managedPaths.length) {
 		errors.push("pipeline config has no managed paths");
 	} else {
@@ -925,6 +957,13 @@ const init = (args: string[]): void => {
 	const workflowCatalog = linkManagedFile(projectRoot, toolkitRoot, WORKFLOW_CATALOG_RELATIVE_PATH, WORKFLOW_CATALOG_CONSUMER_PATH, force, prior);
 	const optionalWorkflowPolicy = readOptionalWorkflowPolicy(projectRoot);
 	const enabledWorkflowFiles = enabledWorkflowFileNames(optionalWorkflowPolicy);
+	// `enable` refuses under self-host before touching the policy, but the policy is plain JSON and
+	// hand-edit-then-`sync` is a supported flow — so the refusal also guards the materialization
+	// site itself. A consumer-shaped workflow in this repository would gate a checkout of itself —
+	// green, and confirming nothing (#26).
+	if (enabledWorkflowFiles.size > 0 && isSelfHostedToolkit(projectRoot)) {
+		fail(`cannot materialize workflow(s) ${Array.from(enabledWorkflowFiles).join(", ")}: the optional workflows are consumer-shaped, and this repository hosts the toolkit itself (#26); disable them in .pipeline/optional-workflow-policy.json`);
+	}
 	// Opt-in only. A workflow the adopter did not ask for becomes a required check they did not
 	// choose, and a red one blocks the merge gate over something that is not their change (#32).
 	const githubWorkflows = GITHUB_WORKFLOW_TEMPLATES.flatMap((template) => {
@@ -979,6 +1018,11 @@ const enable = (args: string[]): void => {
 		fail(`workflow is not optional or does not exist: ${workflow}`);
 	}
 	const projectRoot = findProjectRoot(requested);
+	// The optional workflows are consumer-shaped: they pin `.pipeline/toolkit` in CI and gate the
+	// pull request on it. In the self-hosted toolkit repository that gates a checkout of itself —
+	// green, and confirming nothing (#26) — so the refusal lands before the policy is touched,
+	// leaving nothing behind for a later `sync` to materialize.
+	if (isSelfHostedToolkit(projectRoot)) fail(`cannot enable ${workflow}: the optional workflows are consumer-shaped, and this repository hosts the toolkit itself (#26)`);
 	const policy = readOptionalWorkflowPolicy(projectRoot);
 	policy.workflows[workflow] = {...policy.workflows[workflow], enabled: true};
 	writeJson(join(projectRoot, ".pipeline/optional-workflow-policy.json"), policy);
