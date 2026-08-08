@@ -1,1 +1,1 @@
-../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/coder.md
+../../.pipeline/toolkit/claude-plugins/pipeline/agents/coder.md

@@ -3,7 +3,7 @@
  * the repo's milestone projection over `gh api` REST, so the pure core can validate
  * ROADMAP.md against it. Same service pattern as `campaign`'s `Github` (the originating initiative): a
  * `Context.Service` on `ChildProcessSpawner`, REST only (GraphQL is broken on the
- * kamp-us org), every infra failure a typed error in the `E` channel, untrusted REST
+ * target org), every infra failure a typed error in the `E` channel, untrusted REST
  * JSON Schema-decoded at the boundary into the domain `Milestone` the core resolves over.
  */
 import {Context, Effect, Layer, Stream} from "effect";

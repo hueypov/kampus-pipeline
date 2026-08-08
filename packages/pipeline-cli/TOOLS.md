@@ -75,7 +75,7 @@ node packages/pipeline-cli/src/bin.ts <tool> …
 
 ### `gh-compat` — repository-configured GitHub CLI compatibility and corpus lint
 
-The generic successor to the source-specific `gh-phoenix` package. It preserves the original
+The generic successor to a source-specific predecessor package. It preserves the original
 two independent capabilities without imposing a GitHub-provider limitation on every adopter:
 
 - **`gh-compat lint-skills <file>...`** validates strict YAML frontmatter in scoped skill and
@@ -747,7 +747,7 @@ The machine-readable substrate the `wayfinder` skill's fog-graduation and emissi
 read instead of prose-guessing a map's state. A `wayfinder:map` issue is the ideation-layer
 map that sits upstream of the execution pipeline; its body carries four canonical sections
 (`## Destination` / `## Decisions-so-far` / `## Open frontier` / `## Graduated fog`), defined
-once in the [formats contract](../../claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md).
+once in the [formats contract](../../claude-plugins/pipeline/skills/gh-issue-intake-formats.md).
 This tool parses that body into `{destination, decisionsSoFar, openFrontier, graduatedFog}`,
 validates it against a structural floor (the epic-ledger idiom: a closed defect enum, sorted
 deterministically), and exposes a **graduation-readiness** predicate — is the open frontier

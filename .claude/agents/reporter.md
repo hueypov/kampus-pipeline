@@ -1,1 +1,1 @@
-../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/reporter.md
+../../.pipeline/toolkit/claude-plugins/pipeline/agents/reporter.md

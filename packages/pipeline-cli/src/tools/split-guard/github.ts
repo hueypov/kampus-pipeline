@@ -11,7 +11,7 @@
  * `status:needs-triage` (triage Step 3.3), so the queue is exactly where a fresh twin lives.
  *
  * Same service pattern as `intake-dedup` / `verdict` (the originating initiative): a `Context.Service` on
- * `ChildProcessSpawner`, REST only (GraphQL is broken on the kamp-us org), every infra failure a
+ * `ChildProcessSpawner`, REST only (GraphQL is broken on the target org), every infra failure a
  * typed error in the `E` channel, untrusted REST JSON Schema-decoded at the boundary.
  */
 import {Context, Effect, Layer, Stream} from "effect";

@@ -5,7 +5,7 @@
  *
  * This **template child** provides the `github.ts` service pattern later tool families
  * reuse: a `Context.Service` over `ChildProcessSpawner` (`effect/unstable/process`), REST only (GraphQL is broken on
- * the kamp-us org), with every infrastructure failure a typed error in the `E` channel, never a throw. A
+ * the target org), with every infrastructure failure a typed error in the `E` channel, never a throw. A
  * malformed `gh` output is `GhParseError`, an unresolvable target repo is
  * `RepoResolutionError`, and Schema decodes untrusted REST JSON at the boundary into the domain `ClaimComment` the core
  * resolves over.

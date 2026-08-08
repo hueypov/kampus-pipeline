@@ -2,7 +2,7 @@
  * The `gh api` REST boundary for `leak-guard scan-pr`: fetch a PR's landed comments — both the
  * issue conversation (where `review-*` verdict markers live) AND the inline review comments — so the
  * pure `scanPrComments` core can re-check them for machine-local path leaks. REST only (GraphQL is
- * broken on the kamp-us org); untrusted REST JSON is Schema-decoded at the boundary into the domain
+ * broken on the target org); untrusted REST JSON is Schema-decoded at the boundary into the domain
  * `PrComment` the core scans. See the originating work item.
  *
  * Same service shape as `verdict`'s `Github` (a `Context.Service` on `ChildProcessSpawner`, repo

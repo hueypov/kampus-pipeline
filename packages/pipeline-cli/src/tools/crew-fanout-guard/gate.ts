@@ -4,7 +4,7 @@
  * so it is crossable in unit tests over a fake repo dir rather than only by spawning the
  * bin (the core-in-its-own-file idiom).
  *
- * `checkCrewFanout` enumerates the two agent-def dirs (the kampus-pipeline roster + the
+ * `checkCrewFanout` enumerates the two agent-def dirs (the pipeline roster + the
  * pipeline-crew roster), parses each def's `name`/`disallowedTools`, resolves the three
  * bridge defs, and delegates the verdict to the pure core (`crew-fanout-guard.ts`). It
  * fails `CheckFailed` (exit non-zero) on any non-passing verdict — an uncovered agent-type,
@@ -36,7 +36,7 @@ export class CheckFailed extends Schema.TaggedErrorClass<CheckFailed>()("CheckFa
 
 /** The two agent-def dirs whose union is the crew's spawnable roster. */
 const AGENT_DIRS = [
-	"claude-plugins/kampus-pipeline/agents",
+	"claude-plugins/pipeline/agents",
 	"claude-plugins/pipeline-crew/agents",
 ] as const;
 

@@ -40,135 +40,135 @@
 		},
 		{
 			"path": ".pipeline/workflow-catalog.json",
-			"target": "toolkit/claude-plugins/kampus-pipeline/workflow-catalog.json"
+			"target": "toolkit/claude-plugins/pipeline/workflow-catalog.json"
 		},
 		{
 			"path": ".claude/agents/STANDING-INVARIANTS.md",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/STANDING-INVARIANTS.md"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/agents/STANDING-INVARIANTS.md"
 		},
 		{
 			"path": ".claude/agents/adr.md",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/adr.md"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/agents/adr.md"
 		},
 		{
 			"path": ".claude/agents/canon.md",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/canon.md"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/agents/canon.md"
 		},
 		{
 			"path": ".claude/agents/coder.md",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/coder.md"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/agents/coder.md"
 		},
 		{
 			"path": ".claude/agents/planner.md",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/planner.md"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/agents/planner.md"
 		},
 		{
 			"path": ".claude/agents/reporter.md",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/reporter.md"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/agents/reporter.md"
 		},
 		{
 			"path": ".claude/agents/reviewer.md",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/reviewer.md"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/agents/reviewer.md"
 		},
 		{
 			"path": ".claude/agents/shipper.md",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/shipper.md"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/agents/shipper.md"
 		},
 		{
 			"path": ".claude/agents/triager.md",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/triager.md"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/agents/triager.md"
 		},
 		{
 			"path": ".claude/skills/adr",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/adr"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/adr"
 		},
 		{
 			"path": ".claude/skills/architecture-audit",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/architecture-audit"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/architecture-audit"
 		},
 		{
 			"path": ".claude/skills/author-skill",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/author-skill"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/author-skill"
 		},
 		{
 			"path": ".claude/skills/canon",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/canon"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/canon"
 		},
 		{
 			"path": ".claude/skills/deslop-comments",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/deslop-comments"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/deslop-comments"
 		},
 		{
 			"path": ".claude/skills/diataxis",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/diataxis"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/diataxis"
 		},
 		{
 			"path": ".claude/skills/doctor",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/doctor"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/doctor"
 		},
 		{
 			"path": ".claude/skills/gh-issue-intake-formats.md",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/gh-issue-intake-formats.md"
 		},
 		{
 			"path": ".claude/skills/glossary",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/glossary"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/glossary"
 		},
 		{
 			"path": ".claude/skills/heal-ci",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/heal-ci"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/heal-ci"
 		},
 		{
 			"path": ".claude/skills/plan-epic",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/plan-epic"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/plan-epic"
 		},
 		{
 			"path": ".claude/skills/report",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/report"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/report"
 		},
 		{
 			"path": ".claude/skills/review-code",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/review-code"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/review-code"
 		},
 		{
 			"path": ".claude/skills/review-design",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/review-design"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/review-design"
 		},
 		{
 			"path": ".claude/skills/review-doc",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/review-doc"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/review-doc"
 		},
 		{
 			"path": ".claude/skills/review-plan",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/review-plan"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/review-plan"
 		},
 		{
 			"path": ".claude/skills/review-skill",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/review-skill"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/review-skill"
 		},
 		{
 			"path": ".claude/skills/review-trivial",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/review-trivial"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/review-trivial"
 		},
 		{
 			"path": ".claude/skills/ship-it",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/ship-it"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/ship-it"
 		},
 		{
 			"path": ".claude/skills/triage",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/triage"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/triage"
 		},
 		{
 			"path": ".claude/skills/wayfinder",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/wayfinder"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/wayfinder"
 		},
 		{
 			"path": ".claude/skills/write-code",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/write-code"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/write-code"
 		},
 		{
 			"path": ".claude/skills/writing-clearly-and-concisely",
-			"target": "../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/writing-clearly-and-concisely"
+			"target": "../../.pipeline/toolkit/claude-plugins/pipeline/skills/writing-clearly-and-concisely"
 		}
 	],
 	"managedHooks": {
@@ -178,7 +178,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/install.sh\"",
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/install.sh\"",
 						"timeout": 120
 					}
 				]
@@ -190,7 +190,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-guard pre-file\""
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/guard.sh worktree-guard pre-file\""
 					}
 				]
 			},
@@ -199,7 +199,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-guard pre-bash\""
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/guard.sh worktree-guard pre-bash\""
 					}
 				]
 			},
@@ -208,7 +208,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-guard pre-enter\""
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/guard.sh worktree-guard pre-enter\""
 					}
 				]
 			}
@@ -219,7 +219,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-guard reap\""
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/guard.sh worktree-guard reap\""
 					}
 				]
 			}
@@ -229,7 +229,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/create-worktree.sh\"",
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/create-worktree.sh\"",
 						"timeout": 600
 					}
 				]

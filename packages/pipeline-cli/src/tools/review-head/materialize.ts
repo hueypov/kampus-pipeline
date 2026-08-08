@@ -12,7 +12,7 @@
  *    per-run ref (never the launched tree), assert the fetched ref IS the resolved head SHA, and —
  *    with `--worktree` — add a throwaway DETACHED worktree on that ref (never a branch switch, §RO).
  *
- * REST only (GraphQL is broken on the kamp-us org); every infra failure is a typed error. The caller
+ * REST only (GraphQL is broken on the target org); every infra failure is a typed error. The caller
  * is responsible for the §RO-iso primary-checkout preflight BEFORE calling `materialize` — this verb
  * is the deterministic mechanism, not the isolation gate.
  */

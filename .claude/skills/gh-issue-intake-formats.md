@@ -1,1 +1,1 @@
-../../.pipeline/toolkit/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md
+../../.pipeline/toolkit/claude-plugins/pipeline/skills/gh-issue-intake-formats.md

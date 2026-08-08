@@ -2,7 +2,7 @@
  * The `ship-it` tool — `pipeline cli ship-it check` / `merge`.
  *
  * Implements the derived contract at
- * `claude-plugins/kampus-pipeline/skills/ship-it/contract.md`.
+ * `claude-plugins/pipeline/skills/ship-it/contract.md`.
  *
  * `merge` re-runs every precondition immediately before merging rather than trusting an earlier
  * `check`. The head can move in between, and a verdict bound to the old head is not a verdict — a

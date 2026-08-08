@@ -206,17 +206,17 @@ describe("standup/config — channel-ref grammar matches Claude Code 2.1.212", (
 	it.effect("accepts a plugin:<name>@<marketplace> ref under allowlist", () =>
 		Effect.gen(function* () {
 			const cfg = yield* decodeLaunchConfig(
-				{...validLaunch, channels: {...validLaunch.channels, servers: ["plugin:sozluk@acme"]}},
+				{...validLaunch, channels: {...validLaunch.channels, servers: ["plugin:notes@acme"]}},
 				DEFAULT_CONFIG_PATH,
 			);
-			assert.deepStrictEqual([...cfg.channels.servers], ["plugin:sozluk@acme"]);
+			assert.deepStrictEqual([...cfg.channels.servers], ["plugin:notes@acme"]);
 		}),
 	);
 	it.effect("rejects the old plugin:<plugin>:<server> shape", () =>
 		Effect.gen(function* () {
 			const err = yield* decodeErr({
 				...validLaunch,
-				channels: {...validLaunch.channels, servers: ["plugin:acme:sozluk"]},
+				channels: {...validLaunch.channels, servers: ["plugin:acme:notes"]},
 			});
 			assert.include(err.reason, "servers");
 		}),

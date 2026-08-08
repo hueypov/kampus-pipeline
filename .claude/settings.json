@@ -6,7 +6,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/install.sh\"",
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/install.sh\"",
 						"timeout": 120
 					}
 				]
@@ -18,7 +18,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-guard pre-file\""
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/guard.sh worktree-guard pre-file\""
 					}
 				]
 			},
@@ -27,7 +27,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-guard pre-bash\""
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/guard.sh worktree-guard pre-bash\""
 					}
 				]
 			},
@@ -36,7 +36,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-guard pre-enter\""
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/guard.sh worktree-guard pre-enter\""
 					}
 				]
 			}
@@ -47,7 +47,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-guard reap\""
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/guard.sh worktree-guard reap\""
 					}
 				]
 			}
@@ -57,7 +57,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/create-worktree.sh\"",
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/create-worktree.sh\"",
 						"timeout": 600
 					}
 				]

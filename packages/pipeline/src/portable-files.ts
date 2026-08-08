@@ -5,7 +5,7 @@
  * payload is what lives inside this repository, so the walk never leaves it.**
  *
  * A plain `readdirSync` + `statSync` recursion follows symlinks, and a symlink inside a payload
- * directory is almost never payload — it is local environment. The kampus toolkit's own install
+ * directory is almost never payload — it is local environment. The toolkit's own install
  * hook plants `.claude/.pipeline -> ~/.claude/plugins/cache/<...>` beside the directory a skill
  * runs from, so a walk that follows links reads an entire *other* copy of the pipeline and
  * attributes its contents to this repository. That is how the audit came to report 66 forbidden

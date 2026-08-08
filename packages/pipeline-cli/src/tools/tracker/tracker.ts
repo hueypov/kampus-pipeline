@@ -377,7 +377,7 @@ export type GraduateResult = {
 	readonly state: string;
 };
 
-// Tracker-specific REST arg builders — never GraphQL (broken on the kamp-us org). The generic
+// Tracker-specific REST arg builders — never GraphQL (broken on the target org). The generic
 // comment IO (list/post/patch/delete/get-body) and the `whoami` probe are the shared `gh-io.ts`
 // seam; only the create/label/close envelopes unique to the tracker's verbs live here.
 

@@ -2,7 +2,7 @@
  * The `report` tool — `pipeline-cli report dedup --query "<text>"`.
  *
  * Implements the derived contract at
- * `claude-plugins/kampus-pipeline/skills/report/contract.md`. All three verbs are live: `dedup`
+ * `claude-plugins/pipeline/skills/report/contract.md`. All three verbs are live: `dedup`
  * here, `file` and `note` in `./write.ts`.
  *
  * What this adds over `intake-dedup check`, whose ranking core it reuses rather than copies:

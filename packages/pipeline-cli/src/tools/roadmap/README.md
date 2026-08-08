@@ -66,5 +66,6 @@ target repo resolves per the repository-resolution contract §1: `CLAUDE_PIPELIN
 ## §CP
 
 This lands under `/packages/pipeline-cli/`, a control-plane surface per CODEOWNERS
-(`/packages/pipeline-cli/ @kamp-us/control-plane`, the enforcement-surface control-plane rule). Read-only-ness does not exempt it —
+(the enforcement-surface control-plane rule — the owner is whichever team the repository's own
+CODEOWNERS assigns to that path; no owner is baked in here). Read-only-ness does not exempt it —
 §CP is a path-based code-owner gate, so any PR touching this path merges via the §CP review path.

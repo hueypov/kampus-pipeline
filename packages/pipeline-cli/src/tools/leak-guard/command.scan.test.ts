@@ -67,7 +67,7 @@ describe("leak-guard scan CLI — exit-code contract (#332)", () => {
 
 	it("flags the leaking file among several clean ones", async () => {
 		const clean = write("ok.md", "no paths here");
-		const leaky = write("bad.md", "rebuilt from ~/code/github.com/kamp-us/kampus");
+		const leaky = write("bad.md", "rebuilt from ~/code/github.com/acme/toolkit");
 		const {code, stderr} = await runScan([clean, leaky]);
 		assert.strictEqual(code, 2);
 		assert.include(stderr, "~/code/");

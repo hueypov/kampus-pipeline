@@ -4,7 +4,7 @@
  * (the originating work item), driving the IO-free `classify` core.
  *
  * Same service pattern as `verdict/github.ts` / `epic-ledger/github.ts`: a
- * `Context.Service` over `ChildProcessSpawner`, `gh` REST only (GraphQL is broken on the kamp-us org),
+ * `Context.Service` over `ChildProcessSpawner`, `gh` REST only (GraphQL is broken on the target org),
  * typed infrastructure failures in the `E` channel (`GhCommandError` / `GhParseError` / `RepoResolutionError`),
  * and Schema-decoded untrusted JSON before it reaches the pure classifier. This replaces the prior `execFileSync` + swallowing
  * `catch { return null }` + unchecked `JSON.parse(...) as {…}` shell (the originating work item), so a fault surfaces

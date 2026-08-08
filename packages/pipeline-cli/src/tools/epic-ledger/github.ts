@@ -15,7 +15,7 @@
  *
  * The `Github` service is the IO shell over that boundary: a `Context.Service`
  * over `ChildProcessSpawner` (`effect/unstable/process`). It uses REST only, never GraphQL, which is broken on the
- * kamp-us org. Every infrastructure failure is a typed error in the `E` channel, never a throw: a
+ * target org. Every infrastructure failure is a typed error in the `E` channel, never a throw: a
  * malformed `gh` output is `GhParseError`, and a structurally-invalid REST shape is
  * Schema's `SchemaError`.
  */

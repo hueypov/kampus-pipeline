@@ -10,7 +10,7 @@
 				"label": {
 					"verdict": "PASS",
 					"acFindings": [
-						"Only claude-plugins/kampus-pipeline/agents/shipper.md added, matching the coder.md agent template",
+						"Only claude-plugins/pipeline/agents/shipper.md added, matching the coder.md agent template",
 						"Read-only tool scope (no Edit/Write) — a working-tree mutation is structurally unrepresentable",
 						"Refuses control-plane merges, as the shipper epic intends"
 					]
@@ -22,7 +22,7 @@
 				"label": {
 					"verdict": "FAIL",
 					"acFindings": [
-						"AC1 R2 bucket declared beside PhoenixDb but NOT provisioned — alchemy deploy fails Unauthorized in CI",
+						"AC1 R2 bucket declared beside AnalyticsDb but NOT provisioned — alchemy deploy fails Unauthorized in CI",
 						"deploy and integration-tests jobs are red — the central deliverable fails in CI",
 						"Conjunctive verdict: a red central deliverable forces FAIL despite passing typecheck/build/lint/unit"
 					]

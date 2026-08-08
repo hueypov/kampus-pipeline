@@ -2,7 +2,7 @@
  * The `review-code` tool — `pipeline cli review-code brief`.
  *
  * Implements the derived contract at
- * `claude-plugins/kampus-pipeline/skills/review-code/contract.md`.
+ * `claude-plugins/pipeline/skills/review-code/contract.md`.
  *
  * One verb, and that is the finding rather than an omission. `review-code` is the mirror of
  * `ship-it`: that stage is almost entirely fact, so nearly all of it became verbs; this one is

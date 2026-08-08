@@ -6,18 +6,18 @@ import {validateMap} from "./validate.ts";
 /** The #2421 §worked-example map verbatim — every list item wraps onto a continuation line. */
 const wrappedWorkedExample = [
 	"## Destination",
-	"kamp.us has a working invite (kefil) flow: an existing yazar can vouch a new person in, and",
-	"that person lands as a çaylak with a clear first-run path — no founder in the loop.",
+	"The product has a working invite (sponsor) flow: an existing member can vouch a new person in, and",
+	"that person lands as a newcomer with a clear first-run path — no founder in the loop.",
 	"",
 	"## Decisions-so-far",
-	"- Invites are karma-gated, not seat-gated — a yazar spends no quota, the çaylak's own karma",
+	"- Invites are karma-gated, not seat-gated — a member spends no quota, the newcomer's own karma",
 	"  ramp is the throttle. — from #101",
 	"- The invite artifact is a single-use signed link, not an in-app request/approve handshake. — from #102",
 	"",
 	"## Open frontier",
 	"- #103 — Investigation: does better-auth's session model let us mint a single-use invite token",
 	"  without a new table, or do we need an `invite` store of record?",
-	"- #104 — Decision (founder-decision-fork): should an invited çaylak start at 0 karma or inherit",
+	"- #104 — Decision (founder-decision-fork): should an invited newcomer start at 0 karma or inherit",
 	"  a small vouch-backed starting balance? (options + trade-offs surfaced; awaiting founder)",
 	"",
 	"## Graduated fog",
@@ -30,7 +30,7 @@ describe("parseMapBody — the four sections", () => {
 	it("parses the canonical map body into all four sections", () => {
 		const m = parseMapBody(cleanMapBody);
 		assert.strictEqual(m.destination.present, true);
-		assert.match(m.destination.text, /invite \(kefil\) flow/);
+		assert.match(m.destination.text, /invite \(sponsor\) flow/);
 		assert.strictEqual(m.decisionsSoFar.present, true);
 		assert.strictEqual(m.decisionsSoFar.entries.length, 2);
 		assert.strictEqual(m.openFrontier.present, true);
@@ -120,7 +120,7 @@ describe("parseMapBody — CHART-time seed attribution `— from #<MAP>` (#3405)
 			"A working invite flow.",
 			"",
 			"## Decisions-so-far",
-			"- The path is vouch-gated (kefil), not open signup — a founder given. — from #100 (@founder)",
+			"- The path is vouch-gated (sponsor), not open signup — a founder given. — from #100 (@founder)",
 			"- Invites are karma-gated. — from #101",
 			"",
 			"## Open frontier",

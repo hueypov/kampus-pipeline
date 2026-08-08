@@ -7,7 +7,7 @@ import type {WayfinderMap, WayfinderMapLedger} from "./Map.ts";
 
 /** A canonical, well-formed `wayfinder:map` body — the formats §worked-example shape. */
 export const cleanMapBody = `## Destination
-kamp.us has a working invite (kefil) flow: an existing yazar can vouch a new person in.
+The product has a working invite (sponsor) flow: an existing member can vouch a new person in.
 
 ## Decisions-so-far
 - Invites are karma-gated, not seat-gated. — from #101
@@ -15,7 +15,7 @@ kamp.us has a working invite (kefil) flow: an existing yazar can vouch a new per
 
 ## Open frontier
 - #103 — Investigation: does better-auth's session model let us mint a single-use invite token?
-- #104 — Decision (founder-decision-fork): should an invited çaylak start at 0 karma?
+- #104 — Decision (founder-decision-fork): should an invited newcomer start at 0 karma?
 
 ## Graduated fog
 - #101 — Decided invites are karma-gated. → spawned #104

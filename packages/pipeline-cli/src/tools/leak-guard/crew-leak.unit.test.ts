@@ -99,7 +99,7 @@ describe("findCrewLeaks — match classes", () => {
 			expect(classes(findCrewLeaks("recorded in MEMORY.md"))).toContain("memory-ref");
 		});
 		it("flags a /memory/ path segment", () => {
-			expect(classes(findCrewLeaks("~/.claude/projects/x/memory/kunye.md"))).toContain(
+			expect(classes(findCrewLeaks("~/.claude/projects/x/memory/profile.md"))).toContain(
 				"memory-ref",
 			);
 		});

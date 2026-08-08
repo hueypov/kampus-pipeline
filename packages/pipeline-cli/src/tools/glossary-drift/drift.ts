@@ -154,7 +154,7 @@ export const normalize = (s: string): string => s.toLowerCase().replace(/\s+/g, 
 /**
  * Parse the declared term set out of `.glossary/TERMS.md`. Terms live in the first
  * `|`-column of the `| Term | Definition | Not |` tables; a cell may carry synonyms as
- * `sözlük (sozluk)` or `funnel / conversion funnel`, which we split into each alias so
+ * `gözlük (gozluk)` or `funnel / conversion funnel`, which we split into each alias so
  * "conversion funnel" and "funnel" both count as known. Header rows (`Term`) and the
  * `|---|` separators are skipped. Pure over the file text.
  */
@@ -166,7 +166,7 @@ export const parseKnownTerms = (termsMd: string): ReadonlySet<string> => {
 		if (/^\|[\s:|-]+\|?$/.test(line)) continue; // separator row |---|---|
 		const firstCell = line.split("|")[1]?.trim() ?? "";
 		if (firstCell === "" || firstCell.toLowerCase() === "term") continue;
-		// A cell like `funnel / conversion funnel` or `sözlük (sozluk)` carries aliases.
+		// A cell like `funnel / conversion funnel` or `gözlük (gozluk)` carries aliases.
 		for (const alias of splitAliases(firstCell)) {
 			const n = normalize(alias);
 			if (n !== "") known.add(n);
@@ -180,7 +180,7 @@ const splitAliases = (cell: string): ReadonlyArray<string> => {
 	const out: Array<string> = [];
 	// `funnel / conversion funnel` → two aliases.
 	for (const part of cell.split(" / ")) {
-		// `sözlük (sozluk)` → both `sözlük` and `sozluk`.
+		// `gözlük (gozluk)` → both `gözlük` and `gozluk`.
 		const paren = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(part.trim());
 		if (paren?.[1] !== undefined && paren?.[2] !== undefined) {
 			out.push(paren[1], paren[2]);
@@ -315,7 +315,7 @@ export const renderIssueBody = (
 		"- Register to update: `.glossary/TERMS.md`.",
 		"- The sweep: `packages/pipeline-cli/src/tools/glossary-drift/`, scheduled by `.github/workflows/glossary-drift.yml`.",
 		"- Decision: the glossary trigger rule: identify new domain concepts from changed code and maintain vocabulary outside the merge gate.",
-		"- The glossary skill that does the incremental update: `claude-plugins/kampus-pipeline/skills/glossary/SKILL.md`.",
+		"- The glossary skill that does the incremental update: `claude-plugins/pipeline/skills/glossary/SKILL.md`.",
 		"",
 		"## Suggested next step (non-binding)",
 		"For each phrase, decide add-to-TERMS vs dismiss-as-noise; for real terms, run the `glossary` skill to write the canonical definition. This is a *guess* — a phrase may be incidental prose the recall-biased heuristic over-surfaced.",
