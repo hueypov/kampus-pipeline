@@ -1,6 +1,6 @@
 ---
 name: canon
-description: Author and maintain this repo's `.patterns/*.md` docs from source so they stop drifting by hand — the patterns-maintenance counterpart to the `glossary` skill (which maintains `.glossary/TERMS.md`). Derives each pattern doc from the repo's own in-repo code and the grounding sources `CLAUDE.md` mandates, and lands it in the existing flat `.patterns/` house style with an `.patterns/index.md` table row — never a foreign-shaped `<subject>/` subtree. Two modes — bootstrap (seed a missing/thin doc from a fresh source read) and incremental refresh (update one doc whose source moved). Trigger on "canon a pattern", "author a pattern doc", "refresh `.patterns/<x>` from source", "the patterns drifted from the code", "ground `.patterns/<x>` in source", "bootstrap a pattern doc", "/canon". NOT an architecture audit (that files issues — use `report`), NOT the domain-noun glossary (`.glossary/TERMS.md` — `glossary`), NOT the `.decisions/` *why* surface (`adr`); this skill edits `.patterns/` only.
+description: Author and maintain this repo's `.patterns/*.md` docs from source so they stop drifting by hand — the patterns-maintenance counterpart to the `glossary` skill (which maintains `.glossary/TERMS.md`). Derives each pattern doc from the repo's own in-repo code and the grounding sources `CLAUDE.md` mandates, and lands it in the existing flat `.patterns/` house style with an `.patterns/index.md` table row — never a foreign-shaped `<subject>/` subtree. Two modes — bootstrap (seed a missing/thin doc from a fresh source read) and incremental refresh (update one doc whose source moved). Trigger on "canon a pattern", "author a pattern doc", "refresh `.patterns/<x>` from source", "the patterns drifted from the code", "ground `.patterns/<x>` in source", "bootstrap a pattern doc", "/canon". NOT an architecture audit (that files issues — `architecture-audit`), NOT the domain-noun glossary (`.glossary/TERMS.md` — `glossary`), NOT the `.decisions/` *why* surface (`adr`); this skill edits `.patterns/` only.
 ---
 
 # canon
@@ -34,7 +34,7 @@ The repo's knowledge is split across surfaces; canon owns exactly one. Stay in y
 - **NOT the `.glossary/` noun surface.** The canonical *nouns* live in `.glossary/` (the
   `glossary` skill). This skill *uses* those terms when it names a module or concern.
 - **NOT an architecture audit** (that sweeps for refactor candidates and files issues —
-  use `report`) and **NOT intake** (filing/classifying issues — `report` / `triage`).
+  `architecture-audit`) and **NOT intake** (filing/classifying issues — `report` / `triage`).
   The only thing canon produces is an edit under `.patterns/`.
 
 ## Repo-agnostic — resolve the target once

@@ -4,7 +4,7 @@
  * this file only describes how they are surfaced and what authority they require.
  */
 const CORE_SKILLS = [
-	"adr", "author-skill", "canon", "deslop-comments", "diataxis", "doctor",
+	"adr", "architecture-audit", "author-skill", "canon", "deslop-comments", "diataxis", "doctor",
 	"glossary", "heal-ci", "plan-epic", "report", "review-code", "review-design", "review-doc",
 	"review-plan", "review-skill", "review-trivial", "ship-it", "triage", "wayfinder",
 	"write-code", "writing-clearly-and-concisely",
@@ -13,7 +13,7 @@ const CORE_SKILLS = [
 const CORE_SUPPORT_FILES = ["gh-issue-intake-formats.md"] as const;
 const CORE_AGENTS = ["adr", "canon", "coder", "planner", "reporter", "reviewer", "shipper", "triager"] as const;
 export const CORE_SKILL_DEPENDENCIES: Readonly<Record<string, ReadonlyArray<string>>> = {
-	adr: ["glossary", "report"], "author-skill": ["review-skill"], canon: [],
+	adr: ["glossary", "report"], "architecture-audit": ["report"], "author-skill": ["review-skill"], canon: [],
 	"deslop-comments": ["adr", "report"], diataxis: ["deslop-comments"], doctor: [], glossary: [],
 	"heal-ci": ["report", "review-code", "review-doc", "ship-it", "write-code"], "plan-epic": [], report: [],
 	"review-code": ["adr", "deslop-comments", "report", "review-plan"],

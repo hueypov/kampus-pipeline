@@ -36,7 +36,7 @@ job ends at a correct, committed edit to `.glossary/TERMS.md`.)
   not supply a default language split or reserve a product name of its own.
 - **NOT an architecture audit.** It does not sweep the codebase for shallow modules / refactor
   candidates / deepening opportunities, and it does not file issues. That is a different skill's
-  job — use `report`); this skill's surface is the vocabulary file, not the architecture.
+  job (`architecture-audit`); this skill's surface is the vocabulary file, not the architecture.
 - **NOT intake.** It does not file, classify, or prioritize GitHub issues — that is `report` /
   `triage`. The only thing it produces is an edit to `.glossary/TERMS.md`.
 
