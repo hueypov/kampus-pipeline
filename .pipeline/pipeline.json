@@ -190,7 +190,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-guard pre-file\""
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh\" worktree-guard pre-file"
 					}
 				]
 			},
@@ -199,7 +199,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-guard pre-bash\""
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh\" worktree-guard pre-bash"
 					}
 				]
 			},
@@ -208,7 +208,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-guard pre-enter\""
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh\" worktree-guard pre-enter"
 					}
 				]
 			}
@@ -219,7 +219,7 @@
 				"hooks": [
 					{
 						"type": "command",
-						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-guard reap\""
+						"command": "\"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh\" worktree-guard reap"
 					}
 				]
 			}
