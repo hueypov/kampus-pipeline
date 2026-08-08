@@ -87,6 +87,9 @@ const OLD = "0000000aaaa1111";
 // emission guard (the originating work item) accepts on a POSTed body. `HEAD`/`OLD` stay short: they exercise the READ
 // side, whose {7,40} staleness matcher (the SHA-bound, one-verdict-per-gate contract rule 3) is deliberately looser and left unchanged.
 const HEAD40 = `${"a1b2c3d4e5f6".repeat(3)}a1b2`; // 12*3 + 4 = 40 hex
+// `GET repos/…/pulls/N` is read with `--jq '.head.sha, .user.login'`, so its stdout is two lines:
+// the head binding and the PR author the read-side V5 gate needs (#135).
+const prFacts = (head: string, author: string): string => `${head}\n${author}\n`;
 
 const comment = (over: {
 	readonly id: number;
@@ -109,7 +112,7 @@ describe("Github.read — resolve a PR's SHA-bound verdict over a mock gh spawne
 			assert.isTrue(result.satisfied);
 		}).pipe((effect) =>
 			provide(effect, {
-				[`GET ${P}/pulls/${PR}`]: HEAD,
+				[`GET ${P}/pulls/${PR}`]: prFacts(HEAD, "cansirin"),
 				[`GET ${P}/issues/${PR}/comments`]: JSON.stringify([
 					comment({id: 1, login: "usirin", body: `review-doc: PASS @ ${HEAD} — merge-ready`}),
 				]),
@@ -125,7 +128,7 @@ describe("Github.read — resolve a PR's SHA-bound verdict over a mock gh spawne
 			assert.isFalse(result.satisfied);
 		}).pipe((effect) =>
 			provide(effect, {
-				[`GET ${P}/pulls/${PR}`]: HEAD,
+				[`GET ${P}/pulls/${PR}`]: prFacts(HEAD, "cansirin"),
 				[`GET ${P}/issues/${PR}/comments`]: JSON.stringify([
 					comment({id: 1, login: "usirin", body: `review-doc: PASS @ ${OLD} — merge-ready`}),
 				]),
@@ -141,7 +144,7 @@ describe("Github.read — resolve a PR's SHA-bound verdict over a mock gh spawne
 			assert.isFalse(result.satisfied);
 		}).pipe((effect) =>
 			provide(effect, {
-				[`GET ${P}/pulls/${PR}`]: HEAD,
+				[`GET ${P}/pulls/${PR}`]: prFacts(HEAD, "cansirin"),
 				[`GET ${P}/issues/${PR}/comments`]: JSON.stringify([
 					comment({id: 1, login: "attacker", body: `review-doc: PASS @ ${HEAD} — merge-ready`}),
 				]),
@@ -161,11 +164,44 @@ describe("Github.read — resolve a PR's SHA-bound verdict over a mock gh spawne
 			assert.strictEqual(result.headSha, HEAD);
 		}).pipe((effect) =>
 			provide(effect, {
-				// no pulls fixture: a live-head lookup would 404 — the override must be used instead
+				// The override replaces the live HEAD only — the PR is still read, because the author is
+				// not overridable and the V5 gate needs it (#135). `OLD` here proves the override won.
+				[`GET ${P}/pulls/${PR}`]: prFacts(OLD, "cansirin"),
 				[`GET ${P}/issues/${PR}/comments`]: JSON.stringify([
 					comment({id: 1, login: "usirin", body: `review-skill: PASS @ ${HEAD} — merge-ready`}),
 				]),
 				[`GET ${P}/collaborators/usirin/permission`]: "maintain",
+			}),
+		),
+	);
+
+	// The #135 defect, at the boundary: a current-head PASS from a write+ collaborator who happens to
+	// be the PR's author. The old reader counted it and `ship-it` merged on it; this one refuses.
+	it.effect("a current-head PASS posted by the PR's own author → self-verdict, unsatisfied", () =>
+		Effect.gen(function* () {
+			const result = yield* (yield* Github).read(PR, "doc", "PASS");
+			assert.strictEqual(result.outcome._tag, "self-verdict");
+			assert.isFalse(result.satisfied);
+		}).pipe((effect) =>
+			provide(effect, {
+				[`GET ${P}/pulls/${PR}`]: prFacts(HEAD, "usirin"),
+				[`GET ${P}/issues/${PR}/comments`]: JSON.stringify([
+					comment({id: 1, login: "usirin", body: `review-doc: PASS @ ${HEAD} — merge-ready`}),
+				]),
+				[`GET ${P}/collaborators/usirin/permission`]: "admin",
+			}),
+		),
+	);
+
+	it.effect("an unreadable PR author fails the read rather than resolving a verdict", () =>
+		Effect.gen(function* () {
+			const error = yield* Effect.flip((yield* Github).read(PR, "doc", "PASS"));
+			assert.strictEqual(error._tag, "gh-io/GhParseError");
+		}).pipe((effect) =>
+			provide(effect, {
+				// `.user.login` came back null/absent — jq prints the head line and nothing usable after it.
+				[`GET ${P}/pulls/${PR}`]: `${HEAD}\n`,
+				[`GET ${P}/issues/${PR}/comments`]: JSON.stringify([]),
 			}),
 		),
 	);

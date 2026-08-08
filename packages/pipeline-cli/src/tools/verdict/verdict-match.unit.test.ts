@@ -19,6 +19,8 @@ import {
 
 const HEAD = "abc1234def5678";
 const OLD = "0000000aaaa1111";
+/** The PR's author. Every marker below is `usirin`'s, so the default case is an independent review. */
+const PR_AUTHOR = "cansirin";
 
 const marker = (over: Partial<VerdictComment> & {readonly id: number}): VerdictComment => ({
 	author: "usirin",
@@ -109,6 +111,8 @@ describe("resolveVerdict — the SHA-bound verdict decision (table-driven, the S
 		readonly authorized: ReadonlyArray<string>;
 		readonly gate: VerdictGate;
 		readonly head: string;
+		/** The PR's author login; defaults to a third party, so markers count unless a case says otherwise. */
+		readonly prAuthor?: string;
 		readonly expected: VerdictOutcome;
 		readonly reviewedPass: boolean;
 	}> = [
@@ -248,14 +252,94 @@ describe("resolveVerdict — the SHA-bound verdict decision (table-driven, the S
 			expected: {_tag: "none"},
 			reviewedPass: false,
 		},
+		// The #135 read-side split-role firewall (V5). These are the shape observed live: a PASS at the
+		// current head, from a write+ collaborator, that the merge gate must still refuse because the
+		// poster is the PR's own author.
+		{
+			name: "a self-issued current-head PASS → self-verdict, never a pass (V5, #135)",
+			comments: [marker({id: 1, author: "cansirin"})],
+			authorized: ["cansirin"],
+			gate: "doc",
+			head: HEAD,
+			prAuthor: PR_AUTHOR,
+			expected: {_tag: "self-verdict", commentId: 1, author: "cansirin"},
+			reviewedPass: false,
+		},
+		{
+			name: "a self-issued FAIL is equally inert — polarity does not rescue it",
+			comments: [marker({id: 1, author: "cansirin", body: `review-doc: FAIL @ ${HEAD} — no`})],
+			authorized: ["cansirin"],
+			gate: "doc",
+			head: HEAD,
+			prAuthor: PR_AUTHOR,
+			expected: {_tag: "self-verdict", commentId: 1, author: "cansirin"},
+			reviewedPass: false,
+		},
+		{
+			name: "author login match is case/whitespace-insensitive (a re-cased login is the same person)",
+			comments: [marker({id: 1, author: "CanSirin"})],
+			authorized: ["CanSirin"],
+			gate: "doc",
+			head: HEAD,
+			prAuthor: " cansirin ",
+			expected: {_tag: "self-verdict", commentId: 1, author: "CanSirin"},
+			reviewedPass: false,
+		},
+		{
+			name: "a newer self-issued PASS does not displace the independent verdict that decides",
+			comments: [
+				marker({id: 1, author: "usirin", createdAt: "2026-07-11T00:00:00Z"}),
+				marker({
+					id: 2,
+					author: "cansirin",
+					createdAt: "2026-07-11T00:00:09Z",
+					body: `review-doc: PASS @ ${HEAD} — merge-ready`,
+				}),
+			],
+			authorized: ["usirin", "cansirin"],
+			gate: "doc",
+			head: HEAD,
+			prAuthor: PR_AUTHOR,
+			expected: {_tag: "current", commentId: 1, polarity: "PASS", sha: HEAD},
+			reviewedPass: true,
+		},
+		{
+			name: "an author cannot self-PASS over an independent FAIL",
+			comments: [
+				marker({
+					id: 1,
+					author: "usirin",
+					createdAt: "2026-07-11T00:00:00Z",
+					body: `review-doc: FAIL @ ${HEAD} — changes-requested`,
+				}),
+				marker({id: 2, author: "cansirin", createdAt: "2026-07-11T00:00:09Z"}),
+			],
+			authorized: ["usirin", "cansirin"],
+			gate: "doc",
+			head: HEAD,
+			prAuthor: PR_AUTHOR,
+			expected: {_tag: "current", commentId: 1, polarity: "FAIL", sha: HEAD},
+			reviewedPass: false,
+		},
+		{
+			name: "an unestablished PR author resolves nothing (fail-closed, never a false win)",
+			comments: [marker({id: 1})],
+			authorized: ["usirin"],
+			gate: "doc",
+			head: HEAD,
+			prAuthor: "",
+			expected: {_tag: "none"},
+			reviewedPass: false,
+		},
 	];
-	for (const {name, comments, authorized, gate, head, expected, reviewedPass} of cases) {
+	for (const {name, comments, authorized, gate, head, prAuthor, expected, reviewedPass} of cases) {
 		it(name, () => {
 			const outcome = resolveVerdict({
 				comments,
 				authorizedAuthors: authorized,
 				gate,
 				headSha: head,
+				prAuthor: prAuthor ?? PR_AUTHOR,
 			});
 			assert.deepStrictEqual(outcome, expected);
 			assert.strictEqual(isReviewed(outcome, "PASS"), reviewedPass);
@@ -267,18 +351,46 @@ describe("resolveVerdict — the SHA-bound verdict decision (table-driven, the S
 			marker({id: 1, body: `review-code: PASS @ ${HEAD} — merge-ready`}),
 			marker({id: 2, body: `review-skill: FAIL @ ${HEAD} — changes-requested`}),
 		];
-		assert.deepStrictEqual(
-			resolveVerdict({comments, authorizedAuthors: ["usirin"], gate: "code", headSha: HEAD}),
-			{_tag: "current", commentId: 1, polarity: "PASS", sha: HEAD},
-		);
-		assert.deepStrictEqual(
-			resolveVerdict({comments, authorizedAuthors: ["usirin"], gate: "skill", headSha: HEAD}),
-			{_tag: "current", commentId: 2, polarity: "FAIL", sha: HEAD},
-		);
-		assert.deepStrictEqual(
-			resolveVerdict({comments, authorizedAuthors: ["usirin"], gate: "doc", headSha: HEAD}),
-			{_tag: "none"},
-		);
+		const of = (gate: VerdictGate) =>
+			resolveVerdict({
+				comments,
+				authorizedAuthors: ["usirin"],
+				gate,
+				headSha: HEAD,
+				prAuthor: PR_AUTHOR,
+			});
+		assert.deepStrictEqual(of("code"), {_tag: "current", commentId: 1, polarity: "PASS", sha: HEAD});
+		assert.deepStrictEqual(of("skill"), {
+			_tag: "current",
+			commentId: 2,
+			polarity: "FAIL",
+			sha: HEAD,
+		});
+		assert.deepStrictEqual(of("doc"), {_tag: "none"});
+	});
+
+	// The whole PR #123 shape in one assertion: three current-head PASS markers across three
+	// namespaces, every one of them posted by the PR's own author. None of them gates anything.
+	it("a self-review across every namespace gates none of them (#135)", () => {
+		const comments = [
+			marker({id: 1, author: "cansirin", body: `review-code: PASS @ ${HEAD} — merge-ready`}),
+			marker({id: 2, author: "cansirin", body: `review-doc: PASS @ ${HEAD} — merge-ready`}),
+			marker({id: 3, author: "cansirin", body: `review-skill: PASS @ ${HEAD} — merge-ready`}),
+		];
+		for (const gate of ["code", "doc", "skill"] as const) {
+			const outcome = resolveVerdict({
+				comments,
+				authorizedAuthors: ["cansirin"],
+				gate,
+				headSha: HEAD,
+				prAuthor: PR_AUTHOR,
+			});
+			assert.strictEqual(outcome._tag, "self-verdict", `review-${gate} must not resolve a verdict`);
+			assert.isFalse(isReviewed(outcome, "PASS"));
+			// A self-issued FAIL must not satisfy write-code's repair read either — repair answers an
+			// independent reviewer, never the author's own note to themselves.
+			assert.isFalse(isReviewed(outcome, "FAIL"));
+		}
 	});
 });
 

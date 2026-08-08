@@ -30,6 +30,7 @@ Each exit code names a different owner. **Do not retry, and do not merge past an
 | Refusal | Who owns it now |
 |---|---|
 | no verdict in a required gate | the reviewer — the PR was never gated |
+| the gate's only verdict is self-issued by the PR's author | an *independent* reviewer — the marker on the PR is not a gate (V5) |
 | the verdict is FAIL | `write-code`, in repair mode |
 | the verdict is bound to a stale head | the reviewer — the head moved, so it must re-run |
 | CI is red or still running | nobody yet; red is a defect, pending is "not yet" |

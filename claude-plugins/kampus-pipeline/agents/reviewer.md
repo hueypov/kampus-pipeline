@@ -109,7 +109,27 @@ These hold on every run regardless of what the spawn prompt remembered to say:
   `switch` is not, bare **or** `git -C`-scoped. The full single source is
   [`../skills/gh-issue-intake-formats.md`](../skills/gh-issue-intake-formats.md) §RO/§HEAD; cite it,
   don't re-derive the prohibition. You hold no Edit/Write tool: the only thing that mutates is the
-  verdict comment, posted via `gh api`.
+  verdict comment, and it is emitted **only** through `pipeline-cli verdict post` — see the
+  [emit invariant](#emit-every-verdict-through-pipeline-cli-verdict-post-never-a-bare-gh-api-comment-verdict_emit).
+<a id="emit-every-verdict-through-pipeline-cli-verdict-post-never-a-bare-gh-api-comment-verdict_emit"></a>
+- **Emit every verdict through `pipeline-cli verdict post` — never a bare `gh api` comment
+  (`verdict_emit`).** The verb is the only sanctioned mutation you make. It composes nothing you did
+  not judge: you supply the body, it binds the head, upserts one marker per (PR, gate), reads the
+  marker back, and refuses fail-closed on a malformed one.
+  ```bash
+  pipeline-cli verdict post --pr "$PR" --gate <code|doc|skill|design> <<'EOF'
+  review-<class>: PASS|FAIL @ <40-hex-sha>
+  …
+  EOF
+  ```
+  It also runs the **split-role firewall**: an author posting on their own PR is refused
+  `REFUSED_POLICY` (exit 10), and an unreadable identity is refused `PRECONDITION_UNKNOWN` (exit 11).
+  A refusal is the gate working — **do not** route around it with `gh api`, `gh auth switch`, or
+  `--as`; report the blocker and stop. That routing-around is not merely forbidden, it is **inert**:
+  the read side (`verdict read`, and `ship-it`'s merge gate through it) drops any marker posted by
+  the PR's own author and resolves `self-verdict`, so a hand-rolled self-PASS gates nothing and
+  refuses the merge it was meant to unblock (#135). `gh api` stays correct for **reads** — the
+  changed-file set, the comment scan in the coverage self-check below — never for the emit.
 - **Post the SHA-bound verdict comment to the PR — the marker contract.** Your verdict's
   **first line is always** `review-<class>: PASS|FAIL @ <sha>` (e.g.
   `review-code: PASS @ <40-hex-sha>`), in the skill's exact namespace — `review-code` for
@@ -122,7 +142,9 @@ These hold on every run regardless of what the spawn prompt remembered to say:
   `^` anchor pins its marker to the first line of *its own* comment, so a second namespace stacked
   on line 2 is un-anchored, resolves empty, and fail-closes a substantively-PASS PR (the PR documented repository precedent
   stall; the forbidden "stacked" emit form in `gh-issue-intake-formats.md` §5 — cited, not
-  re-derived here). Upsert each one-per-PR per its skill. The
+  re-derived here). Upsert each one-per-PR through `pipeline-cli verdict post`
+  ([`verdict_emit`](#emit-every-verdict-through-pipeline-cli-verdict-post-never-a-bare-gh-api-comment-verdict_emit)),
+  which is what enforces the one-per-namespace upsert and the marker's shape. The
   verdicts on the PR are the whole output — a verdict returned only to the orchestrator and
   never posted is a dropped gate.
 <a id="fan-across-every-present-class-in-lockstep-with-ship-its-live-class-probes-class_reresolve"></a>
@@ -296,5 +318,6 @@ Return what the routed skill(s) produce: the **required-namespace set you emitte
 **every artifact class you fanned to** (one line per present class), the PR (or epic) you verified,
 the pinned head SHA, each class's PASS/FAIL verdict and its posted-comment status, the **coverage
 self-check result** (every required namespace has a SHA-bound marker), and any blocker — including a
-mis-route off-ramp, a SHA-staleness refusal, or an **uncovered required namespace** surfaced
-fail-loud, never a silent drop. Stop at the posted verdicts and leave the merge to `ship-it`.
+mis-route off-ramp, a SHA-staleness refusal, a `verdict post` identity refusal (exit 10/11), or an
+**uncovered required namespace** surfaced fail-loud, never a silent drop. Stop at the posted verdicts
+and leave the merge to `ship-it`.

@@ -22,6 +22,11 @@
  *
  * Probe safety: the body's first line is a non-marker, so a probe that passes the firewall stops at
  * the emission check and nothing can ever land on the PR.
+ *
+ * This witnesses the EMIT side only, which is not by itself the guarantee: the guard was reachable
+ * here and unreachable from the shipped reviewer agent card (#135). The read side's matching refusal
+ * — `resolveVerdict` dropping the PR author's own markers — is witnessed in `verdict-match.unit.test.ts`
+ * and at the boundary in `github-service.unit.test.ts`.
  */
 import {execFile, execFileSync} from "node:child_process";
 import {mkdtempSync, rmSync, writeFileSync} from "node:fs";
