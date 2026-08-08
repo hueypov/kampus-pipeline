@@ -132,7 +132,7 @@
 			},
 			"protectedChangeApproval": {
 				"authority": {
-					"provider": "github-team",
+					"provider": "github-collaborators",
 					"organization": null,
 					"teamSlug": null
 				},

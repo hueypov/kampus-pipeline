@@ -2,9 +2,17 @@ import {execFileSync} from "node:child_process";
 
 const POLICY_PATH = ".pipeline/agent-policy.json";
 
+/**
+ * Where the approval roster comes from. `github-team` names an org team; `github-collaborators`
+ * names the repository's own push-capable collaborators, the only authority a user-owned repo has.
+ * The provider is stated, never inferred from an absent `teamSlug` — on a fail-closed gate a
+ * dropped slug must refuse, not silently widen authority to everyone with push.
+ */
+export type ApprovalAuthorityProvider = "github-team" | "github-collaborators";
+
 export type ProtectedChangeApprovalPolicy = {
 	readonly authority: {
-		readonly provider: "github-team";
+		readonly provider: ApprovalAuthorityProvider;
 		readonly organization: string | null;
 		readonly teamSlug: string | null;
 	};
@@ -52,21 +60,28 @@ export const parseProtectedChangeApprovalPolicy = (raw: unknown): ProtectedChang
 	if (!isRecord(section) || !isRecord(section.authority) || !isRecord(section.soleAuthorException)) return null;
 	const authority = section.authority;
 	const exception = section.soleAuthorException;
+	const provider = authority.provider;
 	if (
-		authority.provider !== "github-team" ||
+		(provider !== "github-team" && provider !== "github-collaborators") ||
 		(authority.organization !== null && !nonBlankString(authority.organization)) ||
 		(authority.teamSlug !== null && !nonBlankString(authority.teamSlug)) ||
 		!isPositiveInteger(section.requiredNonAuthorApprovals) ||
 		typeof exception.enabled !== "boolean" ||
 		(exception.commentPattern !== null && !nonBlankString(exception.commentPattern))
 	) return null;
+	// A collaborator authority carrying org/team coordinates is a half-done migration — it would
+	// read as one authority while being configured for another, so it is malformed, not merely
+	// unconfigured. A team authority with a null slug stays parseable on purpose: that is the
+	// shipped default meaning "no authority declared yet", and it fails closed at resolve with a
+	// diagnostic that says so rather than calling an untouched default unsafe.
+	if (provider === "github-collaborators" && (authority.teamSlug !== null || authority.organization !== null)) return null;
 	if (exception.enabled) {
 		if (exception.commentPattern === null) return null;
 		try { new RegExp(exception.commentPattern); } catch { return null; }
 	} else if (exception.commentPattern !== null) return null;
 	return {
 		authority: {
-			provider: "github-team",
+			provider,
 			organization: authority.organization === null ? null : authority.organization.trim(),
 			teamSlug: authority.teamSlug === null ? null : authority.teamSlug.trim(),
 		},
@@ -99,12 +114,22 @@ export const readProtectedChangeApprovalPolicy = (
 
 const uniqueIdentities = (entries: ReadonlyArray<string>): ReadonlyArray<string> => [...new Set(entries.map((entry) => entry.trim()))];
 
-const parseMembers = (raw: unknown): ReadonlyArray<string> | null => {
+/**
+ * `pushCapableOnly` applies to the collaborator roster: a read- or triage-only collaborator is
+ * listed by the API but is not approval authority. An entry whose permissions cannot be read is
+ * UNKNOWN, so the whole roster fails rather than silently dropping a member.
+ */
+const parseMembers = (raw: unknown, pushCapableOnly: boolean): ReadonlyArray<string> | null => {
 	const entries = asArrays(raw);
 	if (entries === null) return null;
 	const members: string[] = [];
 	for (const entry of entries) {
 		if (!isRecord(entry) || !nonBlankString(entry.login)) return null;
+		if (pushCapableOnly) {
+			const permissions = entry.permissions;
+			if (!isRecord(permissions) || typeof permissions.push !== "boolean") return null;
+			if (!permissions.push) continue;
+		}
 		members.push(entry.login);
 	}
 	return uniqueIdentities(members);
@@ -160,21 +185,27 @@ export const resolveGithubTeamEvidence = (
 ): EvidenceResolution => {
 	if (!Number.isSafeInteger(pr) || pr < 1) return {ok: false, reason: "pull request number must be a positive integer"};
 	const parsedRepo = repositoryParts(repo);
-	if (parsedRepo === null || policy.authority.teamSlug === null) return {ok: false, reason: "repository or configured approval authority is incomplete"};
+	const {provider, teamSlug} = policy.authority;
+	// `parse` already rejects a slugless team authority; re-assert it here so a hand-built policy
+	// can never fall through to a wider roster than the one it names.
+	if (parsedRepo === null || (provider === "github-team" && teamSlug === null)) return {ok: false, reason: "repository or configured approval authority is incomplete"};
+	const collaboratorAuthority = provider === "github-collaborators";
 	const organization = policy.authority.organization ?? parsedRepo.owner;
 	let membersRaw: unknown;
 	let pullRaw: unknown;
 	let reviewsRaw: unknown;
 	let commentsRaw: unknown;
 	try {
-		membersRaw = readJson(`orgs/${encodeURIComponent(organization)}/teams/${encodeURIComponent(policy.authority.teamSlug)}/members?per_page=100`, true);
+		membersRaw = collaboratorAuthority
+			? readJson(`repos/${repo}/collaborators?per_page=100`, true)
+			: readJson(`orgs/${encodeURIComponent(organization)}/teams/${encodeURIComponent(teamSlug as string)}/members?per_page=100`, true);
 		pullRaw = readJson(`repos/${repo}/pulls/${pr}`, false);
 		reviewsRaw = readJson(`repos/${repo}/pulls/${pr}/reviews?per_page=100`, true);
 		commentsRaw = policy.soleAuthorException.enabled ? readJson(`repos/${repo}/issues/${pr}/comments?per_page=100`, true) : [];
 	} catch {
 		return {ok: false, reason: "GitHub REST evidence could not be read"};
 	}
-	const members = parseMembers(membersRaw);
+	const members = parseMembers(membersRaw, collaboratorAuthority);
 	const pull = parsePull(pullRaw);
 	const reviews = parseReviews(reviewsRaw);
 	const comments = parseComments(commentsRaw);
