@@ -1,20 +1,22 @@
 /**
  * The `crew-fanout-guard` tool — `pipeline-cli crew-fanout-guard check [--root <d>]`.
  *
- * The CI surface for the originating work item: invert the crew read-only-fanout per-bridge spawn DENYLIST into
+ * The CI surface for the originating work item: invert the crew read-only-fanout per-bridge spawn scope into
  * an ENFORCED ALLOWLIST. For every crew bridge def (chief-of-staff / cartographer /
- * intake-desk under `claude-plugins/pipeline-crew/agents/`), assert its `disallowedTools`
- * denies every mutating roster agent-type NOT on that bridge's sanctioned allowlist — so a
- * FUTURE mutating agent-type added to the roster (or a `Task(x)` deny silently removed) reds
- * the build, closing the "a future reader silently reopens the deleted edge" hole the read-only fanout capability rule
- * warns about (the roster's role-kind boundary):
+ * intake-desk under `claude-plugins/pipeline-crew/agents/`), assert the def is shaped so its
+ * declared toolset resolves and its charter excludes every mutating roster agent-type NOT on
+ * that bridge's sanctioned allowlist — so a FUTURE mutating agent-type added to the roster (or
+ * an exclusion silently dropped) reds the build, closing the "a future reader silently reopens
+ * the deleted edge" hole the read-only fanout capability rule warns about (the roster's
+ * role-kind boundary):
  *
  *   pipeline-cli crew-fanout-guard check            # CI gate: exit non-zero on an uncovered agent-type
  *   pipeline-cli crew-fanout-guard check --root <d> # point at a specific repo root (else: walk up for one)
  *
- * Fail-closed on zero scope, a missing bridge def, a stale allowlist, or any uncovered
- * bridge×agent-type pair (the zero-scope fail-closed invariant). The scan/IO lives in `gate.ts`; this file wires it to
- * the CLI (the thin-CLI-over-`gate.ts` idiom shared across the guards).
+ * Fail-closed on zero scope, a missing bridge def, a mis-shaped bridge def, a stale allowlist,
+ * or any uncovered bridge×agent-type pair (the zero-scope fail-closed invariant). The scan/IO
+ * lives in `gate.ts`; this file wires it to the CLI (the thin-CLI-over-`gate.ts` idiom shared
+ * across the guards).
  *
  * Exit-code contract: 0 = clean, any non-zero = failure — both a gate failure (report on
  * stderr) and an IO failure (fs unreadable) exit non-zero, undistinguished. `CheckFailed`
@@ -71,13 +73,13 @@ const check = Command.make(
 	}),
 ).pipe(
 	Command.withDescription(
-		"Fail the build if a crew bridge fails to deny a non-allowlisted mutating roster agent-type",
+		"Fail the build if a crew bridge fails to scope out a non-allowlisted mutating roster agent-type",
 	),
 );
 
 export const crewFanoutGuardCommand = Command.make("crew-fanout-guard").pipe(
 	Command.withSubcommands([check]),
 	Command.withDescription(
-		"Fail-closed gate: every crew bridge denies every non-allowlisted mutating roster agent-type (#3606, enforced by the roster's role-kind boundary)",
+		"Fail-closed gate: every crew bridge charter-excludes every non-allowlisted mutating roster agent-type (#3606, enforced by the roster's role-kind boundary)",
 	),
 );
