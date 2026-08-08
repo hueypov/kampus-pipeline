@@ -9,6 +9,7 @@ import {
 	firstRefusal,
 	gatePrecondition,
 	gatesForFiles,
+	guardPolicy,
 	namespaceCheck,
 	parseGateList,
 	mergeablePrecondition,
@@ -232,5 +233,42 @@ describe("namespaceCheck — a verdict may only land in a namespace the diff req
 		// If a caller DOES hand over the fail-closed policy, every namespace is genuinely in scope
 		// and allowing is correct — the defect was the silent defaulting, not this input.
 		expect(namespaceCheck("design", ["whatever"], FAIL_CLOSED_POLICY)).toEqual({_tag: "allowed"});
+	});
+});
+
+describe("guardPolicy — the seam the review found fail-open", () => {
+	const real = {policy: FAIL_CLOSED_POLICY, trusted: true};
+
+	it("passes a trusted policy through", () => {
+		expect(guardPolicy(real)).toBe(FAIL_CLOSED_POLICY);
+	});
+
+	it("returns null for an UNTRUSTED load — the loader's fail-closed fallback must not reach the guard", () => {
+		// The loader never returns null; unreadable → classify-everything with trusted:false. Feeding
+		// that policy to a refusal guard makes every gate "required" and nothing refusable — the
+		// fail-open the review proved live from a policy-less worktree, after the core was fixed.
+		expect(guardPolicy({policy: FAIL_CLOSED_POLICY, trusted: false})).toBeNull();
+	});
+
+	it("returns null outside a repository", () => {
+		expect(guardPolicy(null)).toBeNull();
+	});
+});
+
+describe("namespaceCheck — the page-size cap", () => {
+	const policy = {
+		code: {includePatterns: ["^(packages|src)/"], excludePatterns: []},
+		docs: {includePatterns: ["\\.md$"], excludePatterns: ["^(packages|src)/", "(^|/)skills/"]},
+		skills: {includePatterns: ["(^|/)skills/"], excludePatterns: []},
+		design: {includePatterns: ["\\.css$"], excludePatterns: []},
+	};
+
+	it("returns unchecked at the page size rather than refusing on a possibly-truncated list", () => {
+		// A dropped path here can drop the gate that would have ALLOWED the verdict — the inverse of
+		// ship-it's direction, where truncation can only under-require. Unknown scope on a refusal
+		// guard warns; it never guesses.
+		const files = Array.from({length: 100}, (_, i) => `packages/f${i}.ts`);
+		expect(namespaceCheck("code", files, policy)).toEqual({_tag: "unchecked"});
+		expect(namespaceCheck("code", files.slice(0, 99), policy)).toEqual({_tag: "allowed"});
 	});
 });

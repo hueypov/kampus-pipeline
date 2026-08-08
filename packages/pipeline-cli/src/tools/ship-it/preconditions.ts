@@ -193,7 +193,26 @@ export const namespaceCheck = (
 	policy: ClassificationPolicy | null,
 ): NamespaceCheck => {
 	if (policy === null) return {_tag: "unchecked"};
+	// The file read takes one 100-item page. At that count a complete list is indistinguishable
+	// from a truncated one, and here the failure direction inverts ship-it's: a dropped path can
+	// drop the gate that would have ALLOWED this verdict, refusing a legitimate review. Unknown
+	// scope on a refusal guard means unchecked, never a guess.
+	if (files.length >= 100) return {_tag: "unchecked"};
 	const required = gatesForFiles(files, policy);
 	if (required === null) return {_tag: "unchecked"};
 	return required.includes(gate) ? {_tag: "allowed"} : {_tag: "refused", required};
 };
+
+/**
+ * The policy `namespaceCheck` may act on, from whatever the loader produced.
+ *
+ * The loader NEVER returns null — on an unreadable policy it fail-closes internally to the
+ * classify-everything policy with `trusted: false`. The first wiring wrote `loaded?.policy ?? null`
+ * and believed it had plumbed the unchecked path; the `?? null` was dead code, the untrusted
+ * fail-closed policy flowed straight into the guard, and the guard fail-opened in every worktree —
+ * the same inversion the core had just been fixed for, one seam deeper, found by review probing the
+ * live binary from a policy-less root. The trust flag is the signal, and discarding it was the bug.
+ */
+export const guardPolicy = (
+	loaded: {readonly policy: ClassificationPolicy; readonly trusted: boolean} | null,
+): ClassificationPolicy | null => (loaded !== null && loaded.trusted ? loaded.policy : null);

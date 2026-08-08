@@ -30,7 +30,7 @@ import {readFileSync} from "node:fs";
 import {Console, Effect, Option} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
 import {readClassificationPolicy, repositoryRoot} from "../class-probe/policy.ts";
-import {namespaceCheck} from "../ship-it/preconditions.ts";
+import {guardPolicy, namespaceCheck} from "../ship-it/preconditions.ts";
 import {GithubTrackerLive, Tracker} from "../tracker/tracker.ts";
 import * as Exit from "../../exit-codes.ts";
 import {Github, GithubLive} from "./github.ts";
@@ -221,11 +221,11 @@ const post = Command.make(
 			}),
 		);
 		const root = repositoryRoot();
-		const policy = root === null ? null : readClassificationPolicy(root, null);
-		// The policy passes through nullable — NEVER defaulted to the fail-closed classify-everything
-		// policy, which contains every gate and turns this refusal guard fail-open (its first live
-		// probe posted a design verdict on a code diff from a policy-less worktree that way).
-		const scope = namespaceCheck(g, changed, policy?.policy ?? null);
+		const loaded = root === null ? null : readClassificationPolicy(root, null);
+		// Through guardPolicy, which honours the loader's trust flag — the loader never returns null,
+		// so a bare `?? null` here was dead code and the untrusted classify-everything fallback
+		// flowed into the guard, fail-opening it in every worktree (caught by review, live).
+		const scope = namespaceCheck(g, changed, guardPolicy(loaded));
 		if (scope._tag === "refused") return yield* refuseWrongNamespace(pr, g, scope.required);
 		if (scope._tag === "unchecked") {
 			// Said aloud rather than skipped silently — a check that did not run must never read as

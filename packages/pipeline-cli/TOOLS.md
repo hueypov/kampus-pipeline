@@ -293,6 +293,13 @@ made explicit (a SHA-less advisory does **not** satisfy a SHA-bound check; a ver
 stale head does **not** pass; newest-authorized-marker wins). It re-encodes the SHA-bound, one-verdict-per-gate contract match
 semantics; it does **not** change what any gate verifies.
 
+`verdict post` also refuses a **namespace the diff does not require** (exit 7): the PR's changed
+files are classified through the repository policy, and a `--gate` outside the required set names
+what the diff does require instead of posting. The check needs a TRUSTED policy — from a root
+without one it warns that it did not run and lets ship-it re-derive the scope at the merge; it
+never guesses from the fail-closed classify-everything fallback, which would make every namespace
+"required" and the refusal unreachable (#66).
+
 - **`verdict read --pr N --gate <code|doc|skill|design> [--expect PASS|FAIL] [--head <sha>]`** —
   resolve the (PR, gate) verdict against the PR's current head (author-gated to write+
   collaborators, the runtime ACL authorization rule). Prints the resolved outcome as JSON on stdout (`_tag` of
