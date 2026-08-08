@@ -144,7 +144,7 @@ node crew-roundtrip.ts
 ```
 
 It runs in under a second and exits cleanly. (If you re-run it and a bind complains, clear the stale
-sockets from the previous run with `rm -f /tmp/kampus-crew-*.sock` and run again — orphaned socket
+sockets from the previous run with `rm -f /tmp/pipeline-crew-*.sock` and run again — orphaned socket
 files are the one thing a hard-killed prior run leaves behind.)
 
 ## Step 3 — read the round-trip

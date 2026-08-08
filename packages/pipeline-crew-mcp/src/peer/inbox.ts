@@ -63,7 +63,7 @@ export class Inbox extends Context.Service<
 		readonly deliver: (envelope: InboxEnvelope) => Effect.Effect<InboxAck>;
 		readonly received: Effect.Effect<ReadonlyArray<InboxEnvelope>>;
 	}
->()("@kampus/pipeline-crew-mcp/peer/Inbox") {
+>()("pipeline-crew-mcp/peer/Inbox") {
 	/** Build an inbox owned by peer `self`; deliveries are recorded and acked as delivered-to-inbox. */
 	static readonly layer = (self: string): Layer.Layer<Inbox> =>
 		Layer.effect(

@@ -66,7 +66,7 @@ import {type CrewRole, kindOf} from "./roles.ts";
 import {type CrewTracker, crewTrackerHostOrDialLayer, peerTrackerLayer} from "./tracker.ts";
 
 /** The MCP server identity a crew session advertises over stdio when none is configured. */
-export const SESSION_SERVER_NAME = "@kampus/pipeline-crew-mcp" as const;
+export const SESSION_SERVER_NAME = "pipeline-crew-mcp" as const;
 
 export interface CrewSessionConfig {
 	readonly role: CrewRole;

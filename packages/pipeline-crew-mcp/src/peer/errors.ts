@@ -10,7 +10,7 @@ import {Schema} from "effect";
  * — a failed dial surfaces loudly as this typed error, never a silent drop.
  */
 export class PeerUnreachableError extends Schema.TaggedErrorClass<PeerUnreachableError>()(
-	"@kampus/pipeline-crew-mcp/PeerUnreachableError",
+	"pipeline-crew-mcp/PeerUnreachableError",
 	{
 		target: Schema.String,
 		reason: Schema.String,

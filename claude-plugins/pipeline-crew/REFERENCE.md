@@ -9,7 +9,7 @@ cited plugin docs) and matches it.
 This page is **Reference only** — it states what is true, not why or how. For the *why* (the
 roster law, the personalization mechanism, the §CP posture) read [`README.md`](README.md) and
 [`PERSONALIZATION.md`](PERSONALIZATION.md); for the rationale, follow the pointers there. Scope is
-the **plugin surface** — the runtime channel substrate `@kampus/pipeline-crew-mcp` has its own
+the **plugin surface** — the runtime channel substrate `pipeline-crew-mcp` has its own
 docs, out of scope here.
 
 ## Agent-def frontmatter contract
@@ -30,16 +30,16 @@ carries the **same five frontmatter keys**; all are present in all four defs.
 Every def's `tools:` array carries the crew channel-send tool by its exact MCP token:
 
 ```
-mcp___kampus_pipeline-crew-mcp__channel_send
+mcp__pipeline-crew-mcp__channel_send
 ```
 
-The token is derived, not guessed: `mcp__` + the server name `@kampus/pipeline-crew-mcp`
-sanitized (`[^a-zA-Z0-9_-]` → `_`, so `@`/`/` become `_`, hyphens preserved) + `__` +
-`channel_send`. The leading `_` of the sanitized name makes the join a **triple** underscore.
+The token is derived, not guessed: `mcp__` + the server name sanitized
+(`[^a-zA-Z0-9_-]` → `_`) + `__` + `channel_send`. `pipeline-crew-mcp` contains only characters
+that class permits, so sanitization is a no-op and the joins are plain double underscores.
 A wrong string fails closed (present-but-uncallable). Single source: [`CHANNEL-TOOL.md`](CHANNEL-TOOL.md).
 
 The **engineering-manager** (the one engine) carries a **second** channel token on top of
-`channel_send` — `mcp___kampus_pipeline-crew-mcp__channel_claim` — which claims a tracker
+`channel_send` — `mcp__pipeline-crew-mcp__channel_claim` — which claims a tracker
 resource before it opens a lane (cross-engine deconfliction, a real lock rather than a relayed
 message). Only the engine lists it; the three bridges list `channel_send` alone. So when
 reconstructing the engine def from the roster table below, note its `tools:` array is seven
@@ -56,9 +56,9 @@ The exact shipped values, matching each def head:
 | [`agents/crew-engineering-manager.md`](agents/crew-engineering-manager.md) | `crew-engineering-manager` | `cyan` | `Task`, `Bash`, `Read`, `Grep`, `Glob`, `channel_send`, `channel_claim` |
 | [`agents/crew-chief-of-staff.md`](agents/crew-chief-of-staff.md) | `crew-chief-of-staff` | `magenta` | `Read`, `Bash`, `Grep`, `Glob`, `channel_send` |
 
-`channel_send` above is the full `mcp___kampus_pipeline-crew-mcp__channel_send` token,
+`channel_send` above is the full `mcp__pipeline-crew-mcp__channel_send` token,
 abbreviated in this table for width; `channel_claim` on the engineering-manager row is
-likewise the full `mcp___kampus_pipeline-crew-mcp__channel_claim` token. Only the
+likewise the full `mcp__pipeline-crew-mcp__channel_claim` token. Only the
 engineering-manager (the one engine) carries `channel_claim` — the three bridges list
 `channel_send` alone (see the channel-token subsection above). `model` is `inherit` for all four.
 
@@ -149,8 +149,8 @@ the **human-notification commands** the chief-of-staff invokes to reach a person
 
 ### Crew-internal channel — `channel_send`
 
-Every role coordinates over one MCP tool, served by `@kampus/pipeline-crew-mcp` (wired per
-session via `--channels server:@kampus/pipeline-crew-mcp`).
+Every role coordinates over one MCP tool, served by `pipeline-crew-mcp` (wired per
+session via `--channels server:pipeline-crew-mcp`).
 
 - **Signature** — `channel_send {targetRole, kind, body}`. Discovery is implicit: the
   substrate resolves the target role's inbox; there is no separate discover/claim tool.

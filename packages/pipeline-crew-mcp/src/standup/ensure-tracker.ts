@@ -28,7 +28,7 @@ export type TrackerBindOutcome = "started" | "already-serving";
 
 /** The launcher couldn't confirm the per-project socket was serving within the wait budget. */
 export class TrackerNotServingError extends Schema.TaggedErrorClass<TrackerNotServingError>()(
-	"@kampus/pipeline-crew-mcp/standup/TrackerNotServingError",
+	"pipeline-crew-mcp/standup/TrackerNotServingError",
 	{socketPath: Schema.String},
 ) {}
 

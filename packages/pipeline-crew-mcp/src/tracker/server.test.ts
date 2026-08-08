@@ -31,7 +31,7 @@ describe("tracker socket path — derived from the canonical repo key", () => {
 	});
 	it("differs across repos and is a well-formed .sock path", () => {
 		assert.notStrictEqual(rendezvousSocketPathFor("/a/.git"), rendezvousSocketPathFor("/b/.git"));
-		assert.match(rendezvousSocketPathFor("/a/.git"), /kampus-crew-[0-9a-f]{16}\.sock$/);
+		assert.match(rendezvousSocketPathFor("/a/.git"), /pipeline-crew-[0-9a-f]{16}\.sock$/);
 	});
 });
 

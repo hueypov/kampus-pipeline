@@ -18,7 +18,7 @@ import {Inbox, inboxHandlers, PeerInbox} from "./inbox.ts";
 import * as Peer from "./peer.ts";
 import {type RolePresence, Tracker} from "./tracker.ts";
 
-const UNREACHABLE = "@kampus/pipeline-crew-mcp/PeerUnreachableError";
+const UNREACHABLE = "pipeline-crew-mcp/PeerUnreachableError";
 
 // A scoped in-memory tracker: announce acquires presence and releases it on scope close.
 const FakeTracker = Layer.effect(

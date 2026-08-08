@@ -44,7 +44,7 @@ export class ChannelDescribe extends Context.Service<
 	{
 		readonly view: ChannelContractView;
 	}
->()("@kampus/pipeline-crew-mcp/edge/ChannelDescribe") {}
+>()("pipeline-crew-mcp/edge/ChannelDescribe") {}
 
 /**
  * The one describe tool: the full discoverable channel contract out. `request` is intentionally

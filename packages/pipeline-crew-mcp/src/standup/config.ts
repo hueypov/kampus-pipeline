@@ -223,7 +223,7 @@ const RawLaunchConfig = Schema.Struct({
 
 /** A crew config that could not be resolved, read, parsed, or validated — carries the offending dimension. */
 export class LaunchConfigError extends Schema.TaggedErrorClass<LaunchConfigError>()(
-	"@kampus/pipeline-crew-mcp/standup/LaunchConfigError",
+	"pipeline-crew-mcp/standup/LaunchConfigError",
 	{
 		configPath: Schema.String,
 		reason: Schema.String,

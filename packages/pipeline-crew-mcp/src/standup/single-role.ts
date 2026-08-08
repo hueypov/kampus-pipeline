@@ -82,7 +82,7 @@ const displayNameOf = (role: CrewRole, instance: string): string =>
  * `stand-up` first — never a silent new-window boot that would strand the member outside the crew view.
  */
 export class CrewWindowNotRunningError extends Schema.TaggedErrorClass<CrewWindowNotRunningError>()(
-	"@kampus/pipeline-crew-mcp/standup/CrewWindowNotRunningError",
+	"pipeline-crew-mcp/standup/CrewWindowNotRunningError",
 	{
 		targetSession: Schema.String,
 		reason: Schema.String,
@@ -274,7 +274,7 @@ export const spawnRole = (
 
 /** `retire-role` was handed an instance argument inconsistent with the role's kind — an engine needs one, a bridge takes none. */
 export class RetireRoleArgError extends Schema.TaggedErrorClass<RetireRoleArgError>()(
-	"@kampus/pipeline-crew-mcp/standup/RetireRoleArgError",
+	"pipeline-crew-mcp/standup/RetireRoleArgError",
 	{
 		role: Schema.String,
 		reason: Schema.String,
@@ -283,7 +283,7 @@ export class RetireRoleArgError extends Schema.TaggedErrorClass<RetireRoleArgErr
 
 /** No single crew pane matched the member to retire — zero matches (already gone) or, defensively, more than one. */
 export class CrewPaneNotFoundError extends Schema.TaggedErrorClass<CrewPaneNotFoundError>()(
-	"@kampus/pipeline-crew-mcp/standup/CrewPaneNotFoundError",
+	"pipeline-crew-mcp/standup/CrewPaneNotFoundError",
 	{
 		displayName: Schema.String,
 		matched: Schema.Number,
@@ -293,7 +293,7 @@ export class CrewPaneNotFoundError extends Schema.TaggedErrorClass<CrewPaneNotFo
 
 /** The member's tmux pane was found but `kill-pane` did not succeed — the retire fails closed rather than half-tear-down. */
 export class CrewPaneKillError extends Schema.TaggedErrorClass<CrewPaneKillError>()(
-	"@kampus/pipeline-crew-mcp/standup/CrewPaneKillError",
+	"pipeline-crew-mcp/standup/CrewPaneKillError",
 	{
 		paneId: Schema.String,
 		reason: Schema.String,

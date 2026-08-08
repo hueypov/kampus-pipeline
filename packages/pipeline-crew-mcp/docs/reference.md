@@ -231,5 +231,5 @@ Both are `Schema.TaggedErrorClass` types (decode-checked, tag-discriminated).
 
 | Error | `_tag` | Fields | Raised when |
 | --- | --- | --- | --- |
-| `RoleUniquenessError` | `@kampus/pipeline-crew-mcp/crew/RoleUniquenessError` | `role: Schema.String`, `heldBy: Schema.String` | A second live session tries to hold a role another session already holds — a rejection, not a shared occupancy. A resource-claim collision, by contrast, is a **value** (`ClaimReply`), never this error. |
-| `PeerUnreachableError` | `@kampus/pipeline-crew-mcp/PeerUnreachableError` | `target: Schema.String`, `reason: Schema.String` | A dial to a target that is absent, expired, or unreachable — surfaced loudly (no store-and-forward, no queue), never a silent drop. |
+| `RoleUniquenessError` | `pipeline-crew-mcp/crew/RoleUniquenessError` | `role: Schema.String`, `heldBy: Schema.String` | A second live session tries to hold a role another session already holds — a rejection, not a shared occupancy. A resource-claim collision, by contrast, is a **value** (`ClaimReply`), never this error. |
+| `PeerUnreachableError` | `pipeline-crew-mcp/PeerUnreachableError` | `target: Schema.String`, `reason: Schema.String` | A dial to a target that is absent, expired, or unreachable — surfaced loudly (no store-and-forward, no queue), never a silent drop. |

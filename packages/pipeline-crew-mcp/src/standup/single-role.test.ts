@@ -41,7 +41,7 @@ import {
 } from "./index.ts";
 
 const PINNED = "2.1.212";
-const SERVER = "@kampus/pipeline-crew-mcp";
+const SERVER = "pipeline-crew-mcp";
 
 /** spawnRole reaches the platform through buildLaunchPlan's FileSystem/Path seam — provide the real Node platform. */
 const spawn = (input: SpawnRoleInput) => spawnRole(input).pipe(Effect.provide(NodeServices.layer));

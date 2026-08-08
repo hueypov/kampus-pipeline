@@ -21,7 +21,7 @@ import {
 import {channelExperimentalCapability} from "./mcp-channel.ts";
 
 class DisposeError extends Schema.TaggedErrorClass<DisposeError>()(
-	"@kampus/pipeline-crew-mcp/DisposeError",
+	"pipeline-crew-mcp/DisposeError",
 	{cause: Schema.Unknown},
 ) {}
 

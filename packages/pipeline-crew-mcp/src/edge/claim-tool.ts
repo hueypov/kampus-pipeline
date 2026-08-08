@@ -36,7 +36,7 @@ export class ChannelClaim extends Context.Service<
 	{
 		readonly claim: (resource: string) => Effect.Effect<ClaimReply>;
 	}
->()("@kampus/pipeline-crew-mcp/edge/ChannelClaim") {}
+>()("pipeline-crew-mcp/edge/ChannelClaim") {}
 
 /** The one claim tool: `{resource}` in, the tracker's typed granted/collision reply out. */
 export const ClaimResource = Tool.make("channel_claim", {

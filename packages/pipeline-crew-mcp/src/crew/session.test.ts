@@ -217,7 +217,7 @@ describe("crew/session — sessionInstance honors the launcher-assigned identity
 // A dispose() rejection is irrelevant to teardown; surface it as a typed failure and swallow it
 // (never Effect.promise, whose rejection escapes as an uncatchable defect; model failures in the effect flow rather than letting a rejected promise escape as a defect).
 class DisposeError extends Schema.TaggedErrorClass<DisposeError>()(
-	"@kampus/pipeline-crew-mcp/crew/DisposeError",
+	"pipeline-crew-mcp/crew/DisposeError",
 	{cause: Schema.Unknown},
 ) {}
 

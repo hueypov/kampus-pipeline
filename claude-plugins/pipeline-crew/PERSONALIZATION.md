@@ -127,7 +127,7 @@ the config elsewhere, set `$CREW_CONFIG` to that path.
 
 Once the config is filled, boot the whole crew from it in **one command** — `/stand-up`
 (the plugin's thin [`commands/stand-up.md`](commands/stand-up.md)), which invokes the
-`@kampus/pipeline-crew-mcp` substrate's `stand-up` subcommand (the launcher rule: commands stay thin and delegate launcher mechanics to the tested crew service):
+`pipeline-crew-mcp` substrate's `stand-up` subcommand (the launcher rule: commands stay thin and delegate launcher mechanics to the tested crew service):
 
 ```bash
 .pipeline/toolkit/bin/pipeline crew stand-up            # defaults --project-root to the working directory

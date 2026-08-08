@@ -26,4 +26,4 @@ export class Tracker extends Context.Service<
 		readonly announce: (presence: RolePresence) => Effect.Effect<void, never, Scope.Scope>;
 		readonly lookup: (role: string) => Effect.Effect<Option.Option<RolePresence>>;
 	}
->()("@kampus/pipeline-crew-mcp/peer/Tracker") {}
+>()("pipeline-crew-mcp/peer/Tracker") {}

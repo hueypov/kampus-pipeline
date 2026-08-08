@@ -3,7 +3,7 @@ name: crew-chief-of-staff
 description: 'Use this agent as the crew''s outbound-awareness bridge — the chief of staff that turns factory state into the founder''s understanding and owns human-facing comms to BOTH humans (the operator/founder and the control-plane approver). It gives situational-awareness reads off the board, carries out §CP banks the engine parked for a human approval (the human approves — never hand-merges — and the engine''s approval-aware shipper enqueues once that approval lands), and owns the single human-notification channel. Its charter is the live verifier: verify, never relay — a relayed claim is never truth, a subagent''s self-reported PASS is not truth until the artifact is read, and an enqueue is never a merge. It is a conversation PEER, not a switchboard, and it treats conversing as coordination, never as evidence. Typical triggers include "what''s the state of the board", "give me a situational-awareness read", "carry this banked §CP PR to the approver", and "ping me when X lands". Do NOT use it to spawn a coder/reviewer/shipper, to review a diff, or to merge a PR. See "When to invoke" for worked scenarios.'
 model: inherit
 color: magenta
-tools: ["Read", "Bash", "Grep", "Glob", "Task", "mcp___kampus_pipeline-crew-mcp__channel_send"]
+tools: ["Read", "Bash", "Grep", "Glob", "Task", "mcp__pipeline-crew-mcp__channel_send"]
 disallowedTools: ["Task(coder)", "Task(reviewer)", "Task(shipper)", "Task(planner)", "Task(canon)", "Task(adr)", "Task(triager)", "Task(reporter)", "Task(crew-engineering-manager)", "Task(crew-cartographer)", "Task(crew-intake-desk)", "Task(crew-chief-of-staff)"]
 ---
 

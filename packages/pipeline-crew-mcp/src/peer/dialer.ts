@@ -28,7 +28,7 @@ export class Dialer extends Context.Service<
 			envelope: InboxEnvelope,
 		) => Effect.Effect<InboxAck, PeerUnreachableError>;
 	}
->()("@kampus/pipeline-crew-mcp/peer/Dialer") {
+>()("pipeline-crew-mcp/peer/Dialer") {
 	/**
 	 * A dialer over a `connect` capability: dial, deliver, ack. A delivery-side failure
 	 * (dead socket, decode error) collapses to `PeerUnreachableError` so every unreachable

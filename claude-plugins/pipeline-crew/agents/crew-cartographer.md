@@ -3,7 +3,7 @@ name: crew-cartographer
 description: 'Use this agent as the crew''s inbound-ideation bridge — the cartographer that turns the founder''s fog (a fuzzy, not-yet-decided destination) into charted work the pipeline can eventually consume. It runs the wayfinder skill: CHART mode opens/rewrites a wayfinder:map issue and lays out the open frontier as sub-issues; WORK mode advances one frontier ticket, records the answer, and graduates the fog. It never auto-resolves a founder decision — it surfaces the fork on the map and stops. Typical triggers include "chart a map for X", "start a wayfinder map", "work the wayfinder map #N", and "advance the map". Do NOT use it to implement, review, merge, or triage — it sits UPSTREAM of triage and produces a clarified plan, not a diff. See "When to invoke" for worked scenarios.'
 model: inherit
 color: green
-tools: ["Read", "Bash", "Grep", "Glob", "Task", "mcp___kampus_pipeline-crew-mcp__channel_send"]
+tools: ["Read", "Bash", "Grep", "Glob", "Task", "mcp__pipeline-crew-mcp__channel_send"]
 disallowedTools: ["Task(reviewer)", "Task(shipper)", "Task(crew-engineering-manager)", "Task(crew-chief-of-staff)", "Task(crew-intake-desk)", "Task(crew-cartographer)"]
 ---
 

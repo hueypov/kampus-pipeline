@@ -1,5 +1,5 @@
 /**
- * @kampus/pipeline-crew-mcp — the crew's channels-backed messaging substrate (the MCP-channel rule: crew roles communicate through MCP channels instead of a terminal relay).
+ * pipeline-crew-mcp — the crew's channels-backed messaging substrate (the MCP-channel rule: crew roles communicate through MCP channels instead of a terminal relay).
  *
  * The cutover (the session-start rule: start one role-bound MCP server and peer for each session) binds the substrate into a runnable crew: `Crew.runCrewSession` /
  * `Crew.crewSessionLayer` stand up one live session's stdio `McpServer` + `ChannelSend`-from-peer,
