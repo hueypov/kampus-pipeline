@@ -77,8 +77,7 @@ Reversible on request; recorded here so the loose end is visible rather than dis
 
 It was deleted, and it should not have been. The verdict rested on a reachability claim that was
 false, produced by measuring the deletions and the keeps with **two different greps**: a
-`skills/<name>` path form for the deletions — which returns **zero for every skill in the
-repository**, including the ones kept — and a backtick form for the keeps.
+`skills/<name>` path form for the deletions, and a `` `<name>` `` backtick form for the keeps.
 
 The exact words that error produced, at commit `34d06d7`, were *"nothing routes to it — no agent, no
 crew role, no stage"* for `architecture-audit`, and *"Zero inbound references"* for `what-shipped`.
@@ -102,22 +101,49 @@ It had more inbound references than anything kept on "general and directly invok
 `author-skill` — kept on exactly those grounds — had none. Against the three tests it fails nothing:
 the job is general, three files route to it, and it names artifacts any repository has.
 
-The three references were then rewritten to point at `report` as part of "repairing dangling
-pointers" — so the evidence contradicting the verdict was edited away in the same change that acted
-on it. Nobody intended that; it is what happens when the repair follows the verdict without
-re-checking it.
-
 `canon` and `glossary` maintain a repository's own decisions and patterns. Both define their scope
 *against* an architecture audit, which is a different job — that distinction is the reason those
 references exist, and collapsing all three into `report` erased a real boundary.
 
-The skill and all four pointers are restored. **The lesson is a rule for this document, not a
-footnote:** measure every candidate with one query, check that query returns non-zero for something
-you intend to keep, and never let a verdict's cleanup run before the verdict is re-checked.
+## Why the two queries disagreed — measured, not assumed
 
-The `skills/<name>` pattern would have failed that middle test immediately — it returns zero for
-`adr`, `report`, and every other skill in the repository. A query that finds nothing anywhere is not
-evidence of absence; it is a broken query.
+Neither form is broken. They see **different citation styles**, and those styles are not evenly
+distributed. Referencing files at `34d06d7^`, same exclusion, both forms:
+
+| Skill | `skills/<name>` | `` `<name>` `` |
+|---|---|---|
+| `write-code` | 3 | 17 |
+| `report` | 2 | 16 |
+| `ship-it` | 5 | 11 |
+| `adr` | 1 | 4 |
+| **`architecture-audit`** | **0** | **3** |
+| `heal-ci` | 0 | 3 |
+| `glossary` | 0 | 2 |
+| `doctor` | 0 | 1 |
+
+The path form catches cross-references written as **file paths**, which is how pipeline *stages* cite
+each other. Ambient skills are cited in **prose, by name** — so the path form reads zero for nearly
+every one of them, `architecture-audit` included. Measuring the deletion candidates with the blind
+form and the keeps with the seeing one did not merely risk the wrong answer. It guaranteed it.
+
+The skill and all four pointers are restored.
+
+## The rule this produces
+
+**Never compare counts produced by different queries.** The error was the *comparison*, not either
+query. Each was locally sensible, and the path form is genuinely non-zero for `ship-it`, `report`,
+and `write-code` — so it does not look broken when you spot-check it.
+
+That last fact also kills the weaker rule an earlier revision of this section proposed: *"check the
+query returns non-zero for something you intend to keep."* The path form **passes** that check —
+`ship-it` returns 5 — and still reads zero for `architecture-audit`. A sanity check that the broken
+measurement survives is not a check. What is needed is that the query can see the citation style the
+candidates actually use, and the only way to know that is to measure a candidate whose answer you
+already know.
+
+**And never let a verdict's cleanup run before the verdict is re-checked.** The three references were
+rewritten to point at `report` while repairing dangling pointers, so the evidence contradicting the
+verdict was edited away by the same change that acted on it.
 
 ## Kept — sixteen (fifteen below, plus `architecture-audit` — see the retraction)
 
