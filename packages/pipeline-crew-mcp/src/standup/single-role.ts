@@ -205,9 +205,10 @@ export const resolveCrewWindowId = (
  * (config, pinned CLI version), ensure the tracker (idempotent — reuses the running one), derive the
  * single session (a bridge singleton or one fresh-instance engine), build its launch plan through the
  * SHARED `buildLaunchPlan` (never a forked launch path, AC3), register just this pane's project scope
- * (idempotent boot gates, untouched siblings), then SPLIT it into the running crew window. The booted
- * session auto-joins the tracker + channel via `AnnouncePresence` and (for an engine) deconflicts by
- * resource claims — the launcher does none of that, it only puts the pane on screen.
+ * (visibility only, untouched siblings — see the register call below), then SPLIT it into the running
+ * crew window. The booted session auto-joins the tracker + channel via `AnnouncePresence` and (for an
+ * engine) deconflicts by resource claims — the launcher does none of that, it only puts the pane on
+ * screen.
  */
 export const spawnRole = (
 	input: SpawnRoleInput,
