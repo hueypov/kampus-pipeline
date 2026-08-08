@@ -176,7 +176,32 @@ describe("checkVerbPath — against the live registry", () => {
 		};
 		walk(live, []);
 		expect(leaves.length).toBeGreaterThan(50);
-		expect(leaves.some((l) => l.flags > 0), "some leaf must expose readable flags").toBe(true);
+		// EVERY declared flag must derive, not SOME leaf somewhere: 44 leaves carry bare (unwrapped)
+		// flags, so a `some` stays true through a wrapper-shape drift (`.param` renamed) while the
+		// wrapped majority silently lose their operand guard — fail-open, the exact hole the review
+		// simulated. The detector compares each node's DERIVED arity map against the command's
+		// DECLARED flag list: an unwrap failure drops entries, so derived < declared reds.
+		const tools = registeredTools as unknown as ReadonlyArray<CommandLike>;
+		const pair = (command: CommandLike, node: typeof live, path: string[]) => {
+			const declared = (command.config?.flags ?? []).length;
+			if (declared > 0) {
+				expect(
+					node.flags.size,
+					`${path.join(" ")} declares ${declared} flag(s) but derived ${node.flags.size} — a wrapper shape stopped unwrapping`,
+				).toBeGreaterThanOrEqual(declared);
+			}
+			const kids = (command.subcommands ?? []).flatMap((e) => e.commands ?? []);
+			kids.forEach((kid, i) => {
+				const child = node.children[i];
+				expect(child?.name).toBe(kid.name);
+				if (child) pair(kid, child, [...path, kid.name]);
+			});
+		};
+		tools.forEach((tool, i) => {
+			const node = live.children[i];
+			expect(node?.name).toBe(tool.name);
+			if (node) pair(tool, node, [tool.name]);
+		});
 	});
 
 	it("refuses a fabricated subcommand under every group", () => {
