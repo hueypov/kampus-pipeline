@@ -146,6 +146,60 @@ export const gatesForFiles = (
 	return gates.length === 0 ? null : gates;
 };
 
+/** Both sides of a pull request's policy, once each has been established as trustworthy. */
+export type SidedPolicies = {
+	readonly base: ClassificationPolicy;
+	readonly head: ClassificationPolicy;
+};
+
+/**
+ * The gates a pull request requires, resolved against BOTH sides of its policy.
+ *
+ * One side is never enough. Classified against the base alone, a PR that changes the classification
+ * policy is gated by the rule it exists to retire — #93 merged requiring two namespaces where its
+ * own head policy requires three. Against the head alone, a PR that DELETES a rule would delete the
+ * gate that should have reviewed the deletion.
+ *
+ * `gates` is therefore the **union**: a namespace either side requires is required. That is the
+ * fail-closed reading and the only one needing no ruling on which side is authoritative. The
+ * alternative — refusing outright whenever the sides disagree — would make every policy-changing PR
+ * wait on a human to assert what the gate could have derived, which is the workaround this defect
+ * already forced once (#120). See ADR 0002.
+ *
+ * `only` names the namespaces exactly one side asked for, and `ship-it check` prints them. That is
+ * **information, not routing**: it carries no exit code, no precondition, and no label, and nothing
+ * tells an agent shipper to read it — a human watching the run learns the sides disagreed, the agent
+ * that merges does not. What refuse-on-disagreement would have bought is genuinely given up;
+ * recording the disagreement is what makes that loss legible, not what compensates for it.
+ *
+ * `null` gates means the scope could not be established at all — an empty file list — and carries
+ * the same meaning it does in `gatesForFiles`: refuse, never "no gates required".
+ */
+export type PrGateScope = {
+	readonly gates: ReadonlyArray<VerdictGate> | null;
+	readonly base: ReadonlyArray<VerdictGate> | null;
+	readonly head: ReadonlyArray<VerdictGate> | null;
+	/** The gates exactly one side requires — the base/head disagreement, reported rather than hidden. */
+	readonly only: ReadonlyArray<VerdictGate>;
+};
+
+export const prGateScope = (
+	files: ReadonlyArray<string>,
+	policies: SidedPolicies,
+): PrGateScope => {
+	const base = gatesForFiles(files, policies.base);
+	const head = gatesForFiles(files, policies.head);
+	const inBase = new Set(base ?? []);
+	const inHead = new Set(head ?? []);
+	const union = GATES.filter((gate) => inBase.has(gate) || inHead.has(gate));
+	return {
+		gates: union.length === 0 ? null : union,
+		base,
+		head,
+		only: union.filter((gate) => inBase.has(gate) !== inHead.has(gate)),
+	};
+};
+
 /**
  * The gates a `--gates` value names, or null when any token is not a gate.
  *
@@ -174,7 +228,10 @@ export type NamespaceCheck =
 /**
  * May a verdict in `gate` be posted for a diff of `files`?
  *
- * `policy` is nullable, and null means UNCHECKED — never "classify fail-closed". The fail-closed
+ * The required set comes from `prGateScope`, the same function `ship-it` derives its merge scope
+ * from, so the reviewer's answer and the shipper's cannot silently differ (#120).
+ *
+ * `policies` is nullable, and null means UNCHECKED — never "classify fail-closed". The fail-closed
  * default is correct for `ship-it`, where classifying everything requires MORE gates and the gate
  * gets stricter; fed to a refusal guard it inverts, because a scope of every-namespace contains
  * every `--gate` value and nothing is ever refused. The first live probe of this guard proved it:
@@ -190,15 +247,15 @@ export type NamespaceCheck =
 export const namespaceCheck = (
 	gate: VerdictGate,
 	files: ReadonlyArray<string>,
-	policy: ClassificationPolicy | null,
+	policies: SidedPolicies | null,
 ): NamespaceCheck => {
-	if (policy === null) return {_tag: "unchecked"};
+	if (policies === null) return {_tag: "unchecked"};
 	// The file read takes one 100-item page. At that count a complete list is indistinguishable
 	// from a truncated one, and here the failure direction inverts ship-it's: a dropped path can
 	// drop the gate that would have ALLOWED this verdict, refusing a legitimate review. Unknown
 	// scope on a refusal guard means unchecked, never a guess.
 	if (files.length >= 100) return {_tag: "unchecked"};
-	const required = gatesForFiles(files, policy);
+	const required = prGateScope(files, policies).gates;
 	if (required === null) return {_tag: "unchecked"};
 	return required.includes(gate) ? {_tag: "allowed"} : {_tag: "refused", required};
 };
@@ -216,3 +273,22 @@ export const namespaceCheck = (
 export const guardPolicy = (
 	loaded: {readonly policy: ClassificationPolicy; readonly trusted: boolean} | null,
 ): ClassificationPolicy | null => (loaded !== null && loaded.trusted ? loaded.policy : null);
+
+/**
+ * Both sides of a PR's loaded policy, or null when EITHER side is untrusted.
+ *
+ * One trusted side is not half a check here. The untrusted side loads as the classify-everything
+ * fallback, which unions to every namespace and leaves the refusal guard with nothing it can refuse
+ * — the same fail-open `guardPolicy` exists to close, arriving through the union instead of through
+ * a single load.
+ */
+export const guardPolicies = (
+	loaded: {
+		readonly base: {readonly policy: ClassificationPolicy; readonly trusted: boolean};
+		readonly head: {readonly policy: ClassificationPolicy; readonly trusted: boolean};
+	} | null,
+): SidedPolicies | null => {
+	const base = guardPolicy(loaded?.base ?? null);
+	const head = guardPolicy(loaded?.head ?? null);
+	return base === null || head === null ? null : {base, head};
+};
