@@ -47,6 +47,13 @@ jobs:
         run: pnpm -r typecheck
 
       - name: test
+        env:
+          # Some spawned-bin witnesses probe a live PR read (the verdict-namespace guard sits behind
+          # a split-role check that needs one). Without a token they skip, and vitest's default
+          # reporter prints no reason — CI would go green with those witnesses silently absent, which
+          # is the shape this repository refuses everywhere else. The tests themselves red in CI when
+          # this is missing, so the two halves cannot drift apart.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # One package at a time. `pipeline`'s init suite shells out to `git` and a real `pnpm
         # install` per fixture, and running it beside the other two suites pushes it past its 20s
         # per-test timeout — a red build caused by scheduling rather than by the diff. A runner has
