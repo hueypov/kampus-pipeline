@@ -71,6 +71,10 @@ The **engineering-manager** (the one engine role) additionally carries a second 
 mcp__pipeline-crew-mcp__channel_claim
 ```
 
+A session serves **both channel tools or neither** — they register on one MCP server through one
+merged layer — so an engine that can see `channel_send` can take the lock, and an engine that
+cannot see one cannot see either. There is no partial-toolset case to check for.
+
 `channel_send` and `channel_claim` are **different mechanisms, not variants**: `channel_send`
 relays a typed message to a peer's inbox (coordination), while `channel_claim` invokes the
 tracker's resource-keyed `Claim` and returns a `{granted, collision, owner}` reply — a real
@@ -102,3 +106,29 @@ session silently — that is exactly what the schema-validation failure did (one
 CLI discard the server's entire `tools/list`, so no seat ever saw any channel tool). If the tools
 are still absent after a re-check or two, stop waiting and **file it** (the `report` skill) —
 still without diagnosing infra yourself.
+
+## Still absent after the re-check — one probe, then act
+
+A permanent absence and the boot window are indistinguishable from a seat, so the re-check above
+can only ever end in "wait more or report". **One** bounded command separates them, and it is the
+only infra call this doc sanctions:
+
+```
+pgrep -f "session --role <your role>"
+```
+
+Your session's channel server runs as `<node> <…>/bin.ts session --role <your role> …`. A match
+means a server exists and the toolset is genuinely mid-connect — re-check as above. **No match
+means no server was ever started for your session, and none will be**: the channel is gated on host
+state read once at your pane's boot, so nothing arrives later and further waiting is pure cost. Run
+this probe once, act on the answer, and stop — reading crew-mcp source is still the ~44k-token burn
+this document exists to prevent.
+
+On no match, report it and then **carry on over the board**. Everything a channel-less seat needs
+is already board-visible: an engine posts its lane as the issue assignee plus a claim comment naming
+its session before opening the lane, and reads both before claiming one, because a seat that cannot
+take the cross-engine claim also cannot read it. That is weaker than the lock and is the whole
+mitigation available at engine count > 1. The mechanism, the evidence, and what is deliberately left
+unfixed are recorded in `.decisions/0002-crew-channel-is-an-operator-gated-boot-precondition.md`.
+Recovery, if an operator is at the keyboard, is `retire-role` then `spawn-role` — it costs the seat
+its context, so it is a recovery and not a fix.

@@ -583,10 +583,11 @@ export const runStandUp = (
 			{concurrency: 1},
 		);
 
-		// Register every pane's crew server as a project-scope leaf `.mcp.json` + seed the two boot gates
-		// (folder trust + server approval) — one fail-closed step (the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure): the channel resolver reads the
+		// Register every pane's crew server as a project-scope leaf `.mcp.json` — one fail-closed step (the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure): the channel resolver reads the
 		// persisted project scope, never the old inline `--mcp-config`. Each `.mcp.json` sits in the pane's
 		// own cwd, on no sibling's ancestor chain, so a pane sees ONLY its own server (no role-lease storm).
+		// This makes the server VISIBLE only: the boot gates that decide whether the CLI ever spawns it are
+		// operator-owned and seeded by no launch path (register-project-scope.ts, ADR 0002).
 		yield* localScope.register({
 			projectRoot,
 			runId,

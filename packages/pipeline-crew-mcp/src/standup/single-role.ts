@@ -250,9 +250,9 @@ export const spawnRole = (
 			crewConfigPath,
 		});
 
-		// Register just THIS pane's project scope (+ idempotent folder-trust / server-approval boot gates):
-		// adds one leaf `.mcp.json` in the pane's own cwd, on no running member's ancestor chain, so no
-		// sibling's channel isolation is disturbed (the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure).
+		// Register just THIS pane's project scope: adds one leaf `.mcp.json` in the pane's own cwd, on no
+		// running member's ancestor chain, so no sibling's channel isolation is disturbed (the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure).
+		// Visibility only — the spawn-deciding boot gates stay operator-owned (register-project-scope.ts, ADR 0002).
 		yield* localScope.register({
 			projectRoot,
 			runId,
