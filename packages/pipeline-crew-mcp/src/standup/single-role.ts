@@ -205,9 +205,10 @@ export const resolveCrewWindowId = (
  * (config, pinned CLI version), ensure the tracker (idempotent — reuses the running one), derive the
  * single session (a bridge singleton or one fresh-instance engine), build its launch plan through the
  * SHARED `buildLaunchPlan` (never a forked launch path, AC3), register just this pane's project scope
- * (idempotent boot gates, untouched siblings), then SPLIT it into the running crew window. The booted
- * session auto-joins the tracker + channel via `AnnouncePresence` and (for an engine) deconflicts by
- * resource claims — the launcher does none of that, it only puts the pane on screen.
+ * (visibility only, untouched siblings — see the register call below), then SPLIT it into the running
+ * crew window. The booted session auto-joins the tracker + channel via `AnnouncePresence` and (for an
+ * engine) deconflicts by resource claims — the launcher does none of that, it only puts the pane on
+ * screen.
  */
 export const spawnRole = (
 	input: SpawnRoleInput,
@@ -250,9 +251,9 @@ export const spawnRole = (
 			crewConfigPath,
 		});
 
-		// Register just THIS pane's project scope (+ idempotent folder-trust / server-approval boot gates):
-		// adds one leaf `.mcp.json` in the pane's own cwd, on no running member's ancestor chain, so no
-		// sibling's channel isolation is disturbed (the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure).
+		// Register just THIS pane's project scope: adds one leaf `.mcp.json` in the pane's own cwd, on no
+		// running member's ancestor chain, so no sibling's channel isolation is disturbed (the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure).
+		// Visibility only — the spawn-deciding boot gates stay operator-owned (register-project-scope.ts, ADR 0002).
 		yield* localScope.register({
 			projectRoot,
 			runId,
