@@ -115,9 +115,12 @@ climbing, a PR state not moving), not through a transport error anyone chases.
 Roles address each other by **role**, through one MCP tool — you never discover or name another session;
 the substrate resolves the target role's inbox for you:
 
-- **`channel_send {targetRole, kind, body}`** — discovery is implicit inside the send (the
-  library resolves the role's inbox; there is no separate discover/claim tool). Success returns
-  an `InboxAck`; an unreachable peer returns a `PeerUnreachableError {target, reason}`.
+- **`channel_send {targetRole, kind, body}`** — *inbox* discovery is implicit inside the send
+  (the library resolves the role's inbox, so you never name a session). Success returns an
+  `InboxAck`; an unreachable peer returns a `PeerUnreachableError {target, reason}`.
+- **`channel_kinds`** — the *contract* discovery the send does not do for you: it returns every
+  message kind's payload schema. Read a kind's shape here before your first send of it; a
+  `body` that fails the decode check comes back as an `InvalidMessageError`, never an ack.
 - **Inbound arrives as a wake tag** — `<channel from="inbox://<role>" kind="…">…JSON…</channel>`.
 - **An ack means delivered-to-inbox + wake enqueued — never seen-by-model.** The peer reads it
   when it wakes; the ack is not a read receipt and never an answer. (This is the load-bearing
