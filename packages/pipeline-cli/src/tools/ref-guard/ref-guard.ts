@@ -25,6 +25,12 @@ export type RefDecision =
 export const decideRefUpdate = (update: RefUpdate, guardedRef: string, facts: ComparisonFacts): RefDecision => {
 	if (update.refName !== guardedRef) return {kind: "allow", reason: `${update.refName} is outside guarded ref ${guardedRef}`};
 	if (update.newOid === ZERO_OID) return {kind: "refuse", reason: `refusing to delete guarded primary ref ${guardedRef}`};
+	// A same-value write moves nothing, so it cannot diverge anything. Git fires these routinely —
+	// `git stash push` and `git reset --hard HEAD` re-write the current branch at its current oid —
+	// and refusing one strands a merely-BEHIND primary: with origin ahead, the divergence test below
+	// reads the standstill as a rewrite and aborts the stash/reset that precedes the very pull that
+	// would catch the branch up (first hit self-hosting, pulling main after #68 merged).
+	if (update.newOid === update.oldOid) return {kind: "allow", reason: `${guardedRef} is unchanged (same-value write)`};
 	if (facts.comparisonOid === null) return {kind: "allow", reason: `comparison ref is unavailable; allowing ${guardedRef} update`};
 	if (update.newOid === facts.comparisonOid) return {kind: "allow", reason: `${guardedRef} matches its comparison ref`};
 	if (facts.comparisonIsAncestorOfNew) return {kind: "allow", reason: `${guardedRef} is a fast-forward of its comparison ref`};
