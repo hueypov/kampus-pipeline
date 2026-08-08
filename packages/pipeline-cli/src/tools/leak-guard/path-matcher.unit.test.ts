@@ -39,13 +39,13 @@ describe("MACHINE_LOCAL_PATH_PATTERNS — home/absolute arm", () => {
 			assert.isTrue(hitsHome("see /Users/someone/code/x"));
 			assert.isTrue(hitsHome("the vault lives at ~/.usirin/vault"));
 			assert.isTrue(hitsHome("agent home ~/.agent/state"));
-			assert.isTrue(hitsHome("rebuilt from ~/code/github.com/kamp-us/kampus"));
+			assert.isTrue(hitsHome("rebuilt from ~/code/github.com/acme/toolkit"));
 			assert.isTrue(hitsHome("stored under /vault/secrets"));
 		});
 		it("does NOT flag a Windows drive-prefixed C:/Users/... URL (#3070)", () =>
 			assert.isFalse(hitsHome("file:///C:/Users/ci/proj/x")));
 		it("does NOT flag benign ~/.config or ~/Documents", () => {
-			assert.isFalse(hitsHome("credentials in ~/.config/kampus/creds"));
+			assert.isFalse(hitsHome("credentials in ~/.config/acme/creds"));
 			assert.isFalse(hitsHome("saved to ~/Documents/report.pdf"));
 		});
 	});

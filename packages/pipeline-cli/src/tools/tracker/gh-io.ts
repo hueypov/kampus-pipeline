@@ -11,7 +11,7 @@
  * and maps the `RawComment` boundary type into its own domain comment. Two rules bind it, the
  * same two that bound the copies:
  *
- *  - **REST only** — GraphQL is broken on the kamp-us org, so every call is `gh api …`.
+ *  - **REST only** — GraphQL is broken on the target org, so every call is `gh api …`.
  *  - **Typed failures, never a throw.** A non-zero `gh` exit is `GhCommandError`, malformed output
  *    is `GhParseError`, an unresolvable repo is `RepoResolutionError`, and untrusted REST JSON is
  *    decoded at the boundary.

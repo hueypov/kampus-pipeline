@@ -1,6 +1,6 @@
 # Provenance & attribution
 
-This skill is a kampus composite adapted from third-party sources. The three bodies of
+This skill is a composite adapted from third-party sources. The three bodies of
 content carry different licenses; this file records what came from where.
 
 ## Strunk — `elements-of-style/`
@@ -12,7 +12,7 @@ obligation. The transcription and file split are vendored from the source skill 
 
 Adapted from the `writing-clearly-and-concisely` skill in
 [joshuadavidthomas/agent-skills](https://github.com/joshuadavidthomas/agent-skills),
-Copyright (c) 2025 Josh Thomas, MIT License. The `SKILL.md` here is a kampus rewrite, not
+Copyright (c) 2025 Josh Thomas, MIT License. The `SKILL.md` here is a rewrite, not
 a verbatim copy; the MIT notice is retained per its terms:
 
 ```

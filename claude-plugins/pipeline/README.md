@@ -1,6 +1,6 @@
-# kampus-pipeline
+# pipeline
 
-`kampus-pipeline` is the project-local workflow payload in the private
+`pipeline` is the project-local workflow payload in the private
 `kampus-pipeline` toolkit. It supplies reusable Git, GitHub, planning, review,
 and repository-knowledge skills to an adopting repository. It is not a public
 package, a registry dependency, or a globally installed Claude plugin.

@@ -6,7 +6,7 @@ color: purple
 tools: ["Read", "Grep", "Glob", "Bash"]
 ---
 
-You are the **reviewer** — the verification stage of the kampus issue pipeline. You take
+You are the **reviewer** — the verification stage of the issue pipeline. You take
 a PR (or a planned epic), verify it against its **linked issue's acceptance criteria**
 one criterion at a time, and land a clear SHA-bound pass-or-fail verdict on it. You come
 to this **fresh**, with no sunk-cost attachment to the work: you only know what the issue
@@ -31,12 +31,12 @@ in the same pass:
 
 - **has-code** (application/source under the code roots — `$PIPELINE_CODE_PATHS`, `$PIPELINE_CODE_PATHS`,
   `$PIPELINE_CODE_PATHS`, `.glossary/**`) → read and follow
-  `claude-plugins/kampus-pipeline/skills/review-code/SKILL.md`, emit `review-code`.
+  `claude-plugins/pipeline/skills/review-code/SKILL.md`, emit `review-code`.
 - **has-docs** (a prose/knowledge `*.md` on `review-doc`'s surface — `.decisions/`,
   `.patterns/`, root docs — after the code-root/skills/`.glossary` carve-out) → read and
-  follow `claude-plugins/kampus-pipeline/skills/review-doc/SKILL.md`, emit `review-doc`.
+  follow `claude-plugins/pipeline/skills/review-doc/SKILL.md`, emit `review-doc`.
 - **has-skills** (`skills/**`, `agents/**` — behavioral artifacts) → read and follow
-  `claude-plugins/kampus-pipeline/skills/review-skill/SKILL.md`, emit `review-skill`.
+  `claude-plugins/pipeline/skills/review-skill/SKILL.md`, emit `review-skill`.
 
 These three are **mutually inclusive** — dispatch **each** that the diff touches, not the
 first that matches. The class set is decided by the **canonical `HAS_*_RE=` probes**,
@@ -46,14 +46,14 @@ invariant below.
 - **A UI-affecting PR** (a changed file under a UI surface declared in
   `.pipeline/agent-policy.json` — the rendered frontend surface:
   React components, styles, tokens, routes) → **additionally** read and follow
-  `claude-plugins/kampus-pipeline/skills/review-design/SKILL.md`. `review-design` is
+  `claude-plugins/pipeline/skills/review-design/SKILL.md`. `review-design` is
   **additive** — dispatched **alongside** the present class gate(s) above when a changed path
   matches the UI-affecting set, never instead of them. A PR with **no** UI-affecting path
   takes the mis-route off-ramp: `review-design` is not dispatched and emits no marker.
   **Resolve the UI-affecting set from live `configured base branch`, not this snapshot** — see the
   [UI dispatch in lockstep with ship-it](#dispatch-review-design-in-lockstep-with-ship-its-live-ui_re) invariant below.
 - **A planned epic** (a `plan-epic`-output ledger whose `$PIPELINE_STATUS` children need
-  gating) → read and follow `claude-plugins/kampus-pipeline/skills/review-plan/SKILL.md`.
+  gating) → read and follow `claude-plugins/pipeline/skills/review-plan/SKILL.md`.
   This is a distinct **epic-plan mode**, not a PR class — it does not fan with the above.
 
 Each skill is the source of truth for its class — the criterion-by-criterion verification,
@@ -181,7 +181,7 @@ These hold on every run regardless of what the spawn prompt remembered to say:
   ```bash
   UI_RE='<derived from github.review.uiPaths>'   # fail-closed reference; the configured policy is authoritative (documented repository precedent: an unconfigured .tsx/.css has no declared rendered surface, not design-gate work)
   UI_EXCLUDE_RE='\.(test|spec)\.tsx?$'   # documented repository precedent: a src-colocated *.test.tsx/*.spec.ts renders no surface — carve it out (mirrors §CLASS has-docs carve-then-test; ERE has no lookahead, hence the exclude pair)
-  UI_RAW="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/ship-it/SKILL.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
+  UI_RAW="$(gh api "repos/$REPO/contents/claude-plugins/pipeline/skills/ship-it/SKILL.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
   UI_LIVE="$(printf '%s\n' "$UI_RAW" | grep '^UI_RE=' | head -n1 || true)"; UX_LIVE="$(printf '%s\n' "$UI_RAW" | grep '^UI_EXCLUDE_RE=' | head -n1 || true)"
   if [ -n "$UI_LIVE" ]; then UI_RE="$(printf '%s' "$UI_LIVE" | sed "s/^UI_RE='//; s/'$//")"; else UI_RE='.'; fi   # unreadable ⇒ '.' ⇒ every path is UI-affecting ⇒ dispatch review-design (never silently drop it)
   if [ -n "$UX_LIVE" ]; then UI_EXCLUDE_RE="$(printf '%s' "$UX_LIVE" | sed "s/^UI_EXCLUDE_RE='//; s/'$//")"; else UI_EXCLUDE_RE='$^'; fi   # unreadable ⇒ '$^' never-match ⇒ carve nothing ⇒ dispatch review-design for every src path (fail-closed)
@@ -258,7 +258,7 @@ These hold on every run regardless of what the spawn prompt remembered to say:
   error**: silent, and it routed a reviewer's `git diff` to the wrong PR's files (documented repository precedent).
   Prefer passing the value in-process and writing no file at all; when a file is genuinely
   needed, derive its path from a per-run namespace and name every leaf under it:
-  `RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?}/<skill>-<work-item>"`,
+  `RUN_SCRATCH="${TMPDIR:-/tmp}/pipeline-run/${CLAUDE_CODE_SESSION_ID:?}/<skill>-<work-item>"`,
   then `mkdir -p "$RUN_SCRATCH"` (fail closed — never fall back to a shared path).
   **When the state must cross a Bash call, this recipe is the carrier: recompute the same line
   in the later call.** Your shell state does not survive between Bash calls, so a

@@ -33,7 +33,7 @@ Every kill is auditable and reversible. Always:
 # namespace (gh-issue-intake-formats.md) — an issue number is NOT unique, and a clobbered file
 # reads back cleanly as another run's body, preserving the WRONG original (documented repository precedent). Keyed on the
 # session id so composing dup-comment.md in a later Bash call still resolves this same directory:
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset — refusing a shared path (documented repository precedent)}/triage-close-<N>"
+RUN_SCRATCH="${TMPDIR:-/tmp}/pipeline-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset — refusing a shared path (documented repository precedent)}/triage-close-<N>"
 mkdir -p "$RUN_SCRATCH" || { echo "§SP: no per-run scratch dir — refusing a shared path (documented repository precedent)." >&2; exit 1; }
 gh api "repos/$REPO/issues/<N>" --jq '.body' > "$RUN_SCRATCH/dup.md"   # then wrap in <details> and:
 gh api "repos/$REPO/issues/<M>/comments" -f body="$(cat "$RUN_SCRATCH/dup-comment.md")"

@@ -2,7 +2,7 @@
  * The `write-code` tool — the three verbs `skills/write-code/SKILL.md` calls.
  *
  * Implements the derived contract at
- * `claude-plugins/kampus-pipeline/skills/write-code/contract.md`.
+ * `claude-plugins/pipeline/skills/write-code/contract.md`.
  *
  * `open-pr` is the one that earns its place. `Fixes #N` is the only link three stages read, and
  * nothing checked it existed, resolved, or pointed at the claimed issue — so a PR opened without

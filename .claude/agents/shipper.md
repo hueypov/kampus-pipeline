@@ -1,1 +1,1 @@
-../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/shipper.md
+../../.pipeline/toolkit/claude-plugins/pipeline/agents/shipper.md

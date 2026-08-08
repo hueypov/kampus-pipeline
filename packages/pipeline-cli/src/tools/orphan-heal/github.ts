@@ -5,7 +5,7 @@
  * `orphan-heal.ts` core.
  *
  * Same service pattern as the `intake-dedup` / `verdict` children (the originating initiative): a
- * `Context.Service` on `ChildProcessSpawner`, REST only (GraphQL is broken on the kamp-us
+ * `Context.Service` on `ChildProcessSpawner`, REST only (GraphQL is broken on the target
  * org), every infra failure a typed error in the `E` channel, untrusted REST JSON
  * Schema-decoded at the boundary. All reads are from EXISTING state (open PRs, head
  * check-runs, issue labels, open issues) — the documented failure AC forbids inventing a new lane store.

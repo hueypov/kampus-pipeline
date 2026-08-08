@@ -315,7 +315,7 @@ export const renderIssueBody = (
 		"- Register to update: `.glossary/TERMS.md`.",
 		"- The sweep: `packages/pipeline-cli/src/tools/glossary-drift/`, scheduled by `.github/workflows/glossary-drift.yml`.",
 		"- Decision: the glossary trigger rule: identify new domain concepts from changed code and maintain vocabulary outside the merge gate.",
-		"- The glossary skill that does the incremental update: `claude-plugins/kampus-pipeline/skills/glossary/SKILL.md`.",
+		"- The glossary skill that does the incremental update: `claude-plugins/pipeline/skills/glossary/SKILL.md`.",
 		"",
 		"## Suggested next step (non-binding)",
 		"For each phrase, decide add-to-TERMS vs dismiss-as-noise; for real terms, run the `glossary` skill to write the canonical definition. This is a *guess* — a phrase may be incidental prose the recall-biased heuristic over-surfaced.",

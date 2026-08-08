@@ -11,7 +11,7 @@
  * parses. The map's real sub-issue numbers come from the `sub_issues` endpoint,
  * resolved here at the boundary, never by parsing the body.
  *
- * REST only, never GraphQL (broken on the kamp-us org). Every infrastructure failure is a
+ * REST only, never GraphQL (broken on the target org). Every infrastructure failure is a
  * typed error in the `E` channel, never a thrown exception.
  */
 import {Context, Effect, Layer, Stream} from "effect";

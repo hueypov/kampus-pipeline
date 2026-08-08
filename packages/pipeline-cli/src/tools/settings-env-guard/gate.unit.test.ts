@@ -43,7 +43,7 @@ describe("checkSettingsEnv — IO gate", () => {
 	});
 
 	it("SUCCEEDS on a settings.json with no env block (the post-#2495 example-repo shape)", () => {
-		writeSettings({enabledPlugins: {"kampus-pipeline@kampus": false}, hooks: {}});
+		writeSettings({enabledPlugins: {"pipeline@acme": false}, hooks: {}});
 		return run(checkSettingsEnv(root)).then((exit) => expect(Exit.isSuccess(exit)).toBe(true));
 	});
 

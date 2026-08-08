@@ -49,17 +49,17 @@ const toolkitFixture = (): {root: string; toolkit: string; mockBin: string} => {
 	write(join(toolkit, "templates/github/workflows/pipeline-doc-links.yml"), "name: Fixture doc links\n");
 	write(join(toolkit, "templates/github/workflows/pipeline-settings-env-guard.yml"), "name: Fixture settings env\n");
 	write(join(toolkit, "templates/github/workflows/pipeline-unresolved-threads.yml"), "name: Fixture unresolved threads\n");
-	write(join(toolkit, "claude-plugins/kampus-pipeline/skills/example/SKILL.md"), "# Example\n");
-	for (const name of CORE_SKILL_NAMES) write(join(toolkit, `claude-plugins/kampus-pipeline/skills/${name}/SKILL.md`), `# ${name}\n`);
-	for (const name of CORE_WORKFLOW_SUPPORT_FILES) write(join(toolkit, `claude-plugins/kampus-pipeline/skills/${name}`), `# ${name}\n`);
-	copyFileSync(join(process.cwd(), "../../claude-plugins/kampus-pipeline/workflow-catalog.json"), join(toolkit, "claude-plugins/kampus-pipeline/workflow-catalog.json"));
+	write(join(toolkit, "claude-plugins/pipeline/skills/example/SKILL.md"), "# Example\n");
+	for (const name of CORE_SKILL_NAMES) write(join(toolkit, `claude-plugins/pipeline/skills/${name}/SKILL.md`), `# ${name}\n`);
+	for (const name of CORE_WORKFLOW_SUPPORT_FILES) write(join(toolkit, `claude-plugins/pipeline/skills/${name}`), `# ${name}\n`);
+	copyFileSync(join(process.cwd(), "../../claude-plugins/pipeline/workflow-catalog.json"), join(toolkit, "claude-plugins/pipeline/workflow-catalog.json"));
 	for (const name of ["adr", "canon", "coder", "planner", "reporter", "reviewer", "shipper", "triager"]) {
-		write(join(toolkit, `claude-plugins/kampus-pipeline/agents/${name}.md`), `# ${name}\n`);
+		write(join(toolkit, `claude-plugins/pipeline/agents/${name}.md`), `# ${name}\n`);
 	}
 	for (const name of ["install.sh", "guard.sh", "resolve-toolkit-root.sh"]) {
-		const destination = join(toolkit, "claude-plugins/kampus-pipeline/hooks", name);
+		const destination = join(toolkit, "claude-plugins/pipeline/hooks", name);
 		mkdirSync(join(destination, ".."), {recursive: true});
-		copyFileSync(join(process.cwd(), "../../claude-plugins/kampus-pipeline/hooks", name), destination);
+		copyFileSync(join(process.cwd(), "../../claude-plugins/pipeline/hooks", name), destination);
 		chmodSync(destination, 0o755);
 	}
 	for (const name of ["pnpm", "claude"]) write(join(mockBin, name), "#!/usr/bin/env bash\nexit 0\n", true);
@@ -146,7 +146,7 @@ describe("pipeline init", () => {
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-verify.yml"))).toBe(false);
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-unresolved-threads.yml"))).toBe(false);
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-doc-safety.yml"))).toBe(false);
-		expect(existsSync(join(consumer, "claude-plugins/kampus-pipeline"))).toBe(false);
+		expect(existsSync(join(consumer, "claude-plugins/pipeline"))).toBe(false);
 		expect(existsSync(join(consumer, "claude-plugins/pipeline-crew"))).toBe(false);
 		for (const agent of CORE_AGENT_NAMES) expect(existsSync(join(consumer, ".claude/agents", `${agent}.md`))).toBe(true);
 		expect(lstatSync(join(consumer, ".claude/agents/reviewer.md")).isSymbolicLink()).toBe(true);
@@ -177,15 +177,19 @@ describe("pipeline init", () => {
 		expect(readFileSync(join(consumer, ".glossary/TERMS.md"), "utf8")).toBe("# Fixture terms\n");
 		const settingsPath = join(consumer, ".claude/settings.json");
 		const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as {hooks: Record<string, unknown[]>};
-		expect(JSON.stringify(settings.hooks)).toContain("$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/");
-		expect(JSON.stringify(settings.hooks)).not.toContain("$CLAUDE_PROJECT_DIR/claude-plugins/kampus-pipeline/hooks/");
+		expect(JSON.stringify(settings.hooks)).toContain("$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/");
+		expect(JSON.stringify(settings.hooks)).not.toContain("$CLAUDE_PROJECT_DIR/claude-plugins/pipeline/hooks/");
 		settings.hooks.SessionStart?.push({
 			matcher: "startup|resume",
+			// The retired spelling on purpose: an adopter who installed before the rename carries it,
+			// and a stale entry left unrecognised fires alongside the new one instead of being replaced.
 			hooks: [{type: "command", command: "old/claude-plugins/kampus-pipeline/hooks/guard.sh worktree-sweep --execute"}],
 		});
 		writeFileSync(settingsPath, `${JSON.stringify(settings)}\n`);
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
 		expect(readFileSync(settingsPath, "utf8")).not.toContain("worktree-sweep");
+		// Likewise the retired spelling: this is the whole-plugin link `init` used to create, and
+		// retiring it is the only thing that removes it from repositories that still have one.
 		const legacyPath = join(consumer, "claude-plugins/kampus-pipeline");
 		mkdirSync(join(legacyPath, ".."), {recursive: true});
 		symlinkSync("../.pipeline/toolkit/claude-plugins/kampus-pipeline", legacyPath, "dir");
@@ -276,7 +280,7 @@ describe("pipeline init", () => {
 
 		// Simulate the submodule moving to a toolkit where both skills were deleted.
 		for (const name of ["deslop-comments", "diataxis"]) {
-			rmSync(join(consumer, ".pipeline/toolkit/claude-plugins/kampus-pipeline/skills", name), {
+			rmSync(join(consumer, ".pipeline/toolkit/claude-plugins/pipeline/skills", name), {
 				recursive: true,
 				force: true,
 			});
@@ -300,6 +304,37 @@ describe("pipeline init", () => {
 		expect(readFileSync(join(consumer, ".pipeline/workflow-catalog.json"), "utf8")).toBe("adopter catalogue\n");
 	});
 
+	it("retargets a managed link whose payload moved, and still refuses one it did not write", () => {
+		const {consumer, mockBin} = fixture();
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		const link = join(consumer, ".claude/agents/reviewer.md");
+		const current = readlinkSync(link);
+		const moved = current.replace("claude-plugins/pipeline", "claude-plugins/renamed-away");
+		const configPath = join(consumer, ".pipeline/pipeline.json");
+		const readConfig = () => JSON.parse(readFileSync(configPath, "utf8")) as {managedPaths: Array<{path: string; target: string}>};
+		// The state a payload rename leaves behind: the link we last wrote, pointing where the
+		// payload used to live, recorded in the manifest at that same old target.
+		rmSync(link);
+		symlinkSync(moved, link, "file");
+		const config = readConfig();
+		for (const entry of config.managedPaths) if (entry.path === ".claude/agents/reviewer.md") entry.target = moved;
+		writeFileSync(configPath, `${JSON.stringify(config)}\n`);
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		expect(readlinkSync(link)).toBe(current);
+
+		// The relaxation is narrow: a symlink we never recorded is still the adopter's, and a
+		// moved payload is not a licence to replace it.
+		rmSync(link);
+		symlinkSync("../../somewhere/the/adopter/chose.md", link, "file");
+		const theirs = readConfig();
+		theirs.managedPaths = theirs.managedPaths.filter((entry) => entry.path !== ".claude/agents/reviewer.md");
+		writeFileSync(configPath, `${JSON.stringify(theirs)}\n`);
+		const refused = command(consumer, ["init"], mockBin);
+		expect(refused.status).toBe(1);
+		expect(refused.stderr).toContain("refusing to replace existing .claude/agents/reviewer.md");
+		expect(readlinkSync(link)).toBe("../../somewhere/the/adopter/chose.md");
+	});
+
 	// Self-hosting: in the toolkit repository itself, `.pipeline/toolkit` is a symlink back to the
 	// repository root. A repository cannot be its own submodule, so the pinning probe is the one
 	// assertion init must skip there; everything else is the full consumer payload.
@@ -314,7 +349,7 @@ describe("pipeline init", () => {
 		// .claude/... -> ../../.pipeline/toolkit/... -> the live tree.
 		const reviewer = join(toolkit, ".claude/agents/reviewer.md");
 		expect(lstatSync(reviewer).isSymbolicLink()).toBe(true);
-		expect(readlinkSync(reviewer)).toBe("../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/reviewer.md");
+		expect(readlinkSync(reviewer)).toBe("../../.pipeline/toolkit/claude-plugins/pipeline/agents/reviewer.md");
 		expect(readFileSync(reviewer, "utf8")).toBe("# reviewer\n");
 		for (const skill of CORE_SKILL_NAMES) expect(existsSync(join(toolkit, ".claude/skills", skill))).toBe(true);
 		for (const file of CORE_WORKFLOW_SUPPORT_FILES) expect(existsSync(join(toolkit, ".claude/skills", file))).toBe(true);
@@ -401,7 +436,7 @@ describe("pipeline init", () => {
 		expect(command(consumer, ["primary-index-guard", "install-hook"], mockBin).status).toBe(0);
 		const commonDir = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {cwd: consumer, encoding: "utf8"}).trim();
 		const hook = join(commonDir, "hooks/pre-commit");
-		expect(readFileSync(hook, "utf8")).toContain("kampus-pipeline primary-index-guard managed hook");
+		expect(readFileSync(hook, "utf8")).toContain("pipeline primary-index-guard managed hook");
 		expect(lstatSync(hook).mode & 0o111).not.toBe(0);
 		expect(command(consumer, ["primary-index-guard", "check-hook"], mockBin).status).toBe(0);
 		for (const [cliStatus, expectedHookStatus] of [["0", 0], ["3", 1], ["2", 0]] as const) {
@@ -530,7 +565,7 @@ describe("pipeline init", () => {
 	it("dispatches generated hooks through the local toolkit binary", () => {
 		const {consumer, mockBin} = fixture();
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
-		const result = spawnSync(join(consumer, ".pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/guard.sh"), ["worktree-guard", "pre-file"], {
+		const result = spawnSync(join(consumer, ".pipeline/toolkit/claude-plugins/pipeline/hooks/guard.sh"), ["worktree-guard", "pre-file"], {
 			cwd: consumer,
 			encoding: "utf8",
 			input: "{}\n",

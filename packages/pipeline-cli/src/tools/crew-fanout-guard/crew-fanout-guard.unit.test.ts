@@ -16,7 +16,7 @@ import {
 	renderReport,
 } from "./crew-fanout-guard.ts";
 
-// The full mutating roster the current crew ships (kampus-pipeline agents + the crew engine),
+// The full mutating roster the current crew ships (pipeline agents + the crew engine),
 // plus the read-only investigator and the three bridges. This mirrors the live agent defs.
 const PIPELINE_AGENTS = [
 	"coder",

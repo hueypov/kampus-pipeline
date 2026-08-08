@@ -20,7 +20,7 @@ describe("findLeaks — BLOCK matrix (a real local path in a shared artifact)", 
 	});
 
 	it("blocks ~/code sibling-repo clone in a .md", () => {
-		assert.isTrue(hasLeak("lineage.md", "rebuilt from ~/code/github.com/kamp-us/kampus"));
+		assert.isTrue(hasLeak("lineage.md", "rebuilt from ~/code/github.com/acme/toolkit"));
 	});
 
 	it("blocks /vault path in a .md", () => {
@@ -43,7 +43,7 @@ describe("findLeaks — ALLOW matrix (legitimate content must NOT be flagged)", 
 	});
 
 	it("allows ~/.config documented product paths in a .md", () => {
-		assert.isFalse(hasLeak("docs.md", "credentials in ~/.config/kampus/creds"));
+		assert.isFalse(hasLeak("docs.md", "credentials in ~/.config/acme/creds"));
 	});
 
 	it("allows ~/.alchemy documented tool dir in a .md", () => {

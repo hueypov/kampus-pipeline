@@ -2,7 +2,7 @@
  * The `triage` tool — the nine verbs `skills/triage/SKILL.md` calls.
  *
  * Implements the derived contract at
- * `claude-plugins/kampus-pipeline/skills/triage/contract.md`.
+ * `claude-plugins/pipeline/skills/triage/contract.md`.
  *
  * The exit codes are the interface. Three of them exist because a wrong answer at this seam is
  * indistinguishable from a right one downstream:

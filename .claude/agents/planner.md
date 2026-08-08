@@ -1,1 +1,1 @@
-../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/planner.md
+../../.pipeline/toolkit/claude-plugins/pipeline/agents/planner.md

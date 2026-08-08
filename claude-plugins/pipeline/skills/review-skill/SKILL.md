@@ -90,7 +90,7 @@ git fetch origin "$BASE_REF"
 # (that one is for allocate-and-consume inside one call, like VERDICT_FILE below): the path is
 # derived deterministically from the session id, so each later step recomputes this same line
 # rather than inheriting a lost `$WT_FILE` variable.
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/review-skill-$PR"
+RUN_SCRATCH="${TMPDIR:-/tmp}/pipeline-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/review-skill-$PR"
 mkdir -p "$RUN_SCRATCH" || { echo "review-skill: §SP could not create a per-run scratch dir (documented repository precedent)." >&2; exit 1; }
 WT_FILE="$RUN_SCRATCH/wt.env"
 pipeline-cli review-head materialize --pr "$PR" --worktree \
@@ -230,8 +230,8 @@ CONTROL_PLANE_TOUCHED="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page
 ```
 
 - **Non-empty** (the PR touches a `.claude`/`.github` path or a **gate-critical skill** —
-  `claude-plugins/kampus-pipeline/skills/ship-it/**`, `claude-plugins/kampus-pipeline/skills/review-code/**`, `claude-plugins/kampus-pipeline/skills/review-doc/**`, `claude-plugins/kampus-pipeline/skills/review-skill/**`,
-  `claude-plugins/kampus-pipeline/skills/review-plan/**`, `claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md`) → the PR is in the **blocking
+  `claude-plugins/pipeline/skills/ship-it/**`, `claude-plugins/pipeline/skills/review-code/**`, `claude-plugins/pipeline/skills/review-doc/**`, `claude-plugins/pipeline/skills/review-skill/**`,
+  `claude-plugins/pipeline/skills/review-plan/**`, `claude-plugins/pipeline/skills/gh-issue-intake-formats.md`) → the PR is in the **blocking
   set** (§CP). You review it and post your findings, but **advisory only** — your verdict does
   not authorize a merge; a `configured approval authority` approval at head does, and `ship-it` then
   enqueues it (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues approve-then-enqueue; the rule that only the shipping stage has merge authority single merge authority). Say so explicitly
@@ -242,8 +242,8 @@ CONTROL_PLANE_TOUCHED="$(gh api --paginate "repos/$REPO/pulls/$PR/files?per_page
   `heal-ci`, `report`, … — possibly alongside other non-blocking paths) → **non-blocking**.
   Your PASS marker binds `ship-it`.
 
-Your class is `claude-plugins/kampus-pipeline/skills/**` **and** the pipeline agent
-definitions `claude-plugins/kampus-pipeline/agents/**` — agent defs are behavioral artifacts
+Your class is `claude-plugins/pipeline/skills/**` **and** the pipeline agent
+definitions `claude-plugins/pipeline/agents/**` — agent defs are behavioral artifacts
 like skills, so they route here for the verdict (the skill-review rule that includes plugin manifests and declared skill surfaces,
 documented repository precedent; an agents-only PR is §CP-blocking for merge via `CONTROL_PLANE_RE`, advisory-verdict
 here). If the diff has **no `skills/**` or `agents/**` file at all**, this is the wrong gate —
@@ -334,7 +334,7 @@ variable by then, so recompute its path from the same §SP recipe first — that
 the namespace is session-derived rather than `mktemp`-allocated:
 
 ```bash
-WT_FILE="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/review-skill-$PR/wt.env"
+WT_FILE="${TMPDIR:-/tmp}/pipeline-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/review-skill-$PR/wt.env"
 [ -s "$WT_FILE" ] || { echo "review-skill: §SP — $WT_FILE missing; re-run the head-materialization step in THIS session." >&2; exit 1; }
 . "$WT_FILE"
 ```

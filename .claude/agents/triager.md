@@ -1,1 +1,1 @@
-../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/triager.md
+../../.pipeline/toolkit/claude-plugins/pipeline/agents/triager.md

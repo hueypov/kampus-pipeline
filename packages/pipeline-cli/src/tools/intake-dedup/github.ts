@@ -3,7 +3,7 @@
  * intake-dedup result sources over `gh api` REST, feeding the IO-free `dedup-match.ts` core.
  *
  * Same service pattern as the `verdict` / `epic-lock` template children (the originating initiative): a
- * `Context.Service` on `ChildProcessSpawner`, REST only (GraphQL is broken on the kamp-us
+ * `Context.Service` on `ChildProcessSpawner`, REST only (GraphQL is broken on the target
  * org), every infra failure a typed error in the `E` channel, untrusted REST JSON
  * Schema-decoded at the boundary into `IssueRef`s the core ranks over.
  *

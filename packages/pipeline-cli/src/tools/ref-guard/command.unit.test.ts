@@ -22,6 +22,13 @@ const V1_HOOK = [
 	"",
 ].join("\n");
 
+/** What an install from before the de-brand left on disk: today's v2 body, the retired marker. */
+const legacyV2Hook = (recorded = "/recorded/at/install/bin.ts"): string =>
+	renderManagedHook(recorded).replace(
+		"# pipeline ref-guard managed hook v2",
+		"# kampus-pipeline ref-guard managed hook v2",
+	);
+
 describe("ref-guard managed hook contract", () => {
 	it("maps only the dedicated refusal to a Git-hook abort", () => {
 		const hook = renderManagedHook();
@@ -89,5 +96,20 @@ describe("ref-guard managed hook contract", () => {
 			"/another/place/bin.ts",
 		);
 		expect(inspectHook(tmpHook(other), expected)).toBe("outdated");
+	});
+
+	it("upgrades a v2 hook carrying the retired marker instead of disowning it", () => {
+		const expected = renderManagedHook();
+		// Every hook installed before the toolkit dropped its `kampus` names carries the old marker.
+		// Reading those as `foreign` would refuse to touch them, stranding a stale guard in every
+		// repository that adopted early — the one thing this rename must not do.
+		expect(inspectHook(tmpHook(legacyV2Hook()), expected)).toBe("outdated");
+	});
+
+	it("refuses a hand-edited retired-marker hook rather than upgrading over the edit", () => {
+		const expected = renderManagedHook();
+		const edited = legacyV2Hook().replace("status=0", 'status=0\n# local tweak\n[ -n "$CI" ] && exit 0');
+		// Recognising the retired marker must not weaken the drift refusal it travels with.
+		expect(inspectHook(tmpHook(edited), expected)).toBe("drifted");
 	});
 });

@@ -3,7 +3,7 @@
  * read-only projection — milestones, open issues (+ each epic's sub-issue children), and open
  * PRs — over `gh api` REST, so the IO-free `roadmap.ts` core can assemble the tree. Same service
  * pattern as `roadmap-guard`'s `Milestones` / `campaign`'s `Github` (the originating initiative): a
- * `Context.Service` on `ChildProcessSpawner`, REST only (GraphQL is broken on the kamp-us org),
+ * `Context.Service` on `ChildProcessSpawner`, REST only (GraphQL is broken on the target org),
  * every infra failure a typed error in the `E` channel, untrusted REST JSON Schema-decoded at the
  * boundary into the domain shapes the core resolves over.
  *

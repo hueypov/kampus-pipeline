@@ -6,7 +6,7 @@ import {renderWorkflowCatalog} from "./payload.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../../..");
-const destination = resolve(root, "claude-plugins/kampus-pipeline/workflow-catalog.json");
+const destination = resolve(root, "claude-plugins/pipeline/workflow-catalog.json");
 const expected = renderWorkflowCatalog();
 
 if (process.argv.includes("--check")) {

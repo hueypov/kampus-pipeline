@@ -12,13 +12,13 @@ const portablePaths = [
 	"templates/glossary",
 	"templates/pipeline",
 	"templates/github/workflows",
-	"claude-plugins/kampus-pipeline/hooks",
-	...Array.from(CORE_SKILL_NAMES, (name) => `claude-plugins/kampus-pipeline/skills/${name}`),
-	...Array.from(CORE_WORKFLOW_SUPPORT_FILES, (name) => `claude-plugins/kampus-pipeline/skills/${name}`),
+	"claude-plugins/pipeline/hooks",
+	...Array.from(CORE_SKILL_NAMES, (name) => `claude-plugins/pipeline/skills/${name}`),
+	...Array.from(CORE_WORKFLOW_SUPPORT_FILES, (name) => `claude-plugins/pipeline/skills/${name}`),
 ];
 const adrPaths = [
-	"claude-plugins/kampus-pipeline/skills/adr/SKILL.md",
-	"claude-plugins/kampus-pipeline/agents/adr.md",
+	"claude-plugins/pipeline/skills/adr/SKILL.md",
+	"claude-plugins/pipeline/agents/adr.md",
 ];
 const forbidden = new RegExp(
 	["pnpm dlx pipeline-cli", "npm install pipeline-cli", "publish .*pipeline-cli", "pho" + "enix", "cloud" + "flare", "cf-utils", "apps/web"].join("|"),
@@ -78,10 +78,10 @@ const archivedWorkflowForbidden = new RegExp(
  */
 const files = (path: string): string[] => collectPayloadFiles(root, path);
 const archivedWorkflowFiles = [
-	"claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md",
-	"claude-plugins/kampus-pipeline/skills/validate-cycle-absence.sh",
-	"claude-plugins/kampus-pipeline/skills/validate-cycle-presence.sh",
-	"claude-plugins/kampus-pipeline/skills/validate-skills.sh",
+	"claude-plugins/pipeline/skills/gh-issue-intake-formats.md",
+	"claude-plugins/pipeline/skills/validate-cycle-absence.sh",
+	"claude-plugins/pipeline/skills/validate-cycle-presence.sh",
+	"claude-plugins/pipeline/skills/validate-skills.sh",
 ]
 	.flatMap(files)
 	.filter((file) => !file.includes("/dimensions/vendor/"));
@@ -248,7 +248,7 @@ describe("portable toolkit boundary", () => {
 		const missingSkills: string[] = [];
 		const sourcePolicyMatches: string[] = [];
 		for (const skill of CORE_SKILL_NAMES) {
-			const file = join(root, "claude-plugins/kampus-pipeline/skills", skill, "SKILL.md");
+			const file = join(root, "claude-plugins/pipeline/skills", skill, "SKILL.md");
 			if (!existsSync(file)) {
 				missingSkills.push(skill);
 				continue;
@@ -265,7 +265,7 @@ describe("portable toolkit boundary", () => {
 		expect(new Set(Object.keys(CORE_SKILL_DEPENDENCIES))).toEqual(CORE_SKILL_NAMES);
 		const linksOutsideThePortableContract: string[] = [];
 		for (const skill of CORE_SKILL_NAMES) {
-			const file = join(root, "claude-plugins/kampus-pipeline/skills", skill, "SKILL.md");
+			const file = join(root, "claude-plugins/pipeline/skills", skill, "SKILL.md");
 			const text = readFileSync(file, "utf8");
 			for (const match of text.matchAll(/\.\.\/([a-z-]+)\/SKILL\.md/g)) {
 				const dependency = match[1];
@@ -304,7 +304,7 @@ describe("portable toolkit boundary", () => {
 		const missingPolicyGate: string[] = [];
 		const sourcePolicyMatches: string[] = [];
 		for (const agent of CORE_AGENT_NAMES) {
-			const file = join(root, "claude-plugins/kampus-pipeline/agents", `${agent}.md`);
+			const file = join(root, "claude-plugins/pipeline/agents", `${agent}.md`);
 			if (!existsSync(file)) {
 				missingAgents.push(agent);
 				continue;

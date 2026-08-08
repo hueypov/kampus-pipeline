@@ -4,7 +4,7 @@
  * `verdict-match.ts` core.
  *
  * Same service pattern as the `epic-lock` template child (the originating initiative): a `Context.Service`
- * on `ChildProcessSpawner`, REST only (GraphQL is broken on the kamp-us org), every infra
+ * on `ChildProcessSpawner`, REST only (GraphQL is broken on the target org), every infra
  * failure a typed error in the `E` channel (`GhCommandError` / `GhParseError` /
  * `RepoResolutionError`), untrusted REST JSON Schema-decoded at the boundary into the domain
  * `VerdictComment` the core resolves over.

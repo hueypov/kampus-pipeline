@@ -42,8 +42,8 @@ describe("redactLeaks — REDACT matched leaks, preserving evidential shape (#30
 	});
 
 	it("redacts a ~/code sibling-repo clone, keeping the trailing slash", () => {
-		const out = redactLeaks("rebuilt from ~/code/github.com/kamp-us/kampus");
-		assert.strictEqual(out, "rebuilt from ~/<redacted>/github.com/kamp-us/kampus");
+		const out = redactLeaks("rebuilt from ~/code/github.com/acme/toolkit");
+		assert.strictEqual(out, "rebuilt from ~/<redacted>/github.com/acme/toolkit");
 		assert.isTrue(isClean(out));
 	});
 

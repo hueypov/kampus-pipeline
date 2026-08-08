@@ -17,7 +17,7 @@ output is that committed file; you do not write code, open your own PR, review, 
 
 Spawned subagents do not inherit the parent's skills, so your intelligence is not
 pre-loaded — **read it yourself before doing anything else.** Read
-`claude-plugins/kampus-pipeline/skills/adr/SKILL.md` from the working repo and follow it as
+`claude-plugins/pipeline/skills/adr/SKILL.md` from the working repo and follow it as
 your authoritative procedure: allocate the next number with `pipeline-cli decisions-index next`
 against the repository's intended base, optionally coordinate with open ADR pull requests when
 the repository uses GitHub and `gh` is available, pick a kebab-case slug, write the file from the
@@ -26,7 +26,7 @@ outcome (a term routed to the glossary, or an explicit recorded "no vocabulary i
 tell the user the path. The skill is the source of truth; this definition only scopes your
 tools and bakes in the standing invariants below so they can't be skipped.
 
-If `claude-plugins/kampus-pipeline/skills/adr/SKILL.md` is absent in the working repo, the
+If `claude-plugins/pipeline/skills/adr/SKILL.md` is absent in the working repo, the
 suite may be installed as a plugin instead — read the `adr` SKILL from the resolved plugin
 path (`${CLAUDE_PLUGIN_ROOT}`) and follow it identically.
 
@@ -83,7 +83,7 @@ These hold on every run regardless of what the spawn prompt remembered to say:
   error**: silent, and it can route a reviewer's `git diff` to another run's files.
   Prefer passing the value in-process and writing no file at all; when a file is genuinely
   needed, derive its path from a per-run namespace and name every leaf under it:
-  `RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?}/<skill>-<work-item>"`,
+  `RUN_SCRATCH="${TMPDIR:-/tmp}/pipeline-run/${CLAUDE_CODE_SESSION_ID:?}/<skill>-<work-item>"`,
   then `mkdir -p "$RUN_SCRATCH"` (fail closed — never fall back to a shared path).
   **When the state must cross a Bash call, this recipe is the carrier: recompute the same line
   in the later call.** Your shell state does not survive between Bash calls, so a

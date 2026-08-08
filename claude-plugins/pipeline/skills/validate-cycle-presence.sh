@@ -29,7 +29,7 @@ set -euo pipefail
 skills_dir="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # The repo root that holds $PIPELINE_DEVELOPMENT_CYCLE_POLICY. Prefer git (robust to where the
 # script lives in the tree); fall back to the physical plugin path
-# (<root>/claude-plugins/kampus-pipeline/skills) when git is unavailable.
+# (<root>/claude-plugins/pipeline/skills) when git is unavailable.
 repo_root="$(git -C "$skills_dir" rev-parse --show-toplevel 2>/dev/null || (cd "$skills_dir/../../.." && pwd))"
 
 # The one well-known cycle-doc path every consumer probes (formats §1, single source).

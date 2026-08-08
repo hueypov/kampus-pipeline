@@ -318,7 +318,7 @@ autonomous "create-milestones" skill (the applicable safety invariant §3). A sk
 existing open milestone leaves the issue **unmilestoned**; it does not invent a home.
 
 **Freeze-by-absence — deliberate absence is a signal, never missing data.** A deliberately
-**unmilestoned** cluster (e.g. a frozen new-product surface — kampus-CLI / künye) is itself
+**unmilestoned** cluster (e.g. a frozen new-product surface) is itself
 the signal that the work is **parked / deferred** (the applicable safety invariant §4). So a missing milestone is
 **never** "data to be backfilled": a skill must not auto-fill an empty milestone to make an issue
 "complete." Absence carries information — treat it as a value, not a gap. This is the inverse of
@@ -1336,36 +1336,36 @@ closing the documented repository precedent drift class).
 - `.github/**` — CI enforcement.
 - the **gate-critical skills** — the verification/merge machinery plus the shared marker
   contract they all depend on:
-  - `claude-plugins/kampus-pipeline/skills/ship-it/**`
-  - `claude-plugins/kampus-pipeline/skills/review-code/**`
-  - `claude-plugins/kampus-pipeline/skills/review-doc/**`
-  - `claude-plugins/kampus-pipeline/skills/review-skill/**`
-  - `claude-plugins/kampus-pipeline/skills/review-design/**`
-  - `claude-plugins/kampus-pipeline/skills/review-plan/**`
-  - `claude-plugins/kampus-pipeline/skills/review-trivial/**` — the trivial-diff gate emits
+  - `claude-plugins/pipeline/skills/ship-it/**`
+  - `claude-plugins/pipeline/skills/review-code/**`
+  - `claude-plugins/pipeline/skills/review-doc/**`
+  - `claude-plugins/pipeline/skills/review-skill/**`
+  - `claude-plugins/pipeline/skills/review-design/**`
+  - `claude-plugins/pipeline/skills/review-plan/**`
+  - `claude-plugins/pipeline/skills/review-trivial/**` — the trivial-diff gate emits
     SHA-bound, merge-consumed verdicts, so it is gate-critical exactly like the other reviewers;
     its omission was a live fail-**open** §CP-bypass (the applicable safety invariant, documented repository precedent).
-  - `claude-plugins/kampus-pipeline/skills/triage/**`
-  - `claude-plugins/kampus-pipeline/skills/write-code/**`
-  - `claude-plugins/kampus-pipeline/skills/plan-epic/**`
-  - `claude-plugins/kampus-pipeline/skills/release/**` — the release machinery (the applicable safety invariant, documented repository precedent).
-  - `claude-plugins/kampus-pipeline/skills/**/*.sh` — every skill shell helper, at **any depth**
+  - `claude-plugins/pipeline/skills/triage/**`
+  - `claude-plugins/pipeline/skills/write-code/**`
+  - `claude-plugins/pipeline/skills/plan-epic/**`
+  - `claude-plugins/pipeline/skills/release/**` — the release machinery (the applicable safety invariant, documented repository precedent).
+  - `claude-plugins/pipeline/skills/**/*.sh` — every skill shell helper, at **any depth**
     under `skills/`: the bare gate-critical guard scripts directly under `skills/`
     (`validate-gate-path-drift.sh`, `validate-skills.sh`, `validate-cycle-*.sh`) **and** a helper
     nested in a skill subdir (`report/footer.sh` — its `Filed by an agent` provenance marker feeds
     triage's the rule that only complete, eligible work may auto-close auto-close eligibility; `doctor/doctor.sh`): executable enforcement that
     feeds or runs the gates, control-plane *by nature* like the guard packages. The
-    `^claude-plugins/kampus-pipeline/skills/([^/]+/)*[^/]+\.sh$` branch classifies them (the applicable safety invariant, documented repository precedent/documented repository precedent);
+    `^claude-plugins/pipeline/skills/([^/]+/)*[^/]+\.sh$` branch classifies them (the applicable safety invariant, documented repository precedent/documented repository precedent);
     the leaf `[^/]+\.sh$` matches a `.sh` filename and `([^/]+/)*` the intervening dirs, so it owns
     a shell helper wherever it sits without reaching the non-`.sh` files in the skill *dirs* above.
-  - `claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md` (this file)
+  - `claude-plugins/pipeline/skills/gh-issue-intake-formats.md` (this file)
 
   **Deliberately OUT of §CP** (recorded so their absence is a decision, not an oversight): the
   `heal-ci`, `doctor`, and `wayfinder` skills are operational diagnostics /
   reporting / orientation — they neither gate a merge nor hold release authority nor sit on a
   gate-critical path, so they auto-merge on a `review-skill` PASS like any ordinary skill. Do
   **not** add them to the boundary (the applicable safety invariant).
-- the **pipeline agent definitions** — `claude-plugins/kampus-pipeline/agents/**`: the behavior
+- the **pipeline agent definitions** — `claude-plugins/pipeline/agents/**`: the behavior
   instructions for the very agents that run the pipeline, including `shipper.md` (the merge
   authority) and `reviewer.md` (the verdict gate). An agents-only PR matched **no** §CP clause
   and **no** routing probe, so `ship-it` would have enqueued it with no human merge and no gate —
@@ -1373,12 +1373,12 @@ closing the documented repository precedent drift class).
   self-modification-of-guardrails risk §CP exists to prevent (the skill-review rule that includes plugin manifests and declared skill surfaces,
   documented repository precedent; same the rule that makes gate-critical skill changes control-plane changes rationale that makes the gate-critical skills blocking). Agent defs are
   behavioral artifacts like skills → **`review-skill`-routed for the verdict**, **blocking for merge**.
-- the **plugin hook surface** — `claude-plugins/kampus-pipeline/hooks/**` (the `install.sh`
+- the **plugin hook surface** — `claude-plugins/pipeline/hooks/**` (the `install.sh`
   that drops the installed `pipeline-cli` and the `guard.sh` fail-open dispatch wrapper) plus
-  `claude-plugins/kampus-pipeline/hooks.json` (the foreign-repo hook manifest). These are
+  `claude-plugins/pipeline/hooks.json` (the foreign-repo hook manifest). These are
   self-weakening by nature — they wire the guard dispatch + the CLI install the `.claude/settings.json`
   hooks depend on (the rule that makes enforcement guard code control-plane code wherever it lives,
-  documented repository precedent). The `^claude-plugins/kampus-pipeline/hooks(/|\.json$)` clause covers the dir + the manifest.
+  documented repository precedent). The `^claude-plugins/pipeline/hooks(/|\.json$)` clause covers the dir + the manifest.
 - the **enforcement-guard packages** — the executable guardrails that gate agent tooling,
   control-plane *by nature* the same way the gate-critical skills are (the rule that makes gate-critical skill changes control-plane changes),
   even though they live under `packages/` rather than `.claude`/skills (the applicable safety invariant):
@@ -1401,7 +1401,7 @@ widened to the gate-critical skills by the rule that makes gate-critical skill c
 that reviews the gates is itself a gate; the enforcement-guard packages added by the applicable safety invariant,
 since a guard is a self-weakening surface wherever it lives; that coverage now also flows
 through the consolidated `^packages/pipeline-cli/` package per the rule that makes enforcement guard code control-plane code wherever it lives;
-the **pipeline agent definitions** (`claude-plugins/kampus-pipeline/agents/**`) added by the skill-review rule that includes plugin manifests and declared skill surfaces,
+the **pipeline agent definitions** (`claude-plugins/pipeline/agents/**`) added by the skill-review rule that includes plugin manifests and declared skill surfaces,
 since a gate/merge agent's own instructions are a self-weakening surface; the **bare gate-critical
 `.sh` guards** under `skills/` and the **`release`/`review-trivial` skill dirs** added by the applicable safety invariant
 (documented repository precedent/documented repository precedent), since a guard script and a SHA-bound-verdict gate are self-weakening surfaces that
@@ -1630,14 +1630,14 @@ HAS_DOCS_RE='^(\.decisions|\.patterns)/|\.md$'
 The boundary each line draws is **not re-derived here** — it is §DOC's, above: `HAS_CODE_RE`
 names the code roots (`apps`/`packages`/`.glossary`/`infra`, the documented repository precedent/documented repository precedent/documented repository precedent has-code set),
 `HAS_SKILLS_RE` the plugin behavioral-artifact surface — **any** plugin's `skills/**`/`agents/**`
-(the plugin-name is `[^/]+`, not the `kampus-pipeline` literal) **plus the `.claude-plugin/**`
+(the plugin-name is `[^/]+`, not the `pipeline` literal) **plus the `.claude-plugin/**`
 plugin/marketplace manifest** that declares that surface (the skill-review rule that gives skills their own behavioral gate; documented repository precedent) — and the
 two `HAS_DOCS_*` lines are the carve-then-test docs probe. `HAS_CODE_RE` and `HAS_DOCS_EXCLUDE_RE`
 name the **same** code roots (the has-code/docs-exclusion agreement invariant) and must move in
 lockstep — keep them adjacent so a root added to one is added to the other.
 
 `HAS_SKILLS_RE`'s two additions close the **documented repository precedent neither-class gap** for the plugin surface (documented repository precedent):
-a PR touching only a **non-`kampus-pipeline`** plugin's `agents/**`/`skills/**` (e.g. the
+a PR touching only a **non-`pipeline`** plugin's `agents/**`/`skills/**` (e.g. the
 `pipeline-crew` crew defs) or only the `.claude-plugin/**` manifest (`plugin.json`,
 `marketplace.json`) previously matched **no** class — so `ship-it` Step 0 demanded no gate and it
 reached merge un-reviewed. Both now class **has-skills** and ride the `review-skill` gate: the
@@ -1660,7 +1660,7 @@ and every path falls through to the doc test). This is the same stance as §CP's
 ```bash
 # Re-resolve a canonical _RE= line from gh-issue-intake-formats.md@configured base branch (documented repository precedent ?ref=$PIPELINE_BASE_REF idiom).
 # Prints the live value, or the fail-closed default $2 when the line is unreadable.
-FORMATS_RAW="$(gh api "repos/$REPO/contents/claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
+FORMATS_RAW="$(gh api "repos/$REPO/contents/claude-plugins/pipeline/skills/gh-issue-intake-formats.md?ref=$PIPELINE_BASE_REF" -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
 reresolve_re() {   # $1=var name, $2=fail-closed default
   live="$(printf '%s\n' "$FORMATS_RAW" | grep "^$1=" | head -n1 || true)"
   if [ -n "$live" ]; then printf '%s' "$live" | sed "s/^$1='//; s/'\$//"; else printf '%s' "$2"; fi
@@ -1889,14 +1889,14 @@ it backwards re-creates the empty-directory bug it exists to prevent:
 # re-run never reads its predecessor's files.
 [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] || {
   echo "§SP: CLAUDE_CODE_SESSION_ID unset — refusing to write run state to a shared scratch path (documented repository precedent)." >&2; exit 1; }
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/$CLAUDE_CODE_SESSION_ID/<slug>"
+RUN_SCRATCH="${TMPDIR:-/tmp}/pipeline-run/$CLAUDE_CODE_SESSION_ID/<slug>"
 rm -rf "$RUN_SCRATCH" && mkdir -p "$RUN_SCRATCH" || {
   echo "§SP: could not create the per-run scratch dir $RUN_SCRATCH." >&2; exit 1; }
 
 # RE-DERIVE — every LATER Bash call. Same recipe ⇒ same directory ⇒ the files are still there.
 # NO `rm -rf` here: that is the open step's job, and repeating it would delete the very state
 # this call came to read. Assert what you expect to find, rather than reading a silent absence.
-RUN_SCRATCH="${TMPDIR:-/tmp}/kampus-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/<slug>"
+RUN_SCRATCH="${TMPDIR:-/tmp}/pipeline-run/${CLAUDE_CODE_SESSION_ID:?§SP: session id unset (documented repository precedent)}/<slug>"
 [ -s "$RUN_SCRATCH/<file>" ] || { echo "§SP: $RUN_SCRATCH/<file> did not survive — re-run the opening step in THIS session." >&2; exit 1; }
 ```
 
@@ -1933,7 +1933,7 @@ splice guard is the live instance), so absence fails loud instead of waving work
    The line between rule 4 and rules 2+3 is **lifetime, not file count**: the moment a path
    has to survive into a *later* Bash call, the carve-out no longer applies and it belongs
    under a session-derived `$RUN_SCRATCH`. Give a rule-4 temp a name that says what it holds
-   (`review-code-verdict.XXXXXX`), never the `kampus-run` prefix the rule-2 namespace uses —
+   (`review-code-verdict.XXXXXX`), never the `pipeline-run` prefix the rule-2 namespace uses —
    the two forms should stay tellable apart at a glance.
 
 ### Corollary — a scratch path is a local absolute path, so it never lands in a public artifact

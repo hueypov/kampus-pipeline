@@ -2,7 +2,7 @@
  * The `plan-epic` tool — the two verbs `skills/plan-epic/SKILL.md` calls that had none.
  *
  * Implements the derived contract at
- * `claude-plugins/kampus-pipeline/skills/plan-epic/contract.md`. The lock (`epic-lock`), the pure
+ * `claude-plugins/pipeline/skills/plan-epic/contract.md`. The lock (`epic-lock`), the pure
  * splice transform (`epic-splice`), and the structural gate (`epic-ledger`) already existed; what
  * was left in the skill's prose was the child shape and the read-modify-write around the transform.
  *

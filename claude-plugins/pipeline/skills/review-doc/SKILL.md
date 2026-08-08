@@ -51,9 +51,9 @@ spec for this split, and it **supersedes** the applicable safety invariant. Two 
   adds no security value.
 - **BLOCKING (§CP — approval-gated).** Anything in the **canonical §CP set** (the single source in
   [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md)): `.claude/**`, `.github/**`,
-  or one of the six **gate-critical skills** (`claude-plugins/kampus-pipeline/skills/ship-it/**`, `claude-plugins/kampus-pipeline/skills/review-code/**`,
-  `claude-plugins/kampus-pipeline/skills/review-doc/**`, `claude-plugins/kampus-pipeline/skills/review-skill/**`, `claude-plugins/kampus-pipeline/skills/review-plan/**`,
-  `claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md`) — the agent control plane (instructions, tools, hooks),
+  or one of the six **gate-critical skills** (`claude-plugins/pipeline/skills/ship-it/**`, `claude-plugins/pipeline/skills/review-code/**`,
+  `claude-plugins/pipeline/skills/review-doc/**`, `claude-plugins/pipeline/skills/review-skill/**`, `claude-plugins/pipeline/skills/review-plan/**`,
+  `claude-plugins/pipeline/skills/gh-issue-intake-formats.md`) — the agent control plane (instructions, tools, hooks),
   CI enforcement, and the pipeline's own gates. A bad merge here is a serious security concern
   (self-modification of guardrails; CI/secret exfiltration), so `ship-it` never auto-merges it on
   machine gates alone: under the §CP hard gate (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues,
@@ -154,9 +154,9 @@ gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" \
 
 - **Any control-plane path** — the **canonical §CP set** in
   [`../gh-issue-intake-formats.md`](../gh-issue-intake-formats.md): `.claude/**`, `.github/**`,
-  or one of the six **gate-critical skills** (`claude-plugins/kampus-pipeline/skills/ship-it/**`, `claude-plugins/kampus-pipeline/skills/review-code/**`,
-  `claude-plugins/kampus-pipeline/skills/review-doc/**`, `claude-plugins/kampus-pipeline/skills/review-skill/**`, `claude-plugins/kampus-pipeline/skills/review-plan/**`,
-  `claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md`) — → the PR is in the **blocking set**. You review it and
+  or one of the six **gate-critical skills** (`claude-plugins/pipeline/skills/ship-it/**`, `claude-plugins/pipeline/skills/review-code/**`,
+  `claude-plugins/pipeline/skills/review-doc/**`, `claude-plugins/pipeline/skills/review-skill/**`, `claude-plugins/pipeline/skills/review-plan/**`,
+  `claude-plugins/pipeline/skills/gh-issue-intake-formats.md`) — → the PR is in the **blocking set**. You review it and
   post your findings, but **advisory only** — your verdict does not authorize a merge; a
   `configured approval authority` approval at head does, and `ship-it` then enqueues it (the control-plane rule that requires non-author approval of the current head before the pipeline enqueues
   approve-then-enqueue; the rule that only the shipping stage has merge authority single merge authority — the §CP set is the control-plane rule that requires human approval for changes to automation, CI, or merge safeguards, widened to the

@@ -15,7 +15,7 @@ import {Argument, Command, Flag} from "effect/unstable/cli";
 import * as Exit from "../../exit-codes.ts";
 import {deriveTier, lintEvalSet, renderFindings, type EvalCase, type EvalSet} from "./evals.ts";
 
-const SKILLS = "claude-plugins/kampus-pipeline/skills";
+const SKILLS = "claude-plugins/pipeline/skills";
 
 const refuse = (verb: string, message: string, code: number): Effect.Effect<never> =>
 	Effect.sync(() => {

@@ -25,10 +25,25 @@ const DOCUMENT_TOPOLOGY_TEMPLATES = [
 	{source: "templates/pipeline/optional-workflow-policy.json", destination: ".pipeline/optional-workflow-policy.json"},
 	{source: "templates/pipeline/cli-capability-matrix.md", destination: ".pipeline/cli-capability-matrix.md"},
 ] as const;
-const WORKFLOW_CATALOG_RELATIVE_PATH = "claude-plugins/kampus-pipeline/workflow-catalog.json";
+const WORKFLOW_CATALOG_RELATIVE_PATH = "claude-plugins/pipeline/workflow-catalog.json";
 const WORKFLOW_CATALOG_CONSUMER_PATH = ".pipeline/workflow-catalog.json";
+/**
+ * The consumer-side whole-plugin symlink `init` used to create and no longer does.
+ *
+ * This names a HISTORICAL path, so it keeps the retired `kampus` spelling on purpose: it is the
+ * link sitting in adopters' repositories right now, and renaming it here would simply stop
+ * retiring it, stranding a dangling symlink nothing would ever clean up again.
+ */
 const LEGACY_PLUGIN_LINK_RELATIVE_PATH = "claude-plugins/kampus-pipeline";
-const PRIMARY_INDEX_GUARD_HOOK_MARKER = "# kampus-pipeline primary-index-guard managed hook";
+const PRIMARY_INDEX_GUARD_HOOK_MARKER = "# pipeline primary-index-guard managed hook";
+/**
+ * The marker every managed pre-commit hook carried before the toolkit dropped its `kampus` names.
+ *
+ * Recognition only — nothing writes it again. `installPrimaryIndexGuardHook` refuses to overwrite a
+ * hook it does not recognise as its own, so without this an adopter who installed before the rename
+ * hits a hard failure telling them to integrate by hand, on a hook this tool wrote itself.
+ */
+const LEGACY_PRIMARY_INDEX_GUARD_HOOK_MARKER = "# kampus-pipeline primary-index-guard managed hook";
 const PRIMARY_INDEX_GUARD_HOOK_NAME = "pre-commit";
 /**
  * The CI workflows an adopting repository MAY install, each opt-in through
@@ -109,7 +124,7 @@ const assertToolkit = (projectRoot: string): string => {
 	const toolkit = toolkitRootFor(projectRoot);
 	if (!existsSync(join(toolkit, "package.json"))) fail(`missing initialized toolkit at ${TOOLKIT_RELATIVE_PATH}`);
 	if (!existsSync(join(toolkit, "packages/pipeline-cli/src/bin.ts"))) fail("toolkit is missing packages/pipeline-cli");
-	if (!existsSync(join(toolkit, "claude-plugins/kampus-pipeline"))) fail("toolkit is missing claude-plugins/kampus-pipeline");
+	if (!existsSync(join(toolkit, "claude-plugins/pipeline"))) fail("toolkit is missing claude-plugins/pipeline");
 	if (!existsSync(join(toolkit, WORKFLOW_CATALOG_RELATIVE_PATH))) fail(`toolkit is missing ${WORKFLOW_CATALOG_RELATIVE_PATH}`);
 	if (!existsSync(join(toolkit, LANGUAGE_TEMPLATE_RELATIVE_PATH))) fail(`toolkit is missing ${LANGUAGE_TEMPLATE_RELATIVE_PATH}`);
 	if (!existsSync(join(toolkit, TERMS_TEMPLATE_RELATIVE_PATH))) fail(`toolkit is missing ${TERMS_TEMPLATE_RELATIVE_PATH}`);
@@ -435,7 +450,10 @@ const installPrimaryIndexGuardHook = (projectRoot: string): void => {
 	const existing = lstatSyncSafe(path);
 	if (existing) {
 		let managed = false;
-		try { managed = existing.isFile() && readFileSync(path, "utf8").includes(PRIMARY_INDEX_GUARD_HOOK_MARKER); } catch {}
+		try {
+			const body = existing.isFile() ? readFileSync(path, "utf8") : "";
+			managed = body.includes(PRIMARY_INDEX_GUARD_HOOK_MARKER) || body.includes(LEGACY_PRIMARY_INDEX_GUARD_HOOK_MARKER);
+		} catch {}
 		if (!managed) fail(primaryIndexGuardHookIntegration());
 	} else {
 		mkdirSync(hooksDirectory, {recursive: true});
@@ -494,7 +512,7 @@ const retireLegacyPluginLink = (projectRoot: string, prior: Map<string, string>)
 const pipelineHooks = (): Record<string, unknown[]> => {
 	const hook = (suffix: string, timeout?: number) => ({
 		type: "command",
-		command: `"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/${suffix}"`,
+		command: `"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/pipeline/hooks/${suffix}"`,
 		...(timeout ? {timeout} : {}),
 	});
 	return {
@@ -509,10 +527,16 @@ const pipelineHooks = (): Record<string, unknown[]> => {
 	};
 };
 
+/**
+ * Whether a settings.json hook entry is one `init` manages, so re-running it replaces rather than
+ * duplicates. The retired `kampus` spelling is matched too: adopters who installed before the
+ * rename have entries carrying it, and failing to recognise those leaves the stale hook in place
+ * beside the new one, firing both.
+ */
 const isPipelineHook = (entry: unknown): boolean => {
 	const serialized = JSON.stringify(entry);
-	return serialized.includes("claude-plugins/kampus-pipeline/hooks/")
-		|| serialized.includes(".pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/");
+	return serialized.includes("claude-plugins/pipeline/hooks/")
+		|| serialized.includes("claude-plugins/kampus-pipeline/hooks/");
 };
 
 const mergeSettings = (projectRoot: string, toolkitRoot: string): Record<string, unknown[]> => {
@@ -581,8 +605,20 @@ const linkEntries = (projectRoot: string, toolkitRoot: string, sourceRelative: s
 			const expectedTarget = relative(dirname(path), target);
 			if (existsSync(path) || (() => { try { return lstatSync(path).isSymbolicLink(); } catch { return false; } })()) {
 				let isExpected = false;
-				try { isExpected = lstatSync(path).isSymbolicLink() && readlinkSync(path) === expectedTarget; } catch {}
-				if (!isExpected && !(force && prior.get(relativePath) === expectedTarget)) fail(`refusing to replace existing ${relativePath}`);
+				let isOursRetargeted = false;
+				try {
+					const link = lstatSync(path).isSymbolicLink() ? readlinkSync(path) : null;
+					isExpected = link === expectedTarget;
+					// Still exactly the link we last recorded, but the payload it points at has since
+					// moved — ours to retarget. The `force` clause below cannot cover this: it compares
+					// the recorded target to the NEW one, so it only ever repairs a link that drifted in
+					// place, never one whose target was renamed. Same rule as `retireLegacyPluginLink` —
+					// a path the adopter replaced with their own file is still theirs.
+					isOursRetargeted = link !== null && prior.get(relativePath) === link;
+				} catch {}
+				if (!isExpected && !isOursRetargeted && !(force && prior.get(relativePath) === expectedTarget)) {
+					fail(`refusing to replace existing ${relativePath}`);
+				}
 				if (!isExpected) rmSync(path, {recursive: true, force: true});
 			}
 			if (!existsSync(path)) symlinkSync(expectedTarget, path, entry.isDirectory() ? "dir" : "file");
@@ -598,8 +634,15 @@ const linkManagedFile = (projectRoot: string, toolkitRoot: string, sourceRelativ
 	const existing = lstatSyncSafe(destination);
 	if (existing) {
 		let expected = false;
-		try { expected = existing.isSymbolicLink() && readlinkSync(destination) === target; } catch {}
-		if (!expected && !(force && prior.get(destinationRelative) === target)) {
+		let oursRetargeted = false;
+		try {
+			const link = existing.isSymbolicLink() ? readlinkSync(destination) : null;
+			expected = link === target;
+			// Ours, pointing at a payload path that moved — retarget rather than refuse. See the
+			// matching branch in `linkEntries` for why `force` does not cover this case.
+			oursRetargeted = link !== null && prior.get(destinationRelative) === link;
+		} catch {}
+		if (!expected && !oursRetargeted && !(force && prior.get(destinationRelative) === target)) {
 			fail(`refusing to replace existing ${destinationRelative}`);
 		}
 		if (!expected) rmSync(destination, {recursive: true, force: true});
@@ -780,11 +823,11 @@ const resolveStatus = (projectRoot: string): {errors: string[]; policy: "valid" 
 		: [];
 	const core: StatusItem[] = [
 		...Array.from(CORE_SKILL_NAMES).map((name) => ({name, type: "skill", path: `.claude/skills/${name}`,
-			state: managedLinkState(projectRoot, config, `.claude/skills/${name}`, expectedLinkTarget(projectRoot, toolkitRoot, `claude-plugins/kampus-pipeline/skills/${name}`, `.claude/skills/${name}`))})),
+			state: managedLinkState(projectRoot, config, `.claude/skills/${name}`, expectedLinkTarget(projectRoot, toolkitRoot, `claude-plugins/pipeline/skills/${name}`, `.claude/skills/${name}`))})),
 		...Array.from(CORE_WORKFLOW_SUPPORT_FILES).map((name) => ({name, type: "support-file", path: `.claude/skills/${name}`,
-			state: managedLinkState(projectRoot, config, `.claude/skills/${name}`, expectedLinkTarget(projectRoot, toolkitRoot, `claude-plugins/kampus-pipeline/skills/${name}`, `.claude/skills/${name}`))})),
+			state: managedLinkState(projectRoot, config, `.claude/skills/${name}`, expectedLinkTarget(projectRoot, toolkitRoot, `claude-plugins/pipeline/skills/${name}`, `.claude/skills/${name}`))})),
 		...Array.from(CORE_AGENT_NAMES).map((name) => ({name, type: "agent", path: `.claude/agents/${name}.md`,
-			state: managedLinkState(projectRoot, config, `.claude/agents/${name}.md`, expectedLinkTarget(projectRoot, toolkitRoot, `claude-plugins/kampus-pipeline/agents/${name}.md`, `.claude/agents/${name}.md`))})),
+			state: managedLinkState(projectRoot, config, `.claude/agents/${name}.md`, expectedLinkTarget(projectRoot, toolkitRoot, `claude-plugins/pipeline/agents/${name}.md`, `.claude/agents/${name}.md`))})),
 		...GITHUB_WORKFLOW_TEMPLATES.map((template): StatusItem => ({name: template.destination, type: "generated-workflow", path: template.destination,
 			state: config?.managedPaths.some((entry) => entry.path === template.destination && entry.target === `template:${template.source}`) && existsSync(join(projectRoot, template.destination)) ? "installed" : "missing-or-drifted"})),
 		...(["main-sync", "trivial-diff classify", "class-probe classify", "guard-content-probe", "cp-cardinality decide", "cp-cardinality evidence-github-team", "reachability-guard check", "worktree-sweep", "gh-compat lint-skills", "ship-digest derive", "primary-index-guard pre-commit"] as const).map((name): StatusItem => ({name, type: "cli-command", path: ".pipeline/toolkit/bin/pipeline",
@@ -1006,10 +1049,10 @@ const init = (args: string[]): void => {
 		...documentTopology,
 		workflowCatalog,
 		...githubWorkflows,
-		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/agents", ".claude/agents", () => true, force, prior),
-		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/kampus-pipeline/skills", ".claude/skills", (name) =>
-			(CORE_SKILL_NAMES.has(name) && existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name, "SKILL.md"))) ||
-			(CORE_WORKFLOW_SUPPORT_FILES.has(name) && existsSync(join(toolkitRoot, "claude-plugins/kampus-pipeline/skills", name))),
+		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/pipeline/agents", ".claude/agents", () => true, force, prior),
+		...linkEntries(projectRoot, toolkitRoot, "claude-plugins/pipeline/skills", ".claude/skills", (name) =>
+			(CORE_SKILL_NAMES.has(name) && existsSync(join(toolkitRoot, "claude-plugins/pipeline/skills", name, "SKILL.md"))) ||
+			(CORE_WORKFLOW_SUPPORT_FILES.has(name) && existsSync(join(toolkitRoot, "claude-plugins/pipeline/skills", name))),
 		force, prior),
 	];
 	const retired = retireUnmanagedPaths(projectRoot, prior, managedPaths);

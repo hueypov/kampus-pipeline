@@ -162,7 +162,7 @@ built to call would break them.
 
 Naming this as an exception rather than arguing it into a pass is deliberate. An earlier revision of
 this section claimed `doctor` "treats that label as a Tier-3 optional and reports its absence", which
-would have satisfied Grounded — and that was false. It is true of the **upstream phoenix plugin's**
+would have satisfied Grounded — and that was false. It is true of the **upstream plugin's**
 doctor, which was read by mistake; this repository's `doctor/SKILL.md` contains no tier taxonomy and
 never mentions `wayfinder:map`. Reading the installed upstream copy as if it were the payload is the
 same confusion that produced #36.

@@ -1,1 +1,1 @@
-../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/reviewer.md
+../../.pipeline/toolkit/claude-plugins/pipeline/agents/reviewer.md

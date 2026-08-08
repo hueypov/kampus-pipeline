@@ -49,7 +49,7 @@ describe("evals lint — the exit contract, witnessed by a spawned bin (#69)", (
 	let root: string;
 
 	const writeSet = (skill: string, set: unknown): void => {
-		const dir = join(root, "claude-plugins/kampus-pipeline/skills", skill, "evals");
+		const dir = join(root, "claude-plugins/pipeline/skills", skill, "evals");
 		mkdirSync(dir, {recursive: true});
 		writeFileSync(join(dir, "evals.json"), JSON.stringify(set));
 	};

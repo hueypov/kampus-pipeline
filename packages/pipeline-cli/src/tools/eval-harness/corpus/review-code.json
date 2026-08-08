@@ -10,7 +10,7 @@
 				"label": {
 					"verdict": "PASS",
 					"acFindings": [
-						"Only claude-plugins/kampus-pipeline/agents/shipper.md added, matching the coder.md agent template",
+						"Only claude-plugins/pipeline/agents/shipper.md added, matching the coder.md agent template",
 						"Read-only tool scope (no Edit/Write) — a working-tree mutation is structurally unrepresentable",
 						"Refuses control-plane merges, as the shipper epic intends"
 					]

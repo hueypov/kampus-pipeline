@@ -4,15 +4,13 @@ The discipline every skill in this plugin meets, and the format of the contract 
 
 ## The two references, and what each is for
 
-**kamp.us fabrika (`claude-plugins/fabrika/` in kamp-us/phoenix) is the method.** Its
-`docs/skill-conventions.md` and `docs/cli-interface-convention.md` define the two-layer split, the
-sizing band, the invocation-axis economics, and the contract-spec format this document adapts. When
-a question here is unanswered, that is where to look.
+**[`author-skill`](../skills/author-skill/SKILL.md) is the method.** It defines the two-layer split,
+the sizing band, the invocation-axis economics, and the contract-spec format this document adapts.
+When a question here is unanswered, that is where to look.
 
-**kamp.us v1 (`claude-plugins/kampus-pipeline/` in kamp-us/phoenix) is a frozen baseline to compare
-against — never a source to port from.** It is useful for one thing: seeing which incidents a rule
-was hardened against. A spec clause that says "same as the v1 script" has derived nothing, and a
-skill that reproduces v1's prose inherits its problems.
+**v1 is a frozen baseline to compare against — never a source to port from.** It is useful for one
+thing: seeing which incidents a rule was hardened against. A spec clause that says "same as the v1
+script" has derived nothing, and a skill that reproduces v1's prose inherits its problems.
 
 This repo's own extracted v1 prose is a third category: **not a reference at all.** The extraction
 collapsed ~400 distinct citations into two generic phrases and broke 71 markdown links, so its
@@ -36,7 +34,7 @@ repo's extraction of it deleted 243 of them.
 overflow is deterministic content that should have become a verb, or reference that should have
 moved behind a pointer.
 
-The classification stage is the known exception — `triage` runs ~155 here and ~160 in fabrika,
+The classification stage is the known exception — `triage` runs ~155 here,
 because the type table and its boundary tests are the most-used decision surface in the skill and
 putting them behind a pointer means opening another file mid-classification.
 

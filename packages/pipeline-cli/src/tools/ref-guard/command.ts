@@ -9,10 +9,19 @@ import {readLifecyclePolicy, repositoryRoot, resolvePrimaryTarget} from "../life
 import {decideHeadDetach, decideRefUpdate, decideTransaction, type RefUpdate, ZERO_OID} from "./ref-guard.ts";
 
 export const REFUSE_EXIT_CODE = 3;
-const MARKER_PREFIX = "# kampus-pipeline ref-guard managed hook";
+const MARKER_PREFIX = "# pipeline ref-guard managed hook";
 const MARKER = `${MARKER_PREFIX} v2`;
+/**
+ * The prefix every hook carried before the toolkit dropped its `kampus` names.
+ *
+ * A hook already on disk in a consumer repository still carries this. It is kept for RECOGNITION
+ * only — nothing writes it again. Without it `inspectHook` reads an installed hook as `foreign`
+ * (carrying no marker of ours) and refuses to touch it, so every repository that installed before
+ * the rename would keep a stale guard that no `install` could ever repair.
+ */
+const LEGACY_MARKER_PREFIX = "# kampus-pipeline ref-guard managed hook";
 /** The v1 marker, kept so a hook this tool wrote earlier is recognised as ours and upgraded. */
-const MARKER_V1 = `${MARKER_PREFIX} v1`;
+const MARKER_V1 = `${LEGACY_MARKER_PREFIX} v1`;
 
 const rootFlag = Flag.string("root").pipe(Flag.optional, Flag.withDescription("repository root (default: current Git root)"));
 const stateArg = Argument.string("state").pipe(Argument.withDescription("Git reference-transaction state; only prepared may refuse"));
@@ -143,15 +152,34 @@ const V1_LINES: ReadonlyArray<string | RegExp> = [
 	"",
 ];
 
-/** A hook body this tool wrote in an earlier version, UNEDITED — the only kind `install` replaces. */
-const isKnownManagedHook = (actual: string): boolean => {
+/**
+ * v2's body as this tool renders it today, but carrying the RETIRED marker — what an install from
+ * before the de-brand left on disk. The body is otherwise byte-identical, so it is derived from the
+ * live renderer rather than transcribed: a future edit to the hook cannot drift this shape out of
+ * sync with it.
+ */
+const RECORDED_SENTINEL = "@@recorded@@";
+const V2_LEGACY_LINES: ReadonlyArray<string | RegExp> = renderManagedHook(RECORDED_SENTINEL)
+	.split("\n")
+	.map((line, index) =>
+		index === 1
+			? `${LEGACY_MARKER_PREFIX} v2`
+			// The recorded fallback path is baked at install time, so it is left open.
+			: line.includes(RECORDED_SENTINEL) ? /^ {2}"[^"]*"$/ : line,
+	);
+
+const matchesShape = (actual: string, shape: ReadonlyArray<string | RegExp>): boolean => {
 	const lines = actual.split("\n");
-	if (lines.length !== V1_LINES.length) return false;
-	return V1_LINES.every((want, i) => {
+	if (lines.length !== shape.length) return false;
+	return shape.every((want, i) => {
 		const got = lines[i] ?? "";
 		return typeof want === "string" ? got === want : want.test(got);
 	});
 };
+
+/** A hook body this tool wrote in an earlier version, UNEDITED — the only kind `install` replaces. */
+const isKnownManagedHook = (actual: string): boolean =>
+	matchesShape(actual, V1_LINES) || matchesShape(actual, V2_LEGACY_LINES);
 
 export type HookState = "absent" | "installed" | "outdated" | "drifted" | "foreign";
 
@@ -169,7 +197,9 @@ export const inspectHook = (path: string, expected: string): HookState => {
 		const actual = readFileSync(path, "utf8");
 		if (actual === expected) return "installed";
 		// Carries one of our markers but is not a rendering we produced ⇒ hand-edited ⇒ refuse.
-		if (!isKnownManagedHook(actual)) return actual.includes(MARKER_PREFIX) ? "drifted" : "foreign";
+		if (!isKnownManagedHook(actual)) {
+			return actual.includes(MARKER_PREFIX) || actual.includes(LEGACY_MARKER_PREFIX) ? "drifted" : "foreign";
+		}
 		return "outdated";
 	} catch {
 		return "foreign";
@@ -177,7 +207,7 @@ export const inspectHook = (path: string, expected: string): HookState => {
 };
 
 const writeManagedHook = (path: string, body: string): void => {
-	const temp = `${path}.kampus-pipeline-${process.pid}.tmp`;
+	const temp = `${path}.pipeline-${process.pid}.tmp`;
 	writeFileSync(temp, body, {mode: 0o755});
 	chmodSync(temp, 0o755);
 	renameSync(temp, path);

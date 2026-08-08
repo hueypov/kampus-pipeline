@@ -1,1 +1,1 @@
-../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/canon.md
+../../.pipeline/toolkit/claude-plugins/pipeline/agents/canon.md

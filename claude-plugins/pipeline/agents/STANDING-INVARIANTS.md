@@ -8,7 +8,7 @@ here for the detail. That placement is load-bearing: these are rules an agent mu
 specific moment, not background it must merely know, so the cite has to fire where the paragraph
 used to.
 
-**Scope: the `kampus-pipeline` agent definitions only.** Nothing here is a cross-plugin dependency.
+**Scope: the `pipeline` agent definitions only.** Nothing here is a cross-plugin dependency.
 
 <a id="sp"></a>
 

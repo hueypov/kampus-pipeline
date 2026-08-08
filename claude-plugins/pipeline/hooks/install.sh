@@ -9,7 +9,7 @@ HOOKS_DIR="$(dirname "${BASH_SOURCE[0]}")"
 
 TOOLKIT="$(resolve_pipeline_toolkit_root || true)"
 if [ -z "$TOOLKIT" ]; then
-	echo "kampus-pipeline: private toolkit is unavailable at .pipeline/toolkit; guards fail open" >&2
+	echo "pipeline: private toolkit is unavailable at .pipeline/toolkit; guards fail open" >&2
 	exit 0
 fi
 
@@ -17,5 +17,5 @@ if "$TOOLKIT/bin/pipeline" cli version >/dev/null 2>&1; then
 	exit 0
 fi
 
-echo "kampus-pipeline: local toolkit failed its CLI readiness check; guards fail open" >&2
+echo "pipeline: local toolkit failed its CLI readiness check; guards fail open" >&2
 exit 0
