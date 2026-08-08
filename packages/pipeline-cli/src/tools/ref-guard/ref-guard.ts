@@ -14,6 +14,8 @@ export interface ComparisonFacts {
 	readonly comparisonIsAncestorOfNew: boolean;
 	/** What the guarded ref resolves to right now, independent of the old value the caller asserted. */
 	readonly currentOid: string | null;
+	/** The guarded ref's value in `packed-refs`, which outlives a deletion of its loose copy. */
+	readonly packedOid: string | null;
 }
 
 export interface CheckoutContext {
@@ -45,7 +47,23 @@ export type RefDecision =
 
 export const decideRefUpdate = (update: RefUpdate, guardedRef: string, facts: ComparisonFacts): RefDecision => {
 	if (update.refName !== guardedRef) return {kind: "allow", reason: `${update.refName} is outside guarded ref ${guardedRef}`};
-	if (update.newOid === ZERO_OID) return {kind: "refuse", reason: `refusing to delete guarded primary ref ${guardedRef}`};
+	if (update.newOid === ZERO_OID) {
+		// `git pack-refs` reports the second half of its work — dropping the LOOSE copy of a ref it has
+		// just written into `packed-refs` — as a deletion: `<current> 0000…0 refs/heads/<primary>`. The
+		// ref survives at that very value in the packed store, so this is a standstill wearing a
+		// delete's clothes, and refusing it aborted every `gc`/`pack-refs` run in the repository.
+		//
+		// What keeps a REAL delete refused is that Git reports one with a ZERO-filled old value —
+		// `0000…0 0000…0 <ref>` — so it can never match a packed oid, which is always a real oid or
+		// absent. The prune is the only deletion-shaped transaction that arrives carrying the old
+		// value, which is exactly what makes the old value the discriminator. Measured on git 2.50.1
+		// for `update-ref -d` and `branch -D`, against a packed-only ref and against a ref holding a
+		// loose and a packed copy at the same oid: every genuine delete zero-filled, the prune did not.
+		// So this branch is unreachable for a genuine delete; it does not rely on a second transaction
+		// in the same command being refused first, nor on any ordering between them.
+		if (facts.packedOid !== null && facts.packedOid === update.oldOid) return {kind: "allow", reason: `${guardedRef} survives in packed-refs at ${update.oldOid.slice(0, 12)} (loose-copy prune)`};
+		return {kind: "refuse", reason: `refusing to delete guarded primary ref ${guardedRef}`};
+	}
 	// A same-value write moves nothing, so it cannot diverge anything. Git fires these routinely —
 	// `git stash push` and `git reset --hard HEAD` re-write the current branch at its current oid —
 	// and refusing one strands a merely-BEHIND primary: with origin ahead, the divergence test below

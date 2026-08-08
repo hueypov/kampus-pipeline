@@ -5,7 +5,7 @@ const OID_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OID_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const guarded = "refs/heads/trunk";
 const update = (over: Partial<RefUpdate> = {}): RefUpdate => ({oldOid: OID_A, newOid: OID_B, refName: guarded, ...over});
-const facts = (over: Partial<ComparisonFacts> = {}): ComparisonFacts => ({comparisonOid: null, comparisonIsAncestorOfNew: false, currentOid: null, ...over});
+const facts = (over: Partial<ComparisonFacts> = {}): ComparisonFacts => ({comparisonOid: null, comparisonIsAncestorOfNew: false, currentOid: null, packedOid: null, ...over});
 const detach = (over: Partial<CheckoutContext> = {}): CheckoutContext => ({sharedHeadPending: null, operationInProgress: false, ...over});
 
 describe("ref-guard pure decisions", () => {
@@ -16,6 +16,11 @@ describe("ref-guard pure decisions", () => {
 
 	it("refuses primary deletes and divergence but allows a missing comparison ref", () => {
 		expect(decideRefUpdate(update({newOid: ZERO_OID}), guarded, facts()).kind).toBe("refuse");
+		// A real deletion also removes any packed copy, and Git reports THAT as its own transaction
+		// with no old value to match — so a packed ref does not excuse it.
+		expect(decideRefUpdate(update({oldOid: ZERO_OID, newOid: ZERO_OID}), guarded, facts({packedOid: OID_A})).kind).toBe("refuse");
+		// A packed copy at a DIFFERENT value than the caller asserted is not this ref's survival.
+		expect(decideRefUpdate(update({oldOid: OID_A, newOid: ZERO_OID}), guarded, facts({packedOid: OID_B})).kind).toBe("refuse");
 		expect(decideRefUpdate(update(), guarded, facts({comparisonOid: OID_A})).kind).toBe("refuse");
 		expect(decideRefUpdate(update(), guarded, facts()).kind).toBe("allow");
 	});
@@ -35,6 +40,13 @@ describe("ref-guard pure decisions", () => {
 		expect(decideRefUpdate(update({oldOid: ZERO_OID, newOid: OID_A}), guarded, facts({comparisonOid: OID_B, currentOid: OID_A})).kind).toBe("allow");
 		// A ref that really is moving stays on the strict ancestry path.
 		expect(decideRefUpdate(update({oldOid: ZERO_OID, newOid: OID_B}), guarded, facts({comparisonOid: OID_A, currentOid: OID_A})).kind).toBe("refuse");
+	});
+
+	it("allows pack-refs pruning the loose copy of a ref that survives packed", () => {
+		// The other half of a pack-refs run: `<current> 0000…0 <ref>`, the loose copy dropped now that
+		// packed-refs holds the same value. Indistinguishable on stdin from `git update-ref -d <ref>
+		// <oid>`, so the packed value is what separates them — and a real delete removes that too.
+		expect(decideRefUpdate(update({oldOid: OID_A, newOid: ZERO_OID}), guarded, facts({packedOid: OID_A})).kind).toBe("allow");
 	});
 
 	it("refuses only an unpaired concrete HEAD move on the primary", () => {
