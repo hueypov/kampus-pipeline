@@ -1,16 +1,11 @@
 import {assert, describe, it} from "@effect/vitest";
-import {decideReap, isManagedWorktree} from "./reap.ts";
+import {decideReap} from "./reap.ts";
 
 const WT = "/Users/dev/code/example-repo/.claude/worktrees/wf_abc123";
 const OTHER_WT = "/Users/dev/code/example-repo/.claude/worktrees/wf_nested999";
 
-describe("isManagedWorktree", () => {
-	it("recognizes the managed worktree layout", () => {
-		assert.isTrue(isManagedWorktree(WT));
-		assert.isFalse(isManagedWorktree("/some/bespoke/wt"));
-		assert.isFalse(isManagedWorktree(""));
-	});
-});
+// `isManagedWorktree` now lives in `arm.ts` (the guard's single home for "is this a managed
+// root"); its coverage moved to `arm.unit.test.ts` with it.
 
 describe("decideReap — the safe-worktree-prune rule (AC: clean → reap, dirty → refuse-and-keep)", () => {
 	it("OWNER + CLEAN → reap (git worktree remove, no --force)", () => {

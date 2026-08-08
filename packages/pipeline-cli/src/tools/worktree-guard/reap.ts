@@ -22,16 +22,12 @@
  * sidecar). We reap only when the stopping agent OWNS `$WORKTREE_ROOT`; unprovable ownership ⇒ KEEP.
  */
 
+import {isManagedWorktree} from "./arm.ts";
+
 export type ReapDecision =
 	| {readonly kind: "skip"; readonly reason: string}
 	| {readonly kind: "reap"; readonly reason: string}
 	| {readonly kind: "refuse"; readonly reason: string};
-
-const WORKTREE_SEGMENT = "/.claude/worktrees/";
-
-/** True when the path is a managed agent worktree (`<main>/.claude/worktrees/<id>`). */
-export const isManagedWorktree = (worktreeRoot: string): boolean =>
-	worktreeRoot.replace(/\\/g, "/").indexOf(WORKTREE_SEGMENT) > 0;
 
 const normalizePath = (p: string): string => p.replace(/\\/g, "/").replace(/\/+$/, "");
 

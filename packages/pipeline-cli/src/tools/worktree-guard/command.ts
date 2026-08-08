@@ -5,10 +5,15 @@
  * the originating work item), moved into the pipeline-cli registry (the originating initiative, Phase 2 / the originating work item). The four
  * hook subcommands each read the hook's stdin JSON envelope, run a pure core, and
  * emit the matching hook output; a fifth (`assert-clean`, the originating work item) is an operator/skill
- * invocation — not a hook — that fails closed on a dirty worktree. All read `$WORKTREE_ROOT` from the process
- * env (injected at spawn for an `isolation:worktree` subagent); an UNSET root makes
- * every subcommand a clean allow/skip no-op, so a non-worktree session is never
- * affected — with ONE exception (the expected-worktree isolation fail-closed rule): `pre-bash` still refuses a head-moving git
+ * invocation — not a hook — that fails closed on a dirty worktree.
+ *
+ * The root each PreToolUse subcommand acts on is RESOLVED, not read: `$WORKTREE_ROOT` first, then
+ * the agent's own meta sidecar, then the payload cwd's linked worktree — see `arm.ts` for why an
+ * env var a harness may omit cannot be the only signal (#141). Whichever way it lands, every hook
+ * emits its arm status on stderr before deciding, so an unarmable guard is visible from outside
+ * instead of looking like a clean pass. A root that resolves from none of the signals still makes
+ * every subcommand a clean allow/skip no-op, so a non-worktree session is never affected — with
+ * ONE exception (the expected-worktree isolation fail-closed rule): `pre-bash` still refuses a head-moving git
  * op when isolation was EXPECTED (a direct coder/reviewer/shipper agent-type, or a nested
  * crew spawn detected via `git-dir == git-common-dir`; the originating work item) yet the root is unset, because
  * that unset root is itself the documented failure harness no-op that would otherwise let the documented failure/the originating work item
@@ -42,6 +47,7 @@ import {resolve} from "node:path";
 import {Console, Effect, Option} from "effect";
 import * as Schema from "effect/Schema";
 import {Command, Flag} from "effect/unstable/cli";
+import {formatArmStatus, resolveArm} from "./arm.ts";
 import {isIsolationExpected, pinBash} from "./bash-pin.ts";
 import {decideCleanTree} from "./clean-tree.ts";
 import {guardEnterWorktree} from "./enter-guard.ts";
@@ -52,16 +58,24 @@ const GATE_FAIL_EXIT_CODE = 1;
 
 const WORKTREE_ROOT = process.env.WORKTREE_ROOT ?? "";
 
-// Is this run sitting on the PRIMARY checkout? Env-independent signal (see the expected-worktree isolation fail-closed rule amendment,
+// Is this run sitting on the PRIMARY checkout, and if not, which linked worktree is the cwd in?
+// Env-independent signal (see the expected-worktree isolation fail-closed rule amendment,
 // the originating work item): `git rev-parse --absolute-git-dir` equals the (cwd-resolved) `--git-common-dir` on the
 // primary checkout, but differs in a linked worktree (whose per-tree git dir is
 // `.git/worktrees/<id>`) — the same signal write-code Step-4 uses. This corroborates the isolation
 // gate for a NESTED crew spawn whose inherited $CLAUDE_CODE_AGENT (engineering-manager) masks the
-// direct agent-type regex. Resolved against the hook's reported cwd; unknowable ⇒ false (degrade to
-// today's allow, never a spurious refusal).
-const onPrimaryCheckout = (cwd: string): boolean => {
+// direct agent-type regex, and doubles as the last-resort root derivation (#141). Resolved against
+// the hook's reported cwd; unknowable ⇒ not-primary, no derived root (degrade to today's allow,
+// never a spurious refusal).
+//
+// `linkedWorktreeTop` is derived ONLY from a cwd the PAYLOAD named: the hook process's own cwd is
+// unreliable by construction — the worktree-agent cwd reset is the hazard this guard exists for —
+// so seeding a root from it would invent a target (path-resolve's rule).
+const probeCwdGit = (
+	cwd: string,
+): {readonly onPrimaryCheckout: boolean; readonly linkedWorktreeTop: string} => {
 	const base = cwd || process.cwd();
-	// biome-ignore lint/plugin: best-effort probe — an unknowable git dir degrades to false (not primary), never E (see file header).
+	// biome-ignore lint/plugin: best-effort probe — an unknowable git dir degrades to not-primary with no derived root, never E (see file header).
 	try {
 		const opts = {cwd: base, encoding: "utf8" as const};
 		const gitDir = resolve(
@@ -72,9 +86,15 @@ const onPrimaryCheckout = (cwd: string): boolean => {
 			base,
 			execFileSync("git", ["rev-parse", "--git-common-dir"], opts).trim(),
 		);
-		return gitDir === commonDir;
+		if (gitDir === commonDir) return {onPrimaryCheckout: true, linkedWorktreeTop: ""};
+		return {
+			onPrimaryCheckout: false,
+			linkedWorktreeTop: cwd
+				? execFileSync("git", ["rev-parse", "--show-toplevel"], opts).trim()
+				: "",
+		};
 	} catch {
-		return false;
+		return {onPrimaryCheckout: false, linkedWorktreeTop: ""};
 	}
 };
 
@@ -117,6 +137,65 @@ const field = (obj: unknown, ...path: string[]): unknown => {
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
+/**
+ * Read the running agent's own meta sidecar out of any hook payload. The harness writes one next
+ * to each subagent transcript (`…/subagents/agent-<id>.meta.json`) recording the worktree that
+ * agent OWNS (`worktreePath`) and the agent type it was actually spawned as (`agentType`), and
+ * every hook envelope's `transcript_path` points at that transcript.
+ *
+ * Both fields are the env-independent truth the guard needs: `worktreePath` arms the guard when a
+ * harness omits `$WORKTREE_ROOT` (#141), and `agentType` is the agent's REAL type where the
+ * inherited `$CLAUDE_CODE_AGENT` reports its parent's (a coder spawned under the crew reads
+ * `engineering-manager`, which is what makes the isolation gate go inert for a nested spawn).
+ *
+ * Anything unreadable ⇒ empty strings ⇒ the caller degrades to the env-only behaviour.
+ */
+const readAgentMeta = (
+	input: unknown,
+): {readonly worktreePath: string; readonly agentType: string} => {
+	const empty = {worktreePath: "", agentType: ""};
+	const transcriptPath = str(field(input, "transcript_path"));
+	if (!transcriptPath) return empty;
+	const metaPath = transcriptPath.replace(/\.jsonl$/, ".meta.json");
+	if (metaPath === transcriptPath || !existsSync(metaPath)) return empty;
+	// biome-ignore lint/plugin: best-effort read — an unreadable/malformed sidecar degrades to empty (env-only behaviour), never E (see file header).
+	try {
+		const meta = JSON.parse(readFileSync(metaPath, "utf8")) as unknown;
+		return {
+			worktreePath: str(field(meta, "worktreePath")),
+			agentType: str(field(meta, "agentType")),
+		};
+	} catch {
+		return empty;
+	}
+};
+
+/**
+ * Everything a PreToolUse subcommand needs before it decides: the root it will act on (or "" when
+ * the guard could not arm), whether isolation was expected, and the one-line status to report.
+ */
+const armPreToolUse = (
+	subcommand: string,
+	input: unknown,
+): {readonly root: string; readonly isolationExpected: boolean; readonly status: string} => {
+	const meta = readAgentMeta(input);
+	const git = probeCwdGit(str(field(input, "cwd")));
+	const arm = resolveArm({
+		envRoot: WORKTREE_ROOT,
+		sidecarWorktree: meta.worktreePath,
+		cwdWorktree: git.linkedWorktreeTop,
+	});
+	const isolationExpected = isIsolationExpected({
+		agentType: meta.agentType || (process.env.CLAUDE_CODE_AGENT ?? ""),
+		onPrimaryCheckout: git.onPrimaryCheckout,
+	});
+	return {
+		root: arm.kind === "armed" ? arm.root : "",
+		isolationExpected,
+		status: formatArmStatus({subcommand, arm, isolationExpected}),
+	};
+};
+
 const allow = (updatedInput?: Record<string, unknown>, systemMessage?: string) =>
 	Console.log(
 		JSON.stringify({
@@ -149,8 +228,10 @@ const preFile = Command.make(
 		const toolInput = (field(input, "tool_input") as Record<string, unknown>) ?? {};
 		const candidate = str(toolInput.file_path);
 		const cwd = str(field(input, "cwd"));
+		const {root, status} = armPreToolUse("pre-file", input);
+		yield* Console.error(status);
 		const decision = resolvePath({
-			worktreeRoot: WORKTREE_ROOT,
+			worktreeRoot: root,
 			cwd,
 			candidatePath: candidate,
 			existsInWorktree: (p) => {
@@ -183,15 +264,9 @@ const preBash = Command.make(
 		const input = yield* readStdin();
 		const toolInput = (field(input, "tool_input") as Record<string, unknown>) ?? {};
 		const command = str(toolInput.command);
-		const cwd = str(field(input, "cwd"));
-		const decision = pinBash({
-			worktreeRoot: WORKTREE_ROOT,
-			command,
-			isolationExpected: isIsolationExpected({
-				agentType: process.env.CLAUDE_CODE_AGENT ?? "",
-				onPrimaryCheckout: onPrimaryCheckout(cwd),
-			}),
-		});
+		const {root, isolationExpected, status} = armPreToolUse("pre-bash", input);
+		yield* Console.error(status);
+		const decision = pinBash({worktreeRoot: root, command, isolationExpected});
 		if (decision.kind === "allow") return yield* allow();
 		if (decision.kind === "refuse") return yield* deny(`worktree-guard: ${decision.reason}`);
 		return yield* allow(
@@ -209,36 +284,18 @@ const preEnter = Command.make(
 	"pre-enter",
 	{},
 	Effect.fn(function* () {
-		yield* readStdin();
-		const decision = guardEnterWorktree(WORKTREE_ROOT);
+		const input = yield* readStdin();
+		const {root, status} = armPreToolUse("pre-enter", input);
+		yield* Console.error(status);
+		// A non-managed `$WORKTREE_ROOT` disarms the guard but must still block nesting: this hook's
+		// question is "am I already inside SOME worktree", which any non-empty root answers.
+		const decision = guardEnterWorktree(WORKTREE_ROOT.trim() !== "" ? WORKTREE_ROOT : root);
 		if (decision.kind === "allow") return yield* allow();
 		return yield* deny(`worktree-guard: ${decision.reason}`);
 	}),
 ).pipe(
 	Command.withDescription("PreToolUse EnterWorktree: hard-block when already inside a worktree"),
 );
-
-/**
- * Derive the STOPPING agent's OWN worktree from the SubagentStop payload — the owner signal the
- * the originating work item gate turns on. The harness writes a per-subagent sidecar next to each subagent transcript
- * (`…/subagents/agent-<id>.meta.json`) recording the worktree that agent OWNS (`worktreePath`), and
- * the payload's `transcript_path` points at that transcript. A nested descendant that merely
- * inherited `$WORKTREE_ROOT` carries its OWN (different, or absent) `worktreePath`, so this
- * distinguishes an owner-stop from a nested stop. Anything unreadable ⇒ "" ⇒ ownership unprovable ⇒
- * `decideReap` KEEPs (fail-closed: never reap a possibly-live parent tree).
- */
-const ownedWorktreeFromPayload = (input: unknown): string => {
-	const transcriptPath = str(field(input, "transcript_path"));
-	if (!transcriptPath) return "";
-	const metaPath = transcriptPath.replace(/\.jsonl$/, ".meta.json");
-	if (metaPath === transcriptPath || !existsSync(metaPath)) return "";
-	// biome-ignore lint/plugin: best-effort read — an unreadable/malformed sidecar degrades to "" (ownership unprovable ⇒ decideReap KEEPs), never E (see file header).
-	try {
-		return str(field(JSON.parse(readFileSync(metaPath, "utf8")) as unknown, "worktreePath"));
-	} catch {
-		return "";
-	}
-};
 
 /** Is the worktree dirty? `git status --porcelain` non-empty ⇒ dirty (also dirty if we can't tell — fail-safe to KEEP). */
 const worktreeIsDirty = (root: string): boolean => {
@@ -259,6 +316,18 @@ const reap = Command.make(
 	{},
 	Effect.fn(function* () {
 		const input = yield* readStdin();
+		// The reaper's root stays ENV-ONLY, deliberately. Its owner gate compares the INHERITED
+		// `$WORKTREE_ROOT` against the sidecar's `worktreePath`, so deriving the root from that same
+		// sidecar would compare a value with itself and pass every nested-descendant stop — turning
+		// the gate that keeps a live parent's worktree alive into a no-op. The status line below is
+		// what #141 asks of this entry point; the derivation is not.
+		yield* Console.error(
+			formatArmStatus({
+				subcommand: "reap",
+				arm: resolveArm({envRoot: WORKTREE_ROOT, sidecarWorktree: "", cwdWorktree: ""}),
+				isolationExpected: false,
+			}),
+		);
 		if (!WORKTREE_ROOT || !existsSync(WORKTREE_ROOT)) {
 			return yield* Console.error("worktree-guard reap: no $WORKTREE_ROOT to reap (skip)");
 		}
@@ -274,7 +343,7 @@ const reap = Command.make(
 		}
 		const decision = decideReap({
 			worktreeRoot: WORKTREE_ROOT,
-			ownedWorktree: ownedWorktreeFromPayload(input),
+			ownedWorktree: readAgentMeta(input).worktreePath,
 			isDirty: worktreeIsDirty(WORKTREE_ROOT),
 		});
 		switch (decision.kind) {

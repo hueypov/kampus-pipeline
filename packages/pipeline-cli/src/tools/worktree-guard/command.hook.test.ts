@@ -66,14 +66,15 @@ describe("worktree-guard pre-file — PreToolUse envelope", () => {
 describe("worktree-guard pre-bash — PreToolUse envelope", () => {
 	const WT = "/Users/dev/code/example-repo/.claude/worktrees/wf_xyz";
 
-	it("pins a Bash command lacking a cd", async () => {
-		const {stdout} = await run(
+	it("pins a Bash command lacking a cd, and reports that it armed from the env root", async () => {
+		const {stdout, stderr} = await run(
 			"pre-bash",
 			{tool_name: "Bash", tool_input: {command: "git status"}},
 			{WORKTREE_ROOT: WT},
 		);
 		const out = JSON.parse(stdout.trim());
 		assert.strictEqual(out.hookSpecificOutput.updatedInput.command, `cd "${WT}" && git status`);
+		assert.include(stderr, `worktree-guard pre-bash: ARMED root=${WT} source=env`);
 	}, 30_000);
 
 	it("DENIES a bare HEAD-moving git op that would detach the shared primary (#1571)", async () => {
@@ -87,12 +88,136 @@ describe("worktree-guard pre-bash — PreToolUse envelope", () => {
 		assert.match(out.hookSpecificOutput.permissionDecisionReason, /git -C "\$WT"/);
 	}, 30_000);
 
+	// `CLAUDE_CODE_AGENT` is pinned empty so the assertion is about the orchestrator's own shell and
+	// not about whatever agent context happens to be running the suite.
 	it("does NOT deny the orchestrator's bare `git checkout main` (no $WORKTREE_ROOT)", async () => {
 		const {stdout} = await run(
 			"pre-bash",
 			{tool_name: "Bash", tool_input: {command: "git checkout main"}},
-			{WORKTREE_ROOT: ""},
+			{WORKTREE_ROOT: "", CLAUDE_CODE_AGENT: ""},
 		);
+		const out = JSON.parse(stdout.trim());
+		assert.strictEqual(out.hookSpecificOutput.permissionDecision, "allow");
+	}, 30_000);
+});
+
+describe("worktree-guard — arming without $WORKTREE_ROOT, and saying so either way (#141)", () => {
+	const SIDECAR_WT = "/Users/dev/code/example-repo/.claude/worktrees/wf_sidecar";
+	let metaDir: string;
+	let transcript: string;
+
+	// The harness records the worktree an agent OWNS in a sidecar beside its transcript; that is the
+	// env-independent signal the guard now arms from when $WORKTREE_ROOT was never exported.
+	beforeAll(() => {
+		metaDir = mkdtempSync(join(tmpdir(), "wtg-meta-"));
+		transcript = join(metaDir, "agent-sidecar.jsonl");
+		writeFileSync(transcript, "");
+		writeFileSync(
+			join(metaDir, "agent-sidecar.meta.json"),
+			JSON.stringify({agentType: "coder", worktreePath: SIDECAR_WT}),
+		);
+	});
+
+	afterAll(() => {
+		rmSync(metaDir, {recursive: true, force: true});
+	});
+
+	it("ARMS from the agent meta sidecar and pins a command the env-keyed guard would have missed", async () => {
+		const {stdout, stderr} = await run(
+			"pre-bash",
+			{tool_name: "Bash", transcript_path: transcript, tool_input: {command: "git status"}},
+			{WORKTREE_ROOT: "", CLAUDE_CODE_AGENT: ""},
+		);
+		assert.include(stderr, `worktree-guard pre-bash: ARMED root=${SIDECAR_WT} source=sidecar`);
+		const out = JSON.parse(stdout.trim());
+		assert.strictEqual(
+			out.hookSpecificOutput.updatedInput.command,
+			`cd "${SIDECAR_WT}" && git status`,
+		);
+	}, 30_000);
+
+	it("ARMS pre-file from the same sidecar (a relative path still resolves into the worktree)", async () => {
+		const {stdout, stderr} = await run(
+			"pre-file",
+			{tool_name: "Edit", transcript_path: transcript, tool_input: {file_path: "src/x.ts"}},
+			{WORKTREE_ROOT: "", CLAUDE_CODE_AGENT: ""},
+		);
+		assert.include(stderr, "worktree-guard pre-file: ARMED");
+		const out = JSON.parse(stdout.trim());
+		assert.strictEqual(out.hookSpecificOutput.updatedInput.file_path, `${SIDECAR_WT}/src/x.ts`);
+	}, 30_000);
+
+	it("says NOT ARMED when no signal names a worktree — never-armed no longer looks like a clean pass", async () => {
+		const {stdout, stderr} = await run(
+			"pre-bash",
+			{tool_name: "Bash", tool_input: {command: "git status"}},
+			{WORKTREE_ROOT: "", CLAUDE_CODE_AGENT: ""},
+		);
+		assert.include(stderr, "worktree-guard pre-bash: NOT ARMED");
+		assert.include(stderr, "isolation-expected=no");
+		const out = JSON.parse(stdout.trim());
+		assert.strictEqual(out.hookSpecificOutput.permissionDecision, "allow");
+		assert.isUndefined(out.hookSpecificOutput.updatedInput);
+	}, 30_000);
+
+	it("still refuses a head-move for an isolation-expecting agent while NOT ARMED (the surviving layer)", async () => {
+		const {stdout, stderr} = await run(
+			"pre-bash",
+			{tool_name: "Bash", tool_input: {command: "git checkout main"}},
+			{WORKTREE_ROOT: "", CLAUDE_CODE_AGENT: "coder"},
+		);
+		assert.include(stderr, "isolation-expected=yes");
+		const out = JSON.parse(stdout.trim());
+		assert.strictEqual(out.hookSpecificOutput.permissionDecision, "deny");
+	}, 30_000);
+
+	it("reap says NOT ARMED with no $WORKTREE_ROOT (the reaper stays env-keyed; only its silence is fixed)", async () => {
+		const {stderr} = await run("reap", {hook_event_name: "SubagentStop"}, {WORKTREE_ROOT: ""});
+		assert.include(stderr, "worktree-guard reap: NOT ARMED");
+	}, 30_000);
+});
+
+describe("worktree-guard pre-bash — last-resort derivation from the payload cwd (#141)", () => {
+	let mainRepo: string;
+	let wtRoot: string;
+
+	const git = (cwd: string, ...args: string[]) =>
+		execFileSync("git", ["-C", cwd, ...args], {encoding: "utf8"});
+
+	beforeAll(() => {
+		mainRepo = mkdtempSync(join(tmpdir(), "wtg-cwd-"));
+		git(mainRepo, "init", "-q", "-b", "main");
+		git(mainRepo, "config", "user.email", "t@t.t");
+		git(mainRepo, "config", "user.name", "t");
+		writeFileSync(join(mainRepo, "README.md"), "x");
+		git(mainRepo, "add", "README.md");
+		git(mainRepo, "commit", "-q", "-m", "init");
+		wtRoot = join(mainRepo, ".claude", "worktrees", "wf_cwd");
+		git(mainRepo, "worktree", "add", "-q", "--detach", wtRoot, "HEAD");
+	});
+
+	afterAll(() => {
+		rmSync(mainRepo, {recursive: true, force: true});
+	});
+
+	it("ARMS from a payload cwd that is a managed linked worktree", async () => {
+		const {stdout, stderr} = await run(
+			"pre-bash",
+			{tool_name: "Bash", cwd: wtRoot, tool_input: {command: "git status"}},
+			{WORKTREE_ROOT: "", CLAUDE_CODE_AGENT: ""},
+		);
+		assert.match(stderr, /worktree-guard pre-bash: ARMED root=\S+ source=git/);
+		const out = JSON.parse(stdout.trim());
+		assert.match(out.hookSpecificOutput.updatedInput.command, /^cd "\S*\/\.claude\/worktrees\//);
+	}, 30_000);
+
+	it("stays NOT ARMED when the payload cwd is the PRIMARY checkout (no over-refusal)", async () => {
+		const {stdout, stderr} = await run(
+			"pre-bash",
+			{tool_name: "Bash", cwd: mainRepo, tool_input: {command: "git checkout main"}},
+			{WORKTREE_ROOT: "", CLAUDE_CODE_AGENT: ""},
+		);
+		assert.include(stderr, "worktree-guard pre-bash: NOT ARMED");
 		const out = JSON.parse(stdout.trim());
 		assert.strictEqual(out.hookSpecificOutput.permissionDecision, "allow");
 	}, 30_000);
