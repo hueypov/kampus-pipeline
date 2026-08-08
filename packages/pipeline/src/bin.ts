@@ -74,6 +74,69 @@ const fail = (message: string): never => {
 	process.exit(1);
 };
 
+/**
+ * How this binary answers an argument it does not recognise.
+ *
+ * The parsing here asked only whether a *known* flag was present and never whether an unknown one
+ * was, so an unrecognised argument was discarded in silence and `init --help` performed a complete
+ * initialisation of the repository the operator was asking about (#86). The refusal statuses are
+ * `packages/pipeline-cli`'s — the other half of the same toolkit is an Effect CLI that already
+ * answers this question — adopted rather than invented per site: an unrecognised argument prints
+ * usage and exits **1**, the status `fail` already uses; `--help`/`-h` prints usage, writes
+ * nothing, and exits **0**.
+ */
+const SUBCOMMAND_USAGE = {
+	init: "pipeline init [--check] [--force] [--project-root <path>]",
+	sync: "pipeline sync [--check] [--force] [--project-root <path>]",
+	check: "pipeline check [<project-root>]",
+	status: "pipeline status [--json] [--project-root <path>]",
+	enable: "pipeline enable <workflow> [--project-root <path>]",
+	"primary-index-guard": "pipeline primary-index-guard <install-hook|check-hook> [--project-root <path>]",
+} as const;
+const COMMAND_USAGE = "pipeline <init|sync|check|status|enable|primary-index-guard|cli|crew> [args]";
+type Subcommand = keyof typeof SUBCOMMAND_USAGE;
+
+const help = (usage: string): never => {
+	console.log(`usage: ${usage}`);
+	process.exit(0);
+};
+
+type ParsedArguments = {flags: ReadonlySet<string>; projectRoot: string | undefined; operands: readonly string[]};
+
+/**
+ * Parse one subcommand's arguments against what it declares it accepts, refusing everything else.
+ *
+ * An operand is only ever taken from a position the subcommand still has one free for, and never
+ * from a flag-shaped token: `check` read `args[0]` outright, which made `pipeline check --help` a
+ * request to check the project rooted at `--help`.
+ */
+const parseArguments = (
+	command: Subcommand,
+	args: string[],
+	accepts: {switches?: readonly string[]; projectRoot?: boolean; operands?: number},
+): ParsedArguments => {
+	const usage = SUBCOMMAND_USAGE[command];
+	const switches = new Set(accepts.switches ?? []);
+	const flags = new Set<string>();
+	const operands: string[] = [];
+	let projectRoot: string | undefined;
+	const remaining = args.slice();
+	for (let argument = remaining.shift(); argument !== undefined; argument = remaining.shift()) {
+		if (argument === "--help" || argument === "-h") help(usage);
+		if (accepts.projectRoot && argument === "--project-root") {
+			// `||` rather than `??`: an empty string is a present-but-unusable path, not a path.
+			projectRoot = remaining.shift() || fail("--project-root requires a path");
+		} else if (switches.has(argument)) {
+			flags.add(argument);
+		} else if (!argument.startsWith("-") && operands.length < (accepts.operands ?? 0)) {
+			operands.push(argument);
+		} else {
+			fail(`unrecognized argument for '${command}': ${argument}\nusage: ${usage}`);
+		}
+	}
+	return {flags, projectRoot, operands};
+};
+
 const run = (command: string, args: string[], cwd: string): string => {
 	const result = spawnSync(command, args, {cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]});
 	if (result.error || result.status !== 0) fail(result.stderr.trim() || `could not run ${command}`);
@@ -945,12 +1008,11 @@ const check = (projectRoot: string): string[] => {
 	return errors;
 };
 
-const init = (args: string[]): void => {
-	const force = args.includes("--force");
-	const checkOnly = args.includes("--check");
-	const requested = args.includes("--project-root") ? args[args.indexOf("--project-root") + 1] : undefined;
-	if (args.includes("--project-root") && !requested) fail("--project-root requires a path");
-	const projectRoot = findProjectRoot(requested);
+const init = (command: "init" | "sync", args: string[]): void => {
+	const parsed = parseArguments(command, args, {switches: ["--force", "--check"], projectRoot: true});
+	const force = parsed.flags.has("--force");
+	const checkOnly = parsed.flags.has("--check");
+	const projectRoot = findProjectRoot(parsed.projectRoot);
 	if (checkOnly) {
 		const errors = check(projectRoot);
 		if (errors.length) fail(`check failed:\n${errors.map((error) => `- ${error}`).join("\n")}`);
@@ -1026,14 +1088,13 @@ const init = (args: string[]): void => {
 };
 
 const enable = (args: string[]): void => {
-	const requested = args.includes("--project-root") ? args[args.indexOf("--project-root") + 1] : undefined;
-	if (args.includes("--project-root") && !requested) fail("--project-root requires a path");
-	const workflow = args.find((arg) => arg !== "--project-root" && arg !== requested)
+	const parsed = parseArguments("enable", args, {projectRoot: true, operands: 1});
+	const workflow = parsed.operands[0]
 		?? fail(`workflow name is required; available: ${GITHUB_WORKFLOW_TEMPLATES.map((template) => basename(template.destination, ".yml")).join(", ")}`);
 	if (!GITHUB_WORKFLOW_TEMPLATES.some((template) => basename(template.destination, ".yml") === workflow)) {
 		fail(`workflow is not optional or does not exist: ${workflow}`);
 	}
-	const projectRoot = findProjectRoot(requested);
+	const projectRoot = findProjectRoot(parsed.projectRoot);
 	// The optional workflows are consumer-shaped: they pin `.pipeline/toolkit` in CI and gate the
 	// pull request on it. In the self-hosted toolkit repository that gates a checkout of itself —
 	// green, and confirming nothing (#26) — so the refusal lands before the policy is touched,
@@ -1042,19 +1103,16 @@ const enable = (args: string[]): void => {
 	const policy = readOptionalWorkflowPolicy(projectRoot);
 	policy.workflows[workflow] = {...policy.workflows[workflow], enabled: true};
 	writeJson(join(projectRoot, ".pipeline/optional-workflow-policy.json"), policy);
-	init(["--project-root", projectRoot]);
+	init("sync", ["--project-root", projectRoot]);
 	const errors = check(projectRoot);
 	if (errors.length) fail(`enable failed:\n${errors.map((error) => `- ${error}`).join("\n")}`);
 	console.log(`pipeline: enabled ${workflow}; it will run on the next pull request`);
 };
 
 const status = (args: string[]): void => {
-	const json = args.includes("--json");
-	const requested = args.includes("--project-root") ? args[args.indexOf("--project-root") + 1] : undefined;
-	if (args.includes("--project-root") && !requested) fail("--project-root requires a path");
-	const unknown = args.filter((arg) => arg !== "--json" && arg !== "--project-root" && arg !== requested);
-	if (unknown.length) fail(`unknown status argument(s): ${unknown.join(", ")}`);
-	const state = resolveStatus(findProjectRoot(requested));
+	const parsed = parseArguments("status", args, {switches: ["--json"], projectRoot: true});
+	const json = parsed.flags.has("--json");
+	const state = resolveStatus(findProjectRoot(parsed.projectRoot));
 	if (json) {
 		console.log(JSON.stringify({ok: state.errors.length === 0, ...state}, null, "\t"));
 	} else {
@@ -1068,15 +1126,12 @@ const status = (args: string[]): void => {
 };
 
 const primaryIndexGuard = (args: string[]): void => {
-	const [action, ...rest] = args;
+	const parsed = parseArguments("primary-index-guard", args, {projectRoot: true, operands: 1});
+	const action = parsed.operands[0];
 	if (action !== "install-hook" && action !== "check-hook") {
-		fail("usage: pipeline primary-index-guard <install-hook|check-hook> [--project-root <path>]");
+		fail(`usage: ${SUBCOMMAND_USAGE["primary-index-guard"]}`);
 	}
-	const requested = rest.includes("--project-root") ? rest[rest.indexOf("--project-root") + 1] : undefined;
-	if (rest.includes("--project-root") && !requested) fail("--project-root requires a path");
-	const unknown = rest.filter((arg) => arg !== "--project-root" && arg !== requested);
-	if (unknown.length) fail(`unknown primary-index-guard argument(s): ${unknown.join(", ")}`);
-	const projectRoot = findProjectRoot(requested);
+	const projectRoot = findProjectRoot(parsed.projectRoot);
 	if (action === "install-hook") {
 		installPrimaryIndexGuardHook(projectRoot);
 		return;
@@ -1098,17 +1153,21 @@ const forward = (packagePath: string, args: string[]): never => {
 };
 
 const [command, ...args] = process.argv.slice(2);
-if (command === "init" || command === "sync") init(args);
+if (command === "--help" || command === "-h") help(COMMAND_USAGE);
+else if (command === "init" || command === "sync") init(command, args);
 else if (command === "enable") enable(args);
 else if (command === "status") status(args);
 else if (command === "primary-index-guard") primaryIndexGuard(args);
 else if (command === "check") {
-	const errors = check(findProjectRoot(args[0]));
+	const parsed = parseArguments("check", args, {operands: 1});
+	const errors = check(findProjectRoot(parsed.operands[0]));
 	if (errors.length) fail(`check failed:\n${errors.map((error) => `- ${error}`).join("\n")}`);
 	console.log("pipeline: check passed");
 } else if (command === "cli") {
+	// A forwarder: everything after `cli` belongs to the binary behind it, which is an Effect CLI
+	// that rejects an unrecognised flag itself — so `--help` and a typo alike pass through.
 	if (!args[0]) fail("CLI tool is required");
 	forward("packages/pipeline-cli/src/bin.ts", args);
 }
 else if (command === "crew") forward("packages/pipeline-crew-mcp/src/bin.ts", args);
-else fail("usage: pipeline <init|sync|check|status|enable|primary-index-guard|cli|crew> [args]");
+else fail(`usage: ${COMMAND_USAGE}`);
