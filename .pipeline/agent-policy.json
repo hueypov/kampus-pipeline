@@ -107,7 +107,13 @@
 		},
 		"shipping": {
 			"enabled": true,
-			"controlPlanePaths": [],
+			"controlPlanePaths": [
+				"^\\.pipeline/",
+				"^\\.claude/",
+				"^\\.github/",
+				"^claude-plugins/[^/]+/agents/",
+				"^claude-plugins/[^/]+/skills/(review-code|review-doc|review-skill|review-design|review-plan|review-trivial|ship-it)/"
+			],
 			"requiredApprovals": 0,
 			"shipDigest": {
 				"categories": {
