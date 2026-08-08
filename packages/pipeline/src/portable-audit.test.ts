@@ -15,6 +15,13 @@ const portablePaths = [
 	"claude-plugins/kampus-pipeline/hooks",
 	...Array.from(CORE_SKILL_NAMES, (name) => `claude-plugins/kampus-pipeline/skills/${name}`),
 	...Array.from(CORE_WORKFLOW_SUPPORT_FILES, (name) => `claude-plugins/kampus-pipeline/skills/${name}`),
+	// The eval sets, named explicitly since ADR 0001 moved them out of the skill directories. They
+	// used to be swept up by the per-skill entries above, because `collectPayloadFiles` recurses —
+	// so the forbidden-string audit covered ~43KB of eval prose without anyone listing it. Dropping
+	// the line would leave every test here green while silently covering five fewer files, which is
+	// the shape this suite exists to catch. Eval prompts describe concrete engineering scenarios,
+	// which is exactly the prose that attracts a real repository path.
+	"claude-plugins/kampus-pipeline/evals",
 ];
 const adrPaths = [
 	"claude-plugins/kampus-pipeline/skills/adr/SKILL.md",
