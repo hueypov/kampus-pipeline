@@ -50,4 +50,20 @@ describe("protected-change-policy command", () => {
 		expect(result.code).toBe(2);
 		expect(result.stdout.trim()).toBe(".");
 	});
+
+	it("treats a boundary that protects nothing exactly like an unreadable one", async () => {
+		// The shipped template declares no paths, so this is the state of every adopter who has not
+		// named their own boundary yet. Honouring it would answer `ordinary` for any input (#134).
+		const vacuous = mkdtempSync(join(tmpdir(), "protected-change-policy-vacuous-"));
+		mkdirSync(join(vacuous, ".pipeline"), {recursive: true});
+		writeFileSync(join(vacuous, ".pipeline", "agent-policy.json"), JSON.stringify({schemaVersion: 1, github: {shipping: {controlPlanePaths: []}}}), "utf8");
+		const classified = await run(vacuous, ["classify", "--files-from", paths]);
+		expect(classified.code).toBe(2);
+		expect(classified.stdout.trim()).toBe("protected");
+		expect(classified.stderr).toContain("declares no protected paths");
+		const regex = await run(vacuous, ["regex"]);
+		expect(regex.code).toBe(2);
+		expect(regex.stdout.trim()).toBe(".");
+		rmSync(vacuous, {recursive: true, force: true});
+	});
 });

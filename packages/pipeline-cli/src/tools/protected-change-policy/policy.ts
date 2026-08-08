@@ -6,6 +6,14 @@ const POLICY_PATH = ".pipeline/agent-policy.json";
 
 export type ProtectedChangePolicy = {readonly controlPlanePaths: ReadonlyArray<string>};
 
+/** A policy document either yields a boundary or states why it is not one. */
+export type ParsedProtectedChangePolicy =
+	| {readonly policy: ProtectedChangePolicy; readonly reason: null}
+	| {readonly policy: null; readonly reason: string};
+
+const UNSAFE_SHAPE_REASON = "protected-change policy has an unsupported or unsafe shape";
+const NO_BOUNDARY_REASON = "protected-change policy declares no protected paths; an empty controlPlanePaths is refused, never honoured as a boundary that protects nothing";
+
 export type LoadedProtectedChangePolicy = {
 	readonly policy: ProtectedChangePolicy | null;
 	readonly trusted: boolean;
@@ -27,11 +35,18 @@ const validPatterns = (value: unknown): ReadonlyArray<string> | null => {
 	}
 };
 
-/** Parse this independent boundary atomically; missing/malformed policy is not an empty boundary. */
-export const parseProtectedChangePolicy = (raw: unknown): ProtectedChangePolicy | null => {
-	if (!isRecord(raw) || raw.schemaVersion !== 1 || !isRecord(raw.github) || !isRecord(raw.github.shipping)) return null;
+/**
+ * Parse this independent boundary atomically; missing/malformed policy is not an empty boundary.
+ * Neither is an empty list: honouring one would classify every path in every repository as
+ * ordinary, so the §CP gate would pass without checking — and that is the state a repository is
+ * left in by the shipped template, which declares no paths until the adopter names their own.
+ * Refusing it here routes every consumer to its existing untrusted-policy fallback (#134).
+ */
+export const parseProtectedChangePolicy = (raw: unknown): ParsedProtectedChangePolicy => {
+	if (!isRecord(raw) || raw.schemaVersion !== 1 || !isRecord(raw.github) || !isRecord(raw.github.shipping)) return {policy: null, reason: UNSAFE_SHAPE_REASON};
 	const paths = validPatterns(raw.github.shipping.controlPlanePaths);
-	return paths === null ? null : {controlPlanePaths: paths};
+	if (paths === null) return {policy: null, reason: UNSAFE_SHAPE_REASON};
+	return paths.length === 0 ? {policy: null, reason: NO_BOUNDARY_REASON} : {policy: {controlPlanePaths: paths}, reason: null};
 };
 
 export const repositoryRoot = (cwd = process.cwd()): string | null => {
@@ -66,10 +81,10 @@ export const readProtectedChangePolicy = (root: string, policyRef: string | null
 	const location = policyRef === null ? join(root, POLICY_PATH) : `${policyRef}:${POLICY_PATH}`;
 	if (source === null) return {policy: null, trusted: false, source: location, reason: "protected-change policy could not be read"};
 	try {
-		const policy = parseProtectedChangePolicy(JSON.parse(source) as unknown);
-		return policy === null
-			? {policy: null, trusted: false, source: location, reason: "protected-change policy has an unsupported or unsafe shape"}
-			: {policy, trusted: true, source: location, reason: null};
+		const parsed = parseProtectedChangePolicy(JSON.parse(source) as unknown);
+		return parsed.policy === null
+			? {policy: null, trusted: false, source: location, reason: parsed.reason}
+			: {policy: parsed.policy, trusted: true, source: location, reason: null};
 	} catch {
 		return {policy: null, trusted: false, source: location, reason: "protected-change policy is not valid JSON"};
 	}

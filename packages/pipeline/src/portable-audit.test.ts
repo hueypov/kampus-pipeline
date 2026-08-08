@@ -173,6 +173,9 @@ describe("portable toolkit boundary", () => {
 			review: {uiPaths: [], requiredChecks: [], classification: expect.any(Object)},
 			shipping: {
 				enabled: true,
+				// The shipped list stays empty because a portable template cannot know an adopter's
+				// source taxonomy. It is not a vacuous gate: `parseProtectedChangePolicy` refuses an
+				// empty boundary, so this default classifies every change as protected (#134).
 				controlPlanePaths: [],
 				requiredApprovals: 0,
 				shipDigest: expect.any(Object),

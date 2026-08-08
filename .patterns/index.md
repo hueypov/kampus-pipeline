@@ -10,3 +10,4 @@ repository source and link to a decision when the pattern has a recorded why.
 
 | Pattern | Scope | Source |
 | --- | --- | --- |
+| [The configured control-plane boundary](control-plane-boundary.md) | Protected-change classification, `review-*` / `ship-it` merge authority | `.pipeline/agent-policy.json`, `packages/pipeline-cli/src/tools/protected-change-policy/` |
