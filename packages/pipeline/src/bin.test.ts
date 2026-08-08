@@ -101,11 +101,11 @@ const enabledPrimaryIndexGuardPolicy = JSON.stringify({
 });
 
 describe("pipeline init", () => {
-	// 90s, not the default 20s. This one runs `git init`, a real `pnpm install`, and two full
-	// installs per fixture, and it grew again when `pipeline-verify` joined the payload. The timeout
-	// is raised because the WORK grew, not to accommodate a scheduling problem — a test that walks
-	// the whole install twice is legitimately slow, and the assertion is about what lands on disk.
-	it("creates project-local wiring, preserves settings, and is idempotent", {timeout: 90_000}, () => {
+	// The trailing timeout goes 20s -> 90s below. This one runs `git init`, a real `pnpm install`,
+	// and two full installs per fixture, and it grew again when `pipeline-verify` joined the payload.
+	// Raised because the WORK grew, not to accommodate a scheduling problem — a test that walks the
+	// whole install twice is legitimately slow, and the assertion is about what lands on disk.
+	it("creates project-local wiring, preserves settings, and is idempotent", () => {
 		const {consumer, mockBin} = fixture();
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
 		expect(JSON.parse(readFileSync(join(consumer, ".claude/settings.json"), "utf8"))).toMatchObject({custom: true, hooks: expect.any(Object)});
@@ -246,7 +246,7 @@ describe("pipeline init", () => {
 		expect(command(consumer, ["sync"], mockBin).status).toBe(0);
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-doc-links.yml"))).toBe(false);
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
-	}, 20_000);
+	}, 90_000);
 
 	it("refuses an unmanaged conflict unless force replaces a prior managed path", () => {
 		const {consumer, mockBin} = fixture();
