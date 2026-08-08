@@ -9,7 +9,7 @@ submodule, initializes local wiring once, and runs everything from that pinned
 checkout.
 
 The intended outcome is that a repository can use a consistent set of generic
-agent workflows without taking a dependency on the Phoenix repository, its
+agent workflows without taking a dependency on its originating repository, its
 deployment stack, a host-level Claude configuration, or an npm publication.
 
 ```text

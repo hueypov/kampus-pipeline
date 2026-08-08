@@ -25,10 +25,10 @@ import {
 const thread = (over: Partial<ReviewThread> = {}): ReviewThread => ({
 	isResolved: false,
 	isOutdated: false,
-	path: "apps/web/worker/features/pano/mutations.ts",
+	path: "apps/web/worker/features/roster/mutations.ts",
 	line: 18,
 	author: "github-code-quality",
-	excerpt: "Unused import PHOENIX_KARMA_GATES",
+	excerpt: "Unused import RANKING_GATES",
 	...over,
 });
 
@@ -49,7 +49,7 @@ describe("siteToken", () => {
 		expect(siteToken(codeqlThread)).toBe(".github/workflows/commands-guard.yml:35");
 	});
 	it("degrades to the bare path when line is null", () => {
-		expect(siteToken(thread({line: null}))).toBe("apps/web/worker/features/pano/mutations.ts");
+		expect(siteToken(thread({line: null}))).toBe("apps/web/worker/features/roster/mutations.ts");
 	});
 	it("is a non-satisfiable sentinel for a path-less pr-level thread", () => {
 		expect(siteToken(thread({path: null, line: null}))).toBe("(pr-level review thread)");
@@ -77,7 +77,7 @@ describe("isAccounted", () => {
 	});
 	it("is false when the verdict names a DIFFERENT site (accounting is per-site)", () => {
 		const verdict =
-			"review-code: FAIL @ deadbeef\n- [FAIL] unresolved-threads — apps/web/worker/features/pano/mutations.ts:18 substantive";
+			"review-code: FAIL @ deadbeef\n- [FAIL] unresolved-threads — apps/web/worker/features/roster/mutations.ts:18 substantive";
 		expect(isAccounted(codeqlThread, verdict)).toBe(false);
 	});
 });
@@ -145,11 +145,11 @@ describe("judge", () => {
 	});
 
 	it("REDS a mix: accounts for one thread, reds the other unaccounted one", () => {
-		const other = thread({path: "apps/web/worker/features/sozluk/mutations.ts", line: 42});
+		const other = thread({path: "apps/web/worker/features/catalog/mutations.ts", line: 42});
 		const partial = `review-code: PASS @ abc\n- [FAIL] unresolved-threads — ${siteToken(codeqlThread)} substantive`;
 		const verdict = judge({threads: [codeqlThread, other], verdictBody: partial});
 		expect(verdict.pass).toBe(false);
 		expect(verdict.unaccounted).toHaveLength(1);
-		expect(verdict.unaccounted[0]?.path).toBe("apps/web/worker/features/sozluk/mutations.ts");
+		expect(verdict.unaccounted[0]?.path).toBe("apps/web/worker/features/catalog/mutations.ts");
 	});
 });

@@ -5,7 +5,7 @@ crew talk over, exposed to each agent as MCP channels (the MCP-channel rule: cre
 topology of four standing roles (`chief-of-staff`, `cartographer`, `intake-desk`,
 `engineering-manager`), coordinating over a generic p2p tracker + peers with an
 MCP channel edge on top, so an agent joins a channel and sends/receives crew messages through
-its MCP client instead of an out-of-band tmux relay. Internal pipeline tooling, on no kamp.us
+its MCP client instead of an out-of-band tmux relay. Internal pipeline tooling, on no product
 user surface.
 
 This README is the **front door**: what the package is, why it exists, and an index into the

@@ -48,16 +48,16 @@ describe("tokenize", () => {
 	});
 
 	// the originating work item — Turkish letters must survive tokenization; the old ASCII splitter shredded
-	// "sözlük" into "s"/"zl"/"k" (all sub-3-char) and it vanished, so a Turkish-titled
+	// "gözlük" into "s"/"zl"/"k" (all sub-3-char) and it vanished, so a Turkish-titled
 	// duplicate silently under-flagged.
 	it("keeps a bare Turkish stem instead of shredding it on diacritics", () => {
-		expect(tokenize("sözlük")).toEqual(["sözlük"]);
+		expect(tokenize("gözlük")).toEqual(["gözlük"]);
 	});
 
 	it("survives every Turkish letter and its uppercase form", () => {
 		// ö ü ğ ş ç ı + uppercase Ö Ü Ğ Ş Ç and dotted-capital İ (the U+0307 casing artifact).
-		expect(tokenize("SÖZLÜK öğüt İşleri çalışma sığır")).toEqual([
-			"sözlük",
+		expect(tokenize("GÖZLÜK öğüt İşleri çalışma sığır")).toEqual([
+			"gözlük",
 			"öğüt",
 			"işleri",
 			"çalışma",
@@ -66,7 +66,7 @@ describe("tokenize", () => {
 	});
 
 	it("drops Turkish function-word stopwords", () => {
-		expect(tokenize("bir sözlük için gibi")).toEqual(["sözlük"]);
+		expect(tokenize("bir gözlük için gibi")).toEqual(["gözlük"]);
 	});
 });
 
@@ -98,11 +98,11 @@ describe("titleScore", () => {
 	});
 
 	// the originating work item — agglutinative Turkish inflections share a stem with the bare form; the query
-	// stem "sözlük" must score against inflected title tokens (suffix-preserving "sözlükte"
-	// and the k→ğ consonant-mutating "sözlüğe"), which exact-token matching missed.
+	// stem "gözlük" must score against inflected title tokens (suffix-preserving "gözlükte"
+	// and the k→ğ consonant-mutating "gözlüğe"), which exact-token matching missed.
 	it("matches an inflected Turkish title against the bare query stem", () => {
-		expect(titleScore("Sözlükte arama çalışmıyor", ["sözlük"])).toBe(1);
-		expect(titleScore("Sözlüğe yeni giriş eklenemiyor", ["sözlük"])).toBe(1);
+		expect(titleScore("Gözlükte arama çalışmıyor", ["gözlük"])).toBe(1);
+		expect(titleScore("Gözlüğe yeni giriş eklenemiyor", ["gözlük"])).toBe(1);
 	});
 
 	it("does not spuriously match short English derivational overlaps", () => {
@@ -173,9 +173,9 @@ describe("rankCandidates", () => {
 	// the miss was silent.
 	it("surfaces a Turkish-titled queue duplicate against an inflected query stem", () => {
 		const out = rankCandidates({
-			queue: [q(20, "Sözlükte arama sonuçları boş"), q(21, "unrelated worker crash")],
+			queue: [q(20, "Gözlükte arama sonuçları boş"), q(21, "unrelated worker crash")],
 			search: [],
-			tokens: tokenize("Sözlüğe giriş eklenince arama bozuluyor"),
+			tokens: tokenize("Gözlüğe giriş eklenince arama bozuluyor"),
 			limit: 20,
 		});
 		expect(out.map((c) => c.number)).toEqual([20]);

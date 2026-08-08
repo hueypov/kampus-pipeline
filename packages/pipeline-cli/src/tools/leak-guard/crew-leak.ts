@@ -85,7 +85,7 @@ const CLASS_PATTERNS: ReadonlyArray<ClassPattern> = [
 	},
 	{
 		// The auto-memory slug filenames (`feedback_credential_share_then_rotate`,
-		// `reference_ea_ping_sound_sosumi`, `project_phoenix_state`) — prefix + at
+		// `reference_ea_ping_sound_sosumi`, `project_atlas_state`) — prefix + at
 		// least two underscore-joined segments, distinctive enough not to catch an
 		// ordinary `reference_x` identifier.
 		class: "memory-ref",

@@ -75,7 +75,7 @@ node packages/pipeline-cli/src/bin.ts <tool> …
 
 ### `gh-compat` — repository-configured GitHub CLI compatibility and corpus lint
 
-The generic successor to the source-specific `gh-phoenix` package. It preserves the original
+The generic successor to a source-specific predecessor package. It preserves the original
 two independent capabilities without imposing a GitHub-provider limitation on every adopter:
 
 - **`gh-compat lint-skills <file>...`** validates strict YAML frontmatter in scoped skill and

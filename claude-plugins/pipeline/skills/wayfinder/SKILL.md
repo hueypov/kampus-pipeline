@@ -97,7 +97,7 @@ CHART obeys one non-negotiable law, inherited from wayfinder's Pocock lineage: *
 do.** Every frontier ticket CHART files must resolve a **decision or an unknown** — *never* a
 deliverable. A frontier ticket asks "which storage model?", "does better-auth's session model
 let us mint a single-use token without a new table?", "0 karma or a vouch-backed starting
-balance?"; it never says "build the invite table" or "ship the kefil form." Charting a foggy
+balance?"; it never says "build the invite table" or "ship the sponsor form." Charting a foggy
 idea straight into an epic of build tasks is the exact over-commitment wayfinder exists to
 prevent — the gap the ideation layer fills, where `plan-epic` would over-commit a genuinely
 foggy idea into a premature, wrong plan. So CHART's output is a map of *questions to resolve*;

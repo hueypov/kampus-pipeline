@@ -59,7 +59,7 @@ lives in the **committed repo glossary**, read fresh each run:
   test, "the interface is the test surface", "one adapter = hypothetical seam, two = real").
   Use these terms exactly in every finding.
 - **`.glossary/TERMS.md`** — the **domain vocabulary**: the canonical product/domain nouns
-  (configured content feature, pano, künye, …). Name the module by its domain term — "the configured content feature entry module",
+  (whatever the adopting repository calls its own products and entities). Name the module by its domain term — "the configured content feature entry module",
   not "the FooBarHandler".
 
 Read both before walking code:

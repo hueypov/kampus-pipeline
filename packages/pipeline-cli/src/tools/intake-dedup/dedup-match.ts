@@ -114,7 +114,7 @@ const MIN_TOKEN_LENGTH = 3;
 /**
  * A query token shares a stem with a title token when their common prefix is at least this
  * long — the relaxation that lets agglutinative Turkish inflections match a bare stem
- * ("sözlük" / "sözlükte" / "sözlüğe", the last also crossing the k→ğ consonant mutation, all
+ * ("gözlük" / "gözlükte" / "gözlüğe", the last also crossing the k→ğ consonant mutation, all
  * share the "sözlü" prefix). Set above typical English derivational overlap ("work"/"workflow"
  * share only 4) so exact-token English behavior is preserved: relaxed matching only *adds*
  * stem hits, never removes an exact one (the originating work item).
@@ -136,7 +136,7 @@ const MAX_QUERY_TOKENS = 12;
  * The split class is Unicode `\p{L}\p{N}` (`u` flag), not the old ASCII `[a-z0-9]`, so Turkish
  * letters (ö ü ğ ş ç ı and their uppercase forms) are word characters that survive tokenization
  * instead of shredding a stem into sub-`MIN_TOKEN_LENGTH` fragments — the root cause of the originating work item,
- * where "sözlük" split into "s"/"zl"/"k" and vanished entirely. The lone casing artifact is
+ * where "gözlük" split into "s"/"zl"/"k" and vanished entirely. The lone casing artifact is
  * dotted-capital İ, which default `.toLowerCase()` maps to "i" + U+0307 (combining dot); we strip
  * that combining dot so "İşleri" tokenizes to "işleri" rather than breaking at the mark.
  */
@@ -173,7 +173,7 @@ const commonPrefixLength = (a: string, b: string): number => {
 /**
  * Whether a query token and a title token name the same stem: an exact hit, or a shared
  * prefix of at least `STEM_MIN_LENGTH`. The prefix arm is what surfaces agglutinative Turkish
- * inflections against a bare stem ("sözlük" vs "sözlükte"/"sözlüğe") without a full morphological
+ * inflections against a bare stem ("gözlük" vs "gözlükte"/"gözlüğe") without a full morphological
  * analyzer; the length floor keeps it off short English derivational overlaps (the originating work item).
  */
 export const tokensRelated = (a: string, b: string): boolean =>

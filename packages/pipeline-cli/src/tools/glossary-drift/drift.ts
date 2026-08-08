@@ -154,7 +154,7 @@ export const normalize = (s: string): string => s.toLowerCase().replace(/\s+/g, 
 /**
  * Parse the declared term set out of `.glossary/TERMS.md`. Terms live in the first
  * `|`-column of the `| Term | Definition | Not |` tables; a cell may carry synonyms as
- * `sözlük (sozluk)` or `funnel / conversion funnel`, which we split into each alias so
+ * `gözlük (gozluk)` or `funnel / conversion funnel`, which we split into each alias so
  * "conversion funnel" and "funnel" both count as known. Header rows (`Term`) and the
  * `|---|` separators are skipped. Pure over the file text.
  */
@@ -166,7 +166,7 @@ export const parseKnownTerms = (termsMd: string): ReadonlySet<string> => {
 		if (/^\|[\s:|-]+\|?$/.test(line)) continue; // separator row |---|---|
 		const firstCell = line.split("|")[1]?.trim() ?? "";
 		if (firstCell === "" || firstCell.toLowerCase() === "term") continue;
-		// A cell like `funnel / conversion funnel` or `sözlük (sozluk)` carries aliases.
+		// A cell like `funnel / conversion funnel` or `gözlük (gozluk)` carries aliases.
 		for (const alias of splitAliases(firstCell)) {
 			const n = normalize(alias);
 			if (n !== "") known.add(n);
@@ -180,7 +180,7 @@ const splitAliases = (cell: string): ReadonlyArray<string> => {
 	const out: Array<string> = [];
 	// `funnel / conversion funnel` → two aliases.
 	for (const part of cell.split(" / ")) {
-		// `sözlük (sozluk)` → both `sözlük` and `sozluk`.
+		// `gözlük (gozluk)` → both `gözlük` and `gozluk`.
 		const paren = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(part.trim());
 		if (paren?.[1] !== undefined && paren?.[2] !== undefined) {
 			out.push(paren[1], paren[2]);

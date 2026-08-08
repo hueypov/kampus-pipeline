@@ -350,7 +350,7 @@ gh pr diff $PR || gh api repos/$REPO/pulls/$PR -H "Accept: application/vnd.githu
 ```
 
 Map each changed `$PIPELINE_APPLICATION_PATH/src/**` surface to the route(s) that render it (a changed
-`sozluk/TermPage` component → the term route; a changed reaction/vote component → every feed + detail
+`catalog/DetailPage` component → the detail route; a changed reaction/vote component → every feed + detail
 route that shows it; a changed empty-state primitive → a route in its **empty** state). Include the
 **state variants** a prohibition needs — an interactive control's `:focus-visible` state (prohibition
 2), a list's **empty** state (prohibition 4). This route+state list is the input to the capture

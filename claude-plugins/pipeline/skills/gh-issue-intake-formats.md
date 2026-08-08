@@ -873,11 +873,11 @@ answer.
 
 ```markdown
 ## Destination
-kamp.us has a working invite (kefil) flow: an existing earned contributor state can configured approval action a new person in, and
+The product has a working invite (sponsor) flow: an existing earned contributor state can configured approval action a new person in, and
 that person lands as a initial contributor state with a clear first-run path — no founder in the loop.
 
 ## Decisions-so-far
-- The initial contributor state → earned contributor state path is configured approval action-gated (kefil), not open signup — a founder given brought in at
+- The initial contributor state → earned contributor state path is configured approval action-gated (sponsor), not open signup — a founder given brought in at
   charting. — from documented repository precedent (@founder)
 - Invites are configured reputation score-gated, not seat-gated — a earned contributor state spends no quota, the initial contributor state's own configured reputation score
   ramp is the throttle. — from documented repository precedent

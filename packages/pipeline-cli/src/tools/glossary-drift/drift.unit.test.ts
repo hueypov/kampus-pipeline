@@ -15,8 +15,8 @@ const TERMS_FIXTURE = `# example-repo domain vocabulary (TERMS)
 
 | Term | Definition | Not |
 |---|---|---|
-| pano | HN-style link aggregator. | "board" |
-| sözlük (sozluk) | Turkish dev-terms dictionary. | "dictionary" |
+| roster | Member-directory view. | "list" |
+| gözlük (gozluk) | Eyewear catalogue surface. | "glasses" |
 | funnel / conversion funnel | The conversion-funnel readout. | a public metrics page |
 
 ## Feature flags
@@ -35,7 +35,7 @@ describe("normalize", () => {
 describe("parseKnownTerms", () => {
 	it("pulls the first column of each table body row as a known term", () => {
 		const known = parseKnownTerms(TERMS_FIXTURE);
-		assert.isTrue(known.has("pano"));
+		assert.isTrue(known.has("roster"));
 		assert.isTrue(known.has("split release/kill"));
 	});
 
@@ -51,10 +51,10 @@ describe("parseKnownTerms", () => {
 		assert.isTrue(known.has("conversion funnel"));
 	});
 
-	it("splits a parenthetical alias `sözlük (sozluk)` into both forms", () => {
+	it("splits a parenthetical alias `gözlük (gozluk)` into both forms", () => {
 		const known = parseKnownTerms(TERMS_FIXTURE);
-		assert.isTrue(known.has("sözlük"));
-		assert.isTrue(known.has("sozluk"));
+		assert.isTrue(known.has("gözlük"));
+		assert.isTrue(known.has("gozluk"));
 	});
 });
 
@@ -144,10 +144,10 @@ describe("findDrift", () => {
 	});
 
 	it("does NOT surface a phrase already covered by a known term (substring-tolerant)", () => {
-		// `pano` is a known term; a phrase containing it is suppressed as already-named.
-		const lines: ReadonlyArray<MergeLine> = [{subject: "feat(pano): pano list view"}];
+		// `roster` is a known term; a phrase containing it is suppressed as already-named.
+		const lines: ReadonlyArray<MergeLine> = [{subject: "feat(roster): roster list view"}];
 		const drift = findDrift(lines, known);
-		assert.isFalse(drift.some((d) => d.phrase.includes("pano")));
+		assert.isFalse(drift.some((d) => d.phrase.includes("roster")));
 	});
 
 	it("carries the source merge subject as evidence for the filed issue", () => {

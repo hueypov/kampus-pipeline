@@ -68,7 +68,7 @@ describe("standup/bind — per-session bind constructor", () => {
 			Effect.gen(function* () {
 				const channels: ChannelConfig = {
 					mode: "allowlist",
-					servers: ["server:pipeline-crew", "plugin:acme:sozluk"],
+					servers: ["server:pipeline-crew", "plugin:acme:notes"],
 					allowedChannelPlugins: ["acme"],
 				};
 				const bind = yield* build({
@@ -87,7 +87,7 @@ describe("standup/bind — per-session bind constructor", () => {
 				assert.deepStrictEqual(bind.channelArg, [
 					ALLOWLIST_CHANNEL_FLAG,
 					"server:pipeline-crew",
-					"plugin:acme:sozluk",
+					"plugin:acme:notes",
 				]);
 
 				// AC2: the argv boots the role persona (--plugin-dir + --agent, the role-persona rule: launch each pane with the crew plugin and its crew-role agent definition), registers the channel,
@@ -100,7 +100,7 @@ describe("standup/bind — per-session bind constructor", () => {
 					`crew-${ROLE}`,
 					ALLOWLIST_CHANNEL_FLAG,
 					"server:pipeline-crew",
-					"plugin:acme:sozluk",
+					"plugin:acme:notes",
 					NAME_FLAG,
 					ROLE,
 					BOOT_PROMPT,
