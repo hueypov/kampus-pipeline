@@ -631,14 +631,16 @@ const ensureGitignoreEntry = (projectRoot: string, entry: string): void => {
 	writeFileSync(path, `${current}${current && !current.endsWith("\n") ? "\n" : ""}${entry}\n`);
 };
 
-/** The terminals the crew launcher can place its panes in — the `terminal` config dimension's vocabulary. */
-const CREW_TERMINALS = new Set(["tmux", "herdr"]);
 /**
  * The version probe each supported terminal actually answers. tmux rejects `--version` outright
  * (only `-V`), so the generic probe reported the DEFAULT terminal as missing on every machine that
- * had it — first surfaced by this repository's own personalized config under self-host.
+ * had it — first surfaced by this repository's own personalized config under self-host. The keys
+ * double as the `terminal` dimension's vocabulary, so a terminal cannot be added without declaring
+ * its probe.
  */
-const CREW_TERMINAL_VERSION_FLAGS: Record<string, string> = {tmux: "-V", herdr: "--version"};
+const CREW_TERMINAL_VERSION_FLAGS = {tmux: "-V", herdr: "--version"} as const;
+/** The terminals the crew launcher can place its panes in — derived from the probe map, never listed twice. */
+const CREW_TERMINALS = new Set<string>(Object.keys(CREW_TERMINAL_VERSION_FLAGS));
 /** The terminal a crew config launches under when it omits the dimension entirely. */
 const DEFAULT_CREW_TERMINAL = "tmux";
 
@@ -707,7 +709,8 @@ const checkCrewTerminal = (projectRoot: string): string | undefined => {
 	if (!CREW_TERMINALS.has(terminal)) {
 		return `unsupported crew terminal in ${CREW_CONFIG_RELATIVE_PATH}: ${terminal} (expected one of ${Array.from(CREW_TERMINALS).join(", ")})`;
 	}
-	if (!commandExists(terminal, CREW_TERMINAL_VERSION_FLAGS[terminal])) {
+	// Membership in CREW_TERMINALS (checked above) guarantees the key exists in the probe map.
+	if (!commandExists(terminal, CREW_TERMINAL_VERSION_FLAGS[terminal as keyof typeof CREW_TERMINAL_VERSION_FLAGS])) {
 		return `missing required command for the configured crew terminal: ${terminal} (set "terminal" in ${CREW_CONFIG_RELATIVE_PATH}, or install ${terminal})`;
 	}
 	return undefined;
@@ -864,6 +867,11 @@ const check = (projectRoot: string): string[] => {
 			}
 			const path = join(projectRoot, managed.path);
 			if (!existsSync(path) && !(lstatSyncSafe(path)?.isSymbolicLink() ?? false)) {
+				// The one operator-owned managed path: `init` materializes the crew config AND
+				// git-ignores it, so a fresh clone or linked worktree legitimately lacks it.
+				// Absence is the not-yet-personalized state `init` reports on its own line —
+				// never repository drift (#68).
+				if (managed.path === CREW_CONFIG_RELATIVE_PATH) continue;
 				errors.push(`missing managed path: ${managed.path}`);
 				continue;
 			}

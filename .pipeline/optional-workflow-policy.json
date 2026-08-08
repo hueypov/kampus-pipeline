@@ -1,6 +1,25 @@
 {
 	"schemaVersion": 1,
-	"workflows": {},
+	"workflows": {
+		"pipeline-doc-safety": {
+			"enabled": false
+		},
+		"pipeline-delivery-gate": {
+			"enabled": false
+		},
+		"pipeline-gitleaks": {
+			"enabled": false
+		},
+		"pipeline-doc-links": {
+			"enabled": false
+		},
+		"pipeline-settings-env-guard": {
+			"enabled": false
+		},
+		"pipeline-unresolved-threads": {
+			"enabled": false
+		}
+	},
 	"adapters": {
 		"catalogGuard": {
 			"enabled": false,

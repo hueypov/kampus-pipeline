@@ -112,7 +112,9 @@ agent-worktree workflow would find no pipeline at all. For the same reason,
 commit the surfaces `init` materializes (`.pipeline/pipeline.json`,
 `.claude/settings.json`, the managed links, the `pipeline` script in
 `package.json`), exactly as adopters commit theirs, so `pipeline check` holds
-inside a fresh worktree too.
+inside a fresh worktree too. The one surface that stays uncommitted is
+`.claude/crew.config.jsonc` — operator-owned and git-ignored — and `check`
+treats its absence as the not-yet-personalized state, never as drift.
 
 Initialization installs the full consumer payload — agents, skills, hooks, and
 the document surfaces — with no self-host-only minimal mode. The submodule
@@ -141,6 +143,13 @@ If it was cloned without submodules, initialize the recorded one once:
 git submodule update --init --recursive
 pnpm pipeline init --check
 ```
+
+The pinned checkout carries the toolkit's own self-host symlink,
+`.pipeline/toolkit -> ..`, which inside a pin resolves to the pin's own root —
+a deliberate cycle. Git, pnpm, and every toolkit command handle it, but tools
+that follow symlinks while walking the tree (`find -L`, symlink-following
+linters, container copy steps) will report a filesystem loop under
+`.pipeline/toolkit`; exclude that path or walk without following links.
 
 ## Update the toolkit revision
 

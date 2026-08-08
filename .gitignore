@@ -9,3 +9,7 @@ dist
 # Per-operator crew state: the personalized config and each run's scratch.
 .claude/crew.config.jsonc
 .claude/crew-run/
+
+# Agent worktrees the create-worktree hook places inside the repository; each
+# contains an embedded checkout that `git add -A` would record as a gitlink.
+.claude/worktrees/

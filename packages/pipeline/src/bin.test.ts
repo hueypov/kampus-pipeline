@@ -446,9 +446,23 @@ describe("pipeline init", () => {
 	it("check accepts a personalized crew config whose terminal is installed", () => {
 		const {consumer, mockBin} = fixture();
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
-		write(join(mockBin, "herdr"), "#!/usr/bin/env bash\nexit 0\n", true);
+		// Flag-faithful like the real binary: herdr answers `--version`; anything else is a miss,
+		// so this test also pins herdr's entry in the version-probe map.
+		write(join(mockBin, "herdr"), '#!/usr/bin/env bash\n[ "$1" = "--version" ] || exit 1\nexit 0\n', true);
 		personalizeCrew(consumer, {operator: "op", terminal: "herdr"});
 		expect(command(consumer, ["check"], mockBin).stderr).not.toContain(TERMINAL_DIAGNOSTIC);
+	}, 20_000);
+
+	it("check tolerates the absent operator-owned crew config in a fresh clone or worktree", () => {
+		const {consumer, mockBin} = fixture();
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		// The crew config is materialized AND git-ignored by init — the one managed path a fresh
+		// clone or linked worktree legitimately lacks. Its absence is the not-yet-personalized
+		// state, never repository drift (#68).
+		rmSync(join(consumer, ".claude/crew.config.jsonc"));
+		const result = command(consumer, ["check"], mockBin);
+		expect(result.stderr).not.toContain("missing managed path: .claude/crew.config.jsonc");
+		expect(result.status).toBe(0);
 	}, 20_000);
 
 	it("check probes tmux with the flag tmux actually answers", () => {
