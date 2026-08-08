@@ -107,8 +107,8 @@ byte, so a lost brief is a failure rather than a silent overwrite.
 cycle, an edge to a child that does not exist, or a child in no phase is a defect you can still fix
 while you hold the lock.
 
-**Read its output — do not chain it.** `--dry-run` prints its verdict and exits 0 either way, so a
-`&&` after it proves nothing. Look for `PASS`.
+**Chain it.** `--dry-run` exits 0 on PASS and 14 on FAIL, so `&&` after it means what it looks like
+it means. The defect list on stdout tells you what to fix.
 
 **A ledger that does not validate is not a plan.** Fix it or park the epic — do not release into a
 state a fleet will start executing.
