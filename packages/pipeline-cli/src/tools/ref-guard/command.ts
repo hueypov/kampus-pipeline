@@ -1,12 +1,12 @@
 /** Git-native reference transaction guard and its explicit local hook manager. */
 import {execFileSync} from "node:child_process";
-import {chmodSync, existsSync, readFileSync, renameSync, unlinkSync, writeFileSync} from "node:fs";
-import {dirname, resolve} from "node:path";
+import {chmodSync, existsSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync} from "node:fs";
+import {dirname, join, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {Console, Effect, Option} from "effect";
 import {Argument, Command, Flag} from "effect/unstable/cli";
 import {readLifecyclePolicy, repositoryRoot, resolvePrimaryTarget} from "../lifecycle-policy.ts";
-import {decideHeadDetach, decideRefUpdate, decideTransaction, type RefUpdate, ZERO_OID} from "./ref-guard.ts";
+import {decideHeadDetach, decideRefUpdate, decideTransaction, HEAD_REF, type RefUpdate, ZERO_OID} from "./ref-guard.ts";
 
 export const REFUSE_EXIT_CODE = 3;
 const MARKER_PREFIX = "# kampus-pipeline ref-guard managed hook";
@@ -47,18 +47,88 @@ const readStdin = (): Effect.Effect<string> => Effect.tryPromise({
 	catch: () => new Error("reference-transaction stdin is unavailable"),
 }).pipe(Effect.orElseSucceed(() => ""));
 
-const primaryCheckout = (root: string): boolean => {
-	const gitDir = runGit(root, ["rev-parse", "--path-format=absolute", "--git-dir"]);
-	const commonDir = runGit(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-	return gitDir.ok && commonDir.ok && gitDir.stdout.trim() !== "" && gitDir.stdout.trim() === commonDir.stdout.trim();
+const commonDir = (root: string): string | null => {
+	const result = runGit(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+	const dir = result.stdout.trim();
+	return result.ok && dir !== "" ? dir : null;
 };
 
-const comparisonFacts = (root: string, comparisonRef: string | null, newOid: string) => {
-	if (comparisonRef === null) return {comparisonOid: null, comparisonIsAncestorOfNew: false};
+const readTrimmed = (path: string): string | null => {
+	try {
+		return readFileSync(path, "utf8").trim();
+	} catch {
+		return null;
+	}
+};
+
+/** The reftable backend's whole-stack lock, per ref store. A `files` repository never has one. */
+const STACK_LOCK = join("reftable", "tables.list.lock");
+
+/** Whether any LINKED worktree's reftable stack is the one Git locked, rather than the shared one. */
+const linkedStackLocked = (dir: string): boolean => {
+	try {
+		return readdirSync(join(dir, "worktrees")).some((name) => existsSync(join(dir, "worktrees", name, STACK_LOCK)));
+	} catch {
+		return false;
+	}
+};
+
+/**
+ * The value Git has staged for the shared primary checkout's own `HEAD` in this transaction, or
+ * `null` when the shared HEAD is not the ref being written.
+ *
+ * `git-dir == git-common-dir` cannot answer this: it measures who INVOKED Git, so `git worktree add
+ * --detach` run from the primary was refused even though it writes the NEW worktree's HEAD. The two
+ * transactions are identical on stdin (`0000…0 <oid> HEAD`, zero-filled old value in both), in cwd,
+ * in the environment, and in both `rev-parse` answers (measured on git 2.50.1). What separates them
+ * is the ref-store lock `githooks(5)` promises at `prepared`: a ref lives in exactly one store, the
+ * primary's rooted at `$GIT_COMMON_DIR` and a linked worktree's at `$GIT_COMMON_DIR/worktrees/<n>`.
+ *
+ * Mere EXISTENCE of the shared lock is still the wrong question, because Git takes it for every
+ * write that dereferences through HEAD, not only for detaches: `commit`, `reset --hard` and `stash
+ * push` in the primary all hold `$GIT_COMMON_DIR/HEAD.lock` while their own hook runs, and a stale
+ * one outlives any interrupted Git. Either would refuse an unrelated `worktree add --detach` all
+ * over again — the same bug, now intermittent. So this reads the lock instead of stat-ing it: Git
+ * writes the pending value into it before renaming it over `HEAD`, measured as the transaction's
+ * own new oid for a real primary detach, `ref: refs/heads/<branch>` for a branch switch, and EMPTY
+ * for every deref-through-HEAD holder. Requiring it to equal the value on stdin scopes the fact to
+ * this transaction; the one residual overlap is a concurrent primary detach to the very same oid,
+ * which fails closed.
+ *
+ * Under `reftable` there is no per-ref lock and no staged value — only a whole-stack lock, which
+ * every branch/tag/remote-ref write from ANY worktree takes, so it cannot carry the decision alone.
+ * There the shared HEAD is under transaction when the shared stack is locked and no linked
+ * worktree's stack is, which never mistakes a linked worktree's detach for the primary's and at
+ * worst stands down while a linked worktree happens to be writing. The backend is read from the
+ * store's shape rather than `git rev-parse --show-ref-format` (Git >= 2.45).
+ */
+const sharedHeadPending = (dir: string, headNewOid: string | null): string | null => {
+	if (headNewOid === null) return null;
+	if (existsSync(join(dir, "reftable"))) return existsSync(join(dir, STACK_LOCK)) && !linkedStackLocked(dir) ? headNewOid : null;
+	return readTrimmed(join(dir, "HEAD.lock")) === headNewOid ? headNewOid : null;
+};
+
+/**
+ * Markers Git writes for a multi-step operation it is driving itself, in the shared checkout.
+ *
+ * `rebase`, `pull --rebase` and `bisect start` detach the shared HEAD as a step and reattach it in
+ * the same command. Refusing that first detach — indistinguishable on stdin from `git checkout
+ * <sha>` — aborted an everyday rebase AND left `.git/rebase-merge` behind, so the operator had to
+ * `git rebase --abort` out of a state the guard created. All three were measured writing their
+ * marker BEFORE the detaching transaction fires (git 2.50.1).
+ */
+const IN_PROGRESS_MARKERS = ["rebase-merge", "rebase-apply", "BISECT_START"] as const;
+
+const operationInProgress = (dir: string): boolean => IN_PROGRESS_MARKERS.some((marker) => existsSync(join(dir, marker)));
+
+const comparisonFacts = (root: string, guardedRef: string, comparisonRef: string | null, newOid: string) => {
+	const current = runGit(root, ["rev-parse", "--verify", "--quiet", guardedRef]);
+	const currentOid = current.ok && current.stdout.trim() !== "" ? current.stdout.trim() : null;
+	if (comparisonRef === null) return {comparisonOid: null, comparisonIsAncestorOfNew: false, currentOid};
 	const resolved = runGit(root, ["rev-parse", "--verify", "--quiet", comparisonRef]);
-	if (!resolved.ok || resolved.stdout.trim() === "") return {comparisonOid: null, comparisonIsAncestorOfNew: false};
+	if (!resolved.ok || resolved.stdout.trim() === "") return {comparisonOid: null, comparisonIsAncestorOfNew: false, currentOid};
 	const ancestry = runGit(root, ["merge-base", "--is-ancestor", comparisonRef, newOid]);
-	return {comparisonOid: resolved.stdout.trim(), comparisonIsAncestorOfNew: ancestry.ok};
+	return {comparisonOid: resolved.stdout.trim(), comparisonIsAncestorOfNew: ancestry.ok, currentOid};
 };
 
 export const hookPathFor = (root: string): string | null => {
@@ -254,8 +324,12 @@ const referenceTransaction = Command.make(
 		// Facts are gathered only for updates the pure ladder will actually test against them: a
 		// same-value write is decided before the ancestry rung, so probing it would spawn two git
 		// processes per stash/reset whose answers are discarded.
-		const refDecisions = updates.map((update) => decideRefUpdate(update, guardedRef, update.refName === guardedRef && update.newOid !== ZERO_OID && update.newOid !== update.oldOid ? comparisonFacts(root, comparisonRef, update.newOid) : {comparisonOid: null, comparisonIsAncestorOfNew: false}));
-		const headDecision = decideHeadDetach(updates, {isPrimaryCheckout: primaryCheckout(root)});
+		const refDecisions = updates.map((update) => decideRefUpdate(update, guardedRef, update.refName === guardedRef && update.newOid !== ZERO_OID && update.newOid !== update.oldOid ? comparisonFacts(root, guardedRef, comparisonRef, update.newOid) : {comparisonOid: null, comparisonIsAncestorOfNew: false, currentOid: null}));
+		const dir = commonDir(root);
+		const headNewOid = updates.find((update) => update.refName === HEAD_REF)?.newOid ?? null;
+		const headDecision = dir === null
+			? {kind: "allow" as const, reason: "Git did not report a common directory"}
+			: decideHeadDetach(updates, {sharedHeadPending: sharedHeadPending(dir, headNewOid), operationInProgress: operationInProgress(dir)});
 		const verdict = decideTransaction([headDecision, ...refDecisions]);
 		if (verdict.kind === "refuse") {
 			yield* Console.error(`ref-guard: ${verdict.reason}`);
