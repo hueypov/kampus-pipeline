@@ -1,7 +1,6 @@
 /**
  * standup/register-project-scope — make each crew pane's channel MCP server visible to claude's
- * channel-ref resolver by emitting a per-pane PROJECT-scope `.mcp.json`, and pre-seed the two boot
- * gates so the panes come up non-interactively (the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure).
+ * channel-ref resolver by emitting a per-pane PROJECT-scope `.mcp.json` (the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure).
  *
  * The forcing fact (verified against the 2.1.214 bundle): a `server:<name>` channel ref resolves only
  * against the four PERSISTED config scopes (enterprise/user/project/local), never an inline
@@ -18,20 +17,31 @@
  * because one there merges into EVERY pane and breaks isolation — `assertNoSharedAncestorMcpJson`
  * fails the launch closed if one is found.
  *
- * Emitting the `.mcp.json` makes the server VISIBLE; two boot gates still make it USABLE non-interactively:
+ * Emitting the `.mcp.json` makes the server VISIBLE. It does NOT make it USABLE: two further boot gates
+ * decide whether the CLI ever spawns it, and BOTH ARE OPERATOR-OWNED — `registerCrewProjectScope` writes
+ * the leaf files and nothing else, so a launched pane's channel depends on host state this module reads
+ * from nobody and writes to nobody:
  *   1. Folder trust — `projects[<git-root>].hasTrustDialogAccepted === true` in `~/.claude.json`. When
- *      true, the approval resolver (`DXr`) reads the server's approval from MERGED SETTINGS only.
+ *      true, the approval resolver reads the server's approval from MERGED SETTINGS only.
  *   2. Server approval — `enabledMcpjsonServers` must include the crew server name in a merged settings
- *      source. The trusted-folder resolver reads `Vn()` (merged userSettings/projectSettings/localSettings);
- *      it does NOT read `projects[<git-root>].enabledMcpjsonServers` (that is a legacy field migrated to
- *      settings on startup, never read live). We seed `userSettings` (`~/.claude/settings.json`) — the
- *      one merged source OUTSIDE the repo, so no `.claude/**` file is dirtied. Targeted (the single crew
- *      server name), never the broad `enableAllProjectMcpServers`, and `disabledMcpjsonServers` is never touched.
+ *      source. The trusted-folder resolver reads merged userSettings/projectSettings/localSettings; it
+ *      does NOT read `projects[<git-root>].enabledMcpjsonServers` (a legacy field migrated to settings on
+ *      startup, never read live). `userSettings` (`~/.claude/settings.json`) is the one merged source
+ *      OUTSIDE the repo, so satisfying the gate dirties no `.claude/**` file.
  *
- * `~/.claude.json` is live-shared with the running crew, so its mutation goes through `proper-lockfile`
- * (the lock the CLI coordinates on) + atomic temp-file+rename; `~/.claude/settings.json` uses the same
- * locked-atomic RMW. Pure transforms are separated from the locked IO so the config-shaping logic is
- * unit-tested with no lock and no real config file — the IO wrappers run against injected temp paths.
+ * An unsatisfied gate is answered interactively at the pane's own boot and is read ONCE, so a pane that
+ * comes up ungated has no crew server for its whole life while a sibling launched after the acceptance
+ * persists has one — the per-session divergence recorded in
+ * `.decisions/0002-crew-channel-is-an-operator-gated-boot-precondition.md`, which also records why
+ * closing the gate from the launcher is a separate decision rather than a fix to make here.
+ *
+ * `ensureFolderTrusted` / `enableCrewServerApproval` / `disableCrewServerApproval` below implement both
+ * gates and are exported for an operator-run tool; NO launch path calls them. Their writes are targeted
+ * (the single crew server name), never the broad `enableAllProjectMcpServers`, and `disabledMcpjsonServers`
+ * is never touched. `~/.claude.json` is live-shared with a running crew, so mutation goes through
+ * `proper-lockfile` (the lock the CLI coordinates on) + atomic temp-file+rename; `~/.claude/settings.json`
+ * uses the same locked-atomic RMW. Pure transforms are separated from the locked IO so the config-shaping
+ * logic is unit-tested with no lock and no real config file — the IO wrappers run against injected temp paths.
  */
 import {randomUUID} from "node:crypto";
 import {
