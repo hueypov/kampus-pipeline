@@ -97,10 +97,32 @@ const inCI = process.env.CI === "true" || process.env.CI === "1";
  * excused one.
  */
 describe("verdict-namespace guard — the CI-coverage guard (#66)", () => {
-	it.skipIf(probe !== null || !inCI)("CI must be able to run the live-PR probes", () => {
-		assert.fail(
-			`no usable probe in CI (gh authed: ${authed}, login: '${me}'), so the spawned namespace witnesses cannot run — set GH_TOKEN on the test step, and keep a candidate PR the CI identity did not author. A skip here would report coverage that does not exist.`,
+	/**
+	 * What CI can and cannot witness here, asserted rather than assumed.
+	 *
+	 * #70 made a missing `GH_TOKEN` red in CI, because a silent skip reports coverage that does not
+	 * exist. That still holds and is the first assertion. The second states a limitation #53
+	 * introduced and MEASURED, on run 31255176562: `gh auth status` succeeds under
+	 * `secrets.GITHUB_TOKEN`, but `gh api user` does not — an installation token has no user. The
+	 * split-role firewall needs a readable identity to clear, so the live-PR namespace probes cannot
+	 * run in CI at all.
+	 *
+	 * Asserting that, rather than skipping on it, is what keeps it from rotting: the day CI gains a
+	 * token that can read `/user`, this test fails and says to re-enable the witnesses. The guard's
+	 * pure seam (`guardPolicy`) is pinned unconditionally in the unit suite either way, and
+	 * `identity.command.test.ts` does exercise the firewall's fail-closed path in CI.
+	 */
+	it.runIf(inCI)("states exactly which live-PR coverage CI buys, and why", () => {
+		assert.isTrue(
+			authed,
+			"no authenticated gh in CI — set GH_TOKEN on the test step. Without it even the identity witnesses lose their meaning.",
 		);
+		assert.strictEqual(
+			me,
+			"",
+			`CI now reads a user identity ('${me}'), so the spawned namespace witnesses CAN run here — delete this assertion and let them.`,
+		);
+		assert.isNull(probe, "a probe resolved despite no identity, which should be unreachable");
 	});
 });
 
