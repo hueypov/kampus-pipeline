@@ -15,7 +15,13 @@ import {Argument, Command, Flag} from "effect/unstable/cli";
 import * as Exit from "../../exit-codes.ts";
 import {deriveTier, lintEvalSet, renderFindings, type EvalCase, type EvalSet} from "./evals.ts";
 
-const SKILLS = "claude-plugins/kampus-pipeline/skills";
+/**
+ * Eval sets live OUTSIDE the skill tree (ADR 0001). Installing a skill is linking its directory, so
+ * a set inside one is installed with it — and a graded run, handed the skill, can read the
+ * assertions it is about to be graded against. Keeping the constant named `SKILLS` while it pointed
+ * out of the skill tree would re-tell the lie the ADR removes, so it is renamed too.
+ */
+const EVALS = "claude-plugins/kampus-pipeline/evals";
 
 const refuse = (verb: string, message: string, code: number): Effect.Effect<never> =>
 	Effect.sync(() => {
@@ -55,7 +61,7 @@ interface Loaded {
 
 const loadSet = (root: string, skill: string, verb: string): Effect.Effect<Loaded> =>
 	Effect.gen(function* () {
-		const path = join(root, SKILLS, skill, "evals", "evals.json");
+		const path = join(root, EVALS, skill, "evals.json");
 		if (!existsSync(path)) {
 			// A skill with no eval set is UNKNOWN, not clean. Reporting "no findings" for a set that
 			// does not exist is the vacuous pass this whole tool exists to refuse.

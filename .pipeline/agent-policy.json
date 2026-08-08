@@ -72,7 +72,7 @@
 					"excludePatterns": ["(^|/)(skills|agents)/", "^\\.codex-plugin/", "^(src|app|apps|packages|lib|server|infra|scripts|tests?)/"]
 				},
 				"skills": {
-					"includePatterns": ["(^|/)(skills|agents)/", "^\\.codex-plugin/"],
+					"includePatterns": ["(^|/)(skills|agents)/", "^\\.codex-plugin/", "^claude-plugins/[^/]+/evals/"],
 					"excludePatterns": []
 				},
 				"design": {
