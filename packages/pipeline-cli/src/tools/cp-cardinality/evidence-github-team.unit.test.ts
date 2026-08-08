@@ -10,6 +10,21 @@ const policy = () => parseProtectedChangeApprovalPolicy({
 	}}},
 });
 
+const collaboratorPolicy = () => parseProtectedChangeApprovalPolicy({
+	schemaVersion: 1,
+	github: {shipping: {protectedChangeApproval: {
+		authority: {provider: "github-collaborators", organization: null, teamSlug: null},
+		requiredNonAuthorApprovals: 1,
+		soleAuthorException: {enabled: true, commentPattern: "sole-author-exception"},
+	}}},
+});
+
+/** The shape `GET /repos/{owner}/{repo}/collaborators` returns, trimmed to what the roster reads. */
+const collaborator = (login: string, push: boolean) => ({
+	login,
+	permissions: {admin: push, maintain: push, pull: true, push, triage: true},
+});
+
 const reader = (over: Partial<Record<string, unknown>> = {}) => (path: string): unknown => {
 	const fixtures: Record<string, unknown> = {
 		"orgs/acme/teams/delivery-approvers/members?per_page=100": [[{login: "author"}, {login: "reviewer"}, {login: "reviewer"}]],
@@ -52,6 +67,52 @@ describe("github-team evidence adapter", () => {
 			[reviewPath]: [{id, user: {login: "reviewer"}, state: "APPROVED", commit_id: "head-sha"}],
 		}))).toMatchObject({ok: false});
 		}
+	});
+
+	it("rosters push-capable repository collaborators when the authority names that provider", () => {
+		const configured = collaboratorPolicy();
+		expect(configured).not.toBeNull();
+		const result = resolveGithubTeamEvidence(configured!, "acme/widget", 7, reader({
+			"repos/acme/widget/collaborators?per_page=100": [[
+				collaborator("author", true),
+				collaborator("reviewer", true),
+				collaborator("read-only", false),
+			]],
+		}));
+		// The read-only collaborator is listed by the API but is not approval authority, so it is
+		// neither a member nor counted toward the non-author capacity.
+		expect(result).toEqual({ok: true, facts: {
+			members: ["author", "reviewer"], author: "author", requiredNonAuthorApprovals: 1,
+			nonAuthorApprovalsAtHead: 1, soleAuthorExceptionAtHead: true,
+		}});
+	});
+
+	it("fails closed when a collaborator's permissions cannot be read", () => {
+		const configured = collaboratorPolicy()!;
+		for (const permissions of [undefined, null, {}, {push: "yes"}]) {
+			expect(resolveGithubTeamEvidence(configured, "acme/widget", 7, reader({
+				"repos/acme/widget/collaborators?per_page=100": [[{login: "reviewer", permissions}]],
+			}))).toMatchObject({ok: false});
+		}
+	});
+
+	it("rejects an authority whose provider and coordinates disagree", () => {
+		const section = (authority: unknown) => ({
+			schemaVersion: 1,
+			github: {shipping: {protectedChangeApproval: {
+				authority, requiredNonAuthorApprovals: 1,
+				soleAuthorException: {enabled: false, commentPattern: null},
+			}}},
+		});
+		// The shipped default (team provider, no slug) stays parseable — "not configured yet" is not
+		// malformed — and refuses at resolve instead of widening to the repository roster.
+		const unconfigured = parseProtectedChangeApprovalPolicy(section({provider: "github-team", organization: null, teamSlug: null}));
+		expect(unconfigured).not.toBeNull();
+		expect(resolveGithubTeamEvidence(unconfigured!, "acme/widget", 7, reader())).toMatchObject({ok: false});
+		// A collaborator authority carrying team coordinates is a half-done migration.
+		expect(parseProtectedChangeApprovalPolicy(section({provider: "github-collaborators", organization: null, teamSlug: "delivery-approvers"}))).toBeNull();
+		expect(parseProtectedChangeApprovalPolicy(section({provider: "github-collaborators", organization: "acme", teamSlug: null}))).toBeNull();
+		expect(parseProtectedChangeApprovalPolicy(section({provider: "github-org", organization: null, teamSlug: null}))).toBeNull();
 	});
 
 	it("requires both the configured exception pattern and the current head binding", () => {
