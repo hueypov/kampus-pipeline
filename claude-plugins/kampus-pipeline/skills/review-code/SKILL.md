@@ -24,6 +24,35 @@ gated, and inventing criteria makes you the author of the spec as well as its ju
 
 Done when you have criteria and a head.
 
+## The discipline — run, don't read
+
+Nothing below is inferred from reading when it can be executed. The day this section was earned,
+one author made nine false claims in one session — counts, quotes, "all references repointed" —
+and every one fell to a reviewer who ran the command instead of trusting the sentence.
+
+- **The PR body is a claim under review, not context.** Re-derive every number and every "nothing
+  remains" it asserts. Where your derivation disagrees, your derivation is the finding — including
+  when the diff the API serves is not the diff the body describes.
+- **A new test must not pass against the parent commit.** Check out the parent, overlay the PR's
+  test files, run them. A new case that PASSES there pins nothing — a test asserting the absence of
+  a call that never existed stays green over the very bug it was written for. A file that fails to
+  load because it imports the PR's own symbols counts as failing, not passing — but a load failure
+  proves little: where the new cases can run against the parent at all, they must fail by
+  asserting, and the verdict says which kind of failure it observed.
+- **A suite count that did not move did not run.** Compare the head's suite total against the
+  parent's — from a run at the parent commit, or the base branch's latest CI. A body claiming six
+  new tests above an unmoved total is describing tests that are not in the commit.
+- **Attack both failure directions.** A guard that refuses legitimate work breaks the pipeline as
+  surely as one that passes defects. The sweep's corpus is the repository itself — the invocations
+  its skills, workflows, and tests already make of the changed surface — and one refusal of a
+  legitimate input blocks. When the PR claims to fix a defect, also reproduce that defect against
+  the parent, so the fix is shown to fix something.
+- **Consume every probe whole.** Never pipe a gate-relevant read through `tail`, `head`, or a
+  count: a filtered probe reports the one line habit expected and discards the lines that mattered,
+  and no surprise ever triggers a re-check. Record the probe's complete output where the verdict
+  cites it. When a result does surprise you, verify the probe before believing what it says about
+  the code — a broken sweep loop reports failures that do not exist.
+
 ## 2 — Grade against the criteria, not the summary
 
 **The acceptance criteria are the standard.** Not the PR description, not the commit message, not
@@ -65,7 +94,7 @@ review-code: FAIL @ <head>
 EOF
 ```
 
-FAIL if any acceptance criterion is unmet, any required test fails, or any blocker-severity defect
+FAIL if any acceptance criterion is unmet, any required test fails, or any verified in-scope defect
 is present. Otherwise PASS — report the lesser findings alongside it rather than withholding a PASS
 over them.
 
@@ -75,8 +104,26 @@ them a bounded repair round and returns the same diff.
 The verdict binds to the head you read. If the head moved while you were reading, your verdict
 describes code nobody is merging — re-read and re-grade rather than posting against the old one.
 
-Done when the verb exits 0. It refuses a self-verdict, a malformed marker, and a body carrying a
-machine-local path — each of those is an input to fix, never a reason to post another way.
+Two checks before the post, both executed:
+
+- `gh api user --jq .login` — you post as the identity you **are**, and it must not be the PR's
+  author. `--as` is an assertion the verb compares against the author; it cannot tell who is
+  actually authenticated, so an unchecked identity posts a void verdict under the wrong name.
+- `pipeline cli class-probe classify --namespaces` with the changed paths on stdin and `--root`
+  pointing at a checkout that carries `.pipeline/agent-policy.json` — review worktrees do not: the
+  policy is untracked, and without it the classifier fail-closes to EVERY namespace. That four-line
+  answer is a dispatch notice, not a classification; its status line lands on stderr, so read both
+  streams and treat `policy trusted from <path>` as part of the answer. The stdout lines, whole,
+  are the `--gate` values your verdicts must cover. No readable policy anywhere → stop and report,
+  exactly as with a missing linked issue: a verdict you cannot ground in a classification
+  fabricates the gate it posts in. A namespace with its own working gate skill is reviewed under
+  that checklist — where none is usable yet, apply this skill's discipline and say so in the
+  verdict. Sixteen of this repository's first twenty-two merges shipped with a required namespace
+  unverdicted, four with no verdict at all (#60); this check is what ends that.
+
+Done when every required namespace carries your verdict and each post exited 0. The verb refuses a
+self-verdict, a malformed marker, and a body carrying a machine-local path — each of those is an
+input to fix, never a reason to post another way.
 
 ## Calibration
 
