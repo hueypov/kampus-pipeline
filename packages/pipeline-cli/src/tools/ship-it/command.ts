@@ -11,11 +11,7 @@
  */
 import {Console, Effect, Option} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
-import {
-	classifyPaths,
-	FAIL_CLOSED_POLICY,
-	requiredNamespaces,
-} from "../class-probe/class-probe.ts";
+import {FAIL_CLOSED_POLICY} from "../class-probe/class-probe.ts";
 import {readClassificationPolicy, repositoryRoot} from "../class-probe/policy.ts";
 import {GithubTrackerLive, Tracker} from "../tracker/tracker.ts";
 import {Github as VerdictGithub, GithubLive as VerdictGithubLive} from "../verdict/github.ts";
@@ -27,6 +23,7 @@ import {
 	firstRefusal,
 	type GateState,
 	gatePrecondition,
+	gatesForFiles,
 	mergeablePrecondition,
 	ok,
 	type Precondition,
@@ -176,11 +173,8 @@ const requiredGates = (pr: number, named: Option.Option<string>) =>
 		const policy = root === null ? null : readClassificationPolicy(root, null);
 		// An unreadable policy classifies everything rather than nothing — the classifier's own
 		// fail-closed default, reused here rather than re-decided.
-		const classified = classifyPaths(files, policy?.policy ?? FAIL_CLOSED_POLICY);
-		const gates = requiredNamespaces(classified.classes).map(
-			(namespace) => namespace.replace(/^review-/, "") as VerdictGate,
-		);
-		if (gates.length === 0) {
+		const gates = gatesForFiles(files, policy?.policy ?? FAIL_CLOSED_POLICY);
+		if (gates === null) {
 			return yield* unknownScope(pr, `${files.length} changed file(s) matched no review namespace`);
 		}
 		return gates;

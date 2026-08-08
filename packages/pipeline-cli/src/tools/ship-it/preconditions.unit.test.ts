@@ -2,11 +2,13 @@
  * Unit tests for the `ship-it` pure core: the exit table and the precondition decisions. IO-free.
  */
 import {describe, expect, it} from "@effect/vitest";
+import {FAIL_CLOSED_POLICY} from "../class-probe/class-probe.ts";
 import {
 	checksPrecondition,
 	EXIT,
 	firstRefusal,
 	gatePrecondition,
+	gatesForFiles,
 	mergeablePrecondition,
 	ok,
 	refused,
@@ -97,5 +99,53 @@ describe("firstRefusal", () => {
 		]);
 		expect(r?.name).toBe("checks");
 		expect(r?.code).toBe(EXIT.CHECKS_RED);
+	});
+});
+
+describe("gatesForFiles — the scope the merge gate rests on", () => {
+	const policy = {
+		code: {includePatterns: ["^(packages|src)/"], excludePatterns: []},
+		docs: {includePatterns: ["\\.md$"], excludePatterns: ["^(packages|src)/"]},
+		skills: {includePatterns: ["(^|/)skills/"], excludePatterns: []},
+		design: {includePatterns: ["\\.css$"], excludePatterns: []},
+	};
+
+	it("derives the gate from what changed, not from what was reviewed", () => {
+		// The defect: the required set was built from the gates that already HAD a verdict, so a PR
+		// nobody reviewed required nothing and the merge authority returned 0 on it. Against the old
+		// implementation this input yields the same answer only by coincidence — the old code never
+		// looked at files at all.
+		expect(gatesForFiles(["packages/pipeline-cli/src/tools/review-code/brief.ts"], policy)).toEqual([
+			"code",
+		]);
+	});
+
+	it("requires only the gates the diff implicates", () => {
+		// The concern the old behaviour protected: a repo that never touches design must not be told
+		// it is missing a design verdict. Classifying the diff answers that properly.
+		expect(gatesForFiles(["README.md"], policy)).toEqual(["doc"]);
+		expect(gatesForFiles(["README.md"], policy)).not.toContain("design");
+	});
+
+	it("requires every gate a mixed diff implicates", () => {
+		expect(gatesForFiles(["packages/a.ts", "docs/b.md", "skills/c/SKILL.md"], policy)).toEqual([
+			"code",
+			"doc",
+			"skill",
+		]);
+	});
+
+	it("returns null for an empty file list rather than an empty gate set", () => {
+		// null refuses; `[]` would read as "no gates required" and pass — the exact reading that made
+		// the merge gate vacuous.
+		expect(gatesForFiles([], policy)).toBeNull();
+	});
+
+	it("classifies an unmatched path rather than exempting it", () => {
+		expect(gatesForFiles([".gitignore"], policy)).toEqual(["code"]);
+	});
+
+	it("requires every gate when the policy cannot be trusted", () => {
+		expect(gatesForFiles(["anything"], FAIL_CLOSED_POLICY)).toEqual(["code", "doc", "skill", "design"]);
 	});
 });

@@ -1,4 +1,10 @@
 import * as Exit from "../../exit-codes.ts";
+import {
+	type ClassificationPolicy,
+	classifyPaths,
+	requiredNamespaces,
+} from "../class-probe/class-probe.ts";
+import type {VerdictGate} from "../verdict/verdict-match.ts";
 
 /**
  * The pure core for `ship-it`: the precondition decisions and the order they are evaluated in.
@@ -120,3 +126,22 @@ export const firstRefusal = (
 	preconditions: ReadonlyArray<Precondition>,
 ): Extract<Precondition, {ok: false}> | null =>
 	preconditions.find((p): p is Extract<Precondition, {ok: false}> => !p.ok) ?? null;
+
+/**
+ * The gates a changed-file list requires, derived from the classifier.
+ *
+ * Extracted from the IO path so the decision that used to be wrong is testable without a network
+ * call. `null` means the scope could not be established — an empty file list, which the classifier
+ * cannot attribute — and the caller refuses on it rather than reading it as "no gates required".
+ * That reading is what let an unreviewed pull request pass the merge gate (#60).
+ */
+export const gatesForFiles = (
+	files: ReadonlyArray<string>,
+	policy: ClassificationPolicy,
+): ReadonlyArray<VerdictGate> | null => {
+	if (files.length === 0) return null;
+	const gates = requiredNamespaces(classifyPaths(files, policy).classes).map(
+		(namespace) => namespace.replace(/^review-/, "") as VerdictGate,
+	);
+	return gates.length === 0 ? null : gates;
+};
