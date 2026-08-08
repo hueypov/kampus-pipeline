@@ -1,0 +1,61 @@
+{
+	"schemaVersion": 1,
+	"workflows": {
+		"pipeline-doc-safety": {
+			"enabled": false
+		},
+		"pipeline-delivery-gate": {
+			"enabled": false
+		},
+		"pipeline-gitleaks": {
+			"enabled": false
+		},
+		"pipeline-doc-links": {
+			"enabled": false
+		},
+		"pipeline-settings-env-guard": {
+			"enabled": false
+		},
+		"pipeline-unresolved-threads": {
+			"enabled": false
+		}
+	},
+	"adapters": {
+		"catalogGuard": {
+			"enabled": false,
+			"packageManager": null,
+			"workspaceManifest": null,
+			"packageGlobs": [],
+			"dependencyFields": [],
+			"catalogNames": [],
+			"allowedSpecifierPrefixes": [],
+			"allowlist": []
+		},
+		"adoptionLint": {
+			"enabled": false,
+			"corpusGlobs": [],
+			"decisions": [],
+			"exemptions": []
+		},
+		"designTokenGuard": {
+			"enabled": false,
+			"sourceGlobs": [],
+			"rawLayerPaths": [],
+			"externalProperties": [],
+			"grandfatheredMissingTokens": [],
+			"rawPxCeilings": {},
+			"referencePattern": null,
+			"declarationPattern": null,
+			"hexLiteralPattern": null,
+			"rawPxPattern": null,
+			"rawPxThreshold": null
+		},
+		"designInventory": {
+			"enabled": false,
+			"sourceGlobs": [],
+			"artifactPath": null,
+			"normativeArtifactPaths": [],
+			"tags": null
+		}
+	}
+}

@@ -1,0 +1,147 @@
+{
+	"schemaVersion": 1,
+	"git": {
+		"primaryBranch": null,
+		"primaryRemote": null,
+		"primaryIndexGuard": {
+			"enabled": false,
+			"protectedPathPrefixes": [],
+			"blockThreshold": 25,
+			"attribution": {
+				"enabled": false,
+				"threshold": 10,
+				"logPath": null
+			}
+		},
+		"postSyncCommand": null
+	},
+	"worktrees": {
+		"managedRoots": [".claude/worktrees"],
+		"reviewPrefixes": ["review-head-", "review-doc-head-", "review-skill-head-"],
+		"idleMinutes": 60
+	},
+	"optionalAdapters": {
+		"protectedOwnership": {
+			"enabled": false,
+			"enforcement": null,
+			"source": null,
+			"sourcePath": null,
+			"ownerPattern": null,
+			"rules": []
+		},
+		"protectedFanout": {
+			"enabled": false,
+			"enforcement": null,
+			"rules": []
+		},
+		"featureReachability": {
+			"enabled": false,
+			"definitionsPath": null,
+			"consumerRoots": [],
+			"consumerFilePattern": null,
+			"journeyRoots": [],
+			"journeyFilePattern": null,
+			"definitionPattern": null,
+			"journeyPattern": null,
+			"exemptionPattern": null
+		}
+	},
+	"github": {
+		"issueMutation": true,
+		"implementation": {
+			"enabled": true
+		},
+		"planning": {
+			"enabled": true,
+			"epicEligibilityQuery": null
+		},
+		"triage": {
+			"enabled": true,
+			"queueQuery": null
+		},
+		"review": {
+			"uiPaths": [],
+			"requiredChecks": [],
+			"classification": {
+				"code": {
+					"includePatterns": ["^(src|app|apps|packages|lib|server|infra|scripts|tests?)/"],
+					"excludePatterns": []
+				},
+				"docs": {
+					"includePatterns": ["^(docs|documentation|\\.decisions|\\.patterns)/|(^|/)README\\.md$|\\.md$"],
+					"excludePatterns": ["(^|/)(skills|agents)/", "^\\.codex-plugin/", "^(src|app|apps|packages|lib|server|infra|scripts|tests?)/"]
+				},
+				"skills": {
+					"includePatterns": ["(^|/)(skills|agents)/", "^\\.codex-plugin/"],
+					"excludePatterns": []
+				},
+				"design": {
+					"includePatterns": [],
+					"excludePatterns": []
+				}
+			},
+			"trivialDiff": {
+				"enabled": false,
+				"maxChangedLines": 20,
+				"protectedPaths": []
+			}
+		},
+		"cliCompatibility": {
+			"enabled": false,
+			"targetRepository": null,
+			"realGhPath": null,
+			"pathShim": {
+				"enabled": false
+			},
+			"graphql": {
+				"mode": "passthrough",
+				"blockVerbs": [],
+				"unsupportedJsonFields": [],
+				"rewriteIssueAndPrEdit": false
+			},
+			"skillLint": {
+				"strictYamlFrontmatter": true,
+				"forbidConfiguredGraphqlPaths": false,
+				"selfExemptPaths": []
+			}
+		},
+		"shipping": {
+			"enabled": true,
+			"controlPlanePaths": [],
+			"requiredApprovals": 0,
+			"shipDigest": {
+				"categories": {
+					"order": [],
+					"labels": {},
+					"fallbackLabel": "Uncategorized"
+				},
+				"types": {
+					"order": [],
+					"labels": {},
+					"fallbackLabel": "Uncategorized"
+				},
+				"releaseState": {
+					"adapter": null,
+					"mergedWithoutReleaseEvidence": "unknown"
+				}
+			},
+			"guardContent": {
+				"enabled": false,
+				"decisionRecordPaths": [],
+				"vocabularyPatterns": []
+			},
+			"protectedChangeApproval": {
+				"authority": {
+					"provider": "github-team",
+					"organization": null,
+					"teamSlug": null
+				},
+				"requiredNonAuthorApprovals": 1,
+				"soleAuthorException": {
+					"enabled": false,
+					"commentPattern": null
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,1 @@
+../../.pipeline/toolkit/claude-plugins/kampus-pipeline/agents/adr.md
