@@ -151,11 +151,25 @@ verdict was edited away by the same change that acted on it.
 `reviewer` agent lists (`review-design`, `review-doc`, `review-plan`, `review-skill`), and
 `wayfinder` via the crew's `crew-cartographer`.
 
-`wayfinder` is the one kept against its own reading. At 571 lines it is the largest skill here, it
-keys on a `wayfinder:map` label a fresh adopter does not have. Grounded is satisfied only because `doctor` already treats that label as a Tier-3 optional and
-reports its absence rather than matching nothing — which is the toolkit handling the case correctly,
-not the skill. It stays because two other layers were built to call it; revisit if the cartographer
-role is ever retired.
+`wayfinder` is kept as a **stated exception, not a pass.** At 571 lines it is the largest of the
+skills judged here, and it keys on a `wayfinder:map` label a fresh adopter does not have — so it
+**fails Grounded**, and the rule above says one failure is enough to delete it.
+
+It is kept anyway because Reachable holds unusually strongly: the `pipeline-crew` plugin ships a
+`crew-cartographer` agent whose stated behaviour *is* this skill, and `wayfinder-map` is a CLI verb
+with its own tested parse/validate core. Deleting a skill that two other layers were deliberately
+built to call would break them.
+
+Naming this as an exception rather than arguing it into a pass is deliberate. An earlier revision of
+this section claimed `doctor` "treats that label as a Tier-3 optional and reports its absence", which
+would have satisfied Grounded — and that was false. It is true of the **upstream phoenix plugin's**
+doctor, which was read by mistake; this repository's `doctor/SKILL.md` contains no tier taxonomy and
+never mentions `wayfinder:map`. Reading the installed upstream copy as if it were the payload is the
+same confusion that produced #36.
+
+What would resolve the exception: `doctor` gaining that check, so an adopting repository is told the
+label is missing instead of `wayfinder` matching nothing and reporting it as normal. Until then this
+entry is a debt, and revisiting it is warranted if the cartographer role is ever retired.
 
 **General and directly invoked:** `author-skill` (the method these rewrites follow — 133 lines, no
 damage), `doctor` (adopter preflight, 30 lines), `glossary` (a vocabulary register any repo can
@@ -178,8 +192,11 @@ and is tested. That is a wiring gap, not a dead skill. Rewriting it belongs with
   `gh-issue-intake-formats.md` (the largest concentration of damage anywhere), plus
   `agents/reviewer.md` ([#40](https://github.com/hueypov/kampus-pipeline/issues/40)). `reviewer`
   should also list `review-trivial`.
-- Six kept skills are over the 140-line band — `canon`, `glossary`, `heal-ci`, and the gates. Being
-  oversized is a rewrite cost, not a deletion reason, and it is the only thing left after this.
+- **Eleven** files are over the 140-line band at this commit — `review-doc` 958, `review-skill` 827,
+  `review-design` 768, `wayfinder` 571, `review-plan` 480, `heal-ci` 391, `review-trivial` 326,
+  `canon` 277, `glossary` 198, `triage` 176, `write-code` 152. The last two are already-rewritten
+  stages, so the band is a target the rewrites themselves have not always hit. Being oversized is a
+  rewrite cost, not a deletion reason, and it is most of what is left after this.
 - Fixed here: `doctor`'s routing description called this "the private, project-local kampus
   pipeline toolkit" — org branding in the first surface an adopter reads. Also fixed the pointers
   in `canon`, `glossary`, and the formats contract that named the two deleted skills as live routes.
