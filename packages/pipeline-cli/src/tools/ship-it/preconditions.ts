@@ -164,3 +164,55 @@ export const parseGateList = (raw: string): ReadonlyArray<VerdictGate> | null =>
 	const gates = tokens.filter((g): g is VerdictGate => (GATES as ReadonlyArray<string>).includes(g));
 	return gates.length === tokens.length ? gates : null;
 };
+
+/** The verdict-post namespace decision, pure so the refusal that guards the gate record is tested. */
+export type NamespaceCheck =
+	| {readonly _tag: "allowed"}
+	| {readonly _tag: "refused"; readonly required: ReadonlyArray<VerdictGate>}
+	| {readonly _tag: "unchecked"};
+
+/**
+ * May a verdict in `gate` be posted for a diff of `files`?
+ *
+ * `policy` is nullable, and null means UNCHECKED — never "classify fail-closed". The fail-closed
+ * default is correct for `ship-it`, where classifying everything requires MORE gates and the gate
+ * gets stricter; fed to a refusal guard it inverts, because a scope of every-namespace contains
+ * every `--gate` value and nothing is ever refused. The first live probe of this guard proved it:
+ * run from a worktree with no policy file, it fail-OPENED and posted a design verdict on a code
+ * diff — the exact stray this guard exists to stop.
+ *
+ * `unchecked` — a missing policy or an empty file list — warns rather than refuses: this is not
+ * the last line of defence (`ship-it` re-derives the same scope at the merge and refuses there),
+ * and blocking every review on an unreadable scope would stop all work to prevent something
+ * already caught downstream. A merge on unknown scope is unsafe; a review withheld on unknown
+ * scope is just lost.
+ */
+export const namespaceCheck = (
+	gate: VerdictGate,
+	files: ReadonlyArray<string>,
+	policy: ClassificationPolicy | null,
+): NamespaceCheck => {
+	if (policy === null) return {_tag: "unchecked"};
+	// The file read takes one 100-item page. At that count a complete list is indistinguishable
+	// from a truncated one, and here the failure direction inverts ship-it's: a dropped path can
+	// drop the gate that would have ALLOWED this verdict, refusing a legitimate review. Unknown
+	// scope on a refusal guard means unchecked, never a guess.
+	if (files.length >= 100) return {_tag: "unchecked"};
+	const required = gatesForFiles(files, policy);
+	if (required === null) return {_tag: "unchecked"};
+	return required.includes(gate) ? {_tag: "allowed"} : {_tag: "refused", required};
+};
+
+/**
+ * The policy `namespaceCheck` may act on, from whatever the loader produced.
+ *
+ * The loader NEVER returns null — on an unreadable policy it fail-closes internally to the
+ * classify-everything policy with `trusted: false`. The first wiring wrote `loaded?.policy ?? null`
+ * and believed it had plumbed the unchecked path; the `?? null` was dead code, the untrusted
+ * fail-closed policy flowed straight into the guard, and the guard fail-opened in every worktree —
+ * the same inversion the core had just been fixed for, one seam deeper, found by review probing the
+ * live binary from a policy-less root. The trust flag is the signal, and discarding it was the bug.
+ */
+export const guardPolicy = (
+	loaded: {readonly policy: ClassificationPolicy; readonly trusted: boolean} | null,
+): ClassificationPolicy | null => (loaded !== null && loaded.trusted ? loaded.policy : null);
