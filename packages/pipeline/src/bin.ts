@@ -39,10 +39,13 @@ const PRIMARY_INDEX_GUARD_HOOK_NAME = "pre-commit";
  * these failed out of the box, and `ship-it` then correctly refused to merge anything (#32). An
  * adopter brings their own CI; the pipeline adds guards only where they ask for them.
  *
- * `pipeline-toolkit` is deliberately absent: it runs the TOOLKIT's own test suite, which is never
- * an adopter's concern and gated their merges on our unit tests passing in their runner.
+ * `pipeline-verify` is the one that completes the pipeline: without a check reporting on a head,
+ * `ship-it` refuses every merge with PRECONDITION_UNKNOWN, so an adopter who enables nothing else
+ * still enables this. It runs a repository-owned `.pipeline/verify.sh` rather than guessing a
+ * stack — a guess that is wrong reports green while verifying the wrong thing.
  */
 const GITHUB_WORKFLOW_TEMPLATES = [
+	{source: "templates/github/workflows/pipeline-verify.yml", destination: ".github/workflows/pipeline-verify.yml"},
 	{source: "templates/github/workflows/pipeline-doc-safety.yml", destination: ".github/workflows/pipeline-doc-safety.yml"},
 	{source: "templates/github/workflows/pipeline-delivery-gate.yml", destination: ".github/workflows/pipeline-delivery-gate.yml"},
 	{source: "templates/github/workflows/pipeline-gitleaks.yml", destination: ".github/workflows/pipeline-gitleaks.yml"},

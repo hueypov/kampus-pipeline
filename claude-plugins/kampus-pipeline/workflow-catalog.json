@@ -468,6 +468,16 @@
 			"authorityBoundary": "Local safety command; mutations require explicit execution and configuration."
 		},
 		{
+			"name": "pipeline-verify",
+			"artifactType": "generated-workflow",
+			"deliveryClass": "optional-with-adapter",
+			"entryPoint": ".github/workflows/pipeline-verify.yml",
+			"prerequisites": [
+				".pipeline/optional-workflow-policy.json"
+			],
+			"authorityBoundary": "Installed only when the repository enables it; repository-owned checks and paths remain explicit."
+		},
+		{
 			"name": "pipeline-doc-safety",
 			"artifactType": "generated-workflow",
 			"deliveryClass": "optional-with-adapter",
