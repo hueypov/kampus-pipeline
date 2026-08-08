@@ -9,6 +9,7 @@ import {
 	firstRefusal,
 	gatePrecondition,
 	gatesForFiles,
+	parseGateList,
 	mergeablePrecondition,
 	ok,
 	refused,
@@ -147,5 +148,37 @@ describe("gatesForFiles — the scope the merge gate rests on", () => {
 
 	it("requires every gate when the policy cannot be trusted", () => {
 		expect(gatesForFiles(["anything"], FAIL_CLOSED_POLICY)).toEqual(["code", "doc", "skill", "design"]);
+	});
+});
+
+describe("parseGateList — an explicit --gates must not weaken the gate", () => {
+	it("refuses a token that is not a gate rather than filtering it away", () => {
+		// The live hole: filtering left an empty required set, so `--gates=nonsense` passed a PR with
+		// no review at all, and `merge` reads the same value.
+		expect(parseGateList("nonsense")).toBeNull();
+	});
+
+	it("refuses the classification policy's own plural spellings", () => {
+		// Not a contrived input. The policy says `docs`/`skills`; the gate namespaces are
+		// `doc`/`skill`. Typing the vocabulary this repository uses collapsed the gate to nothing.
+		expect(parseGateList("docs")).toBeNull();
+		expect(parseGateList("skills")).toBeNull();
+	});
+
+	it("refuses a value that names nothing at all", () => {
+		expect(parseGateList(",")).toBeNull();
+		expect(parseGateList("")).toBeNull();
+		expect(parseGateList("   ")).toBeNull();
+	});
+
+	it("refuses a list where only SOME tokens are gates", () => {
+		// Partially honouring an explicit assertion is worse than refusing it: the caller believes
+		// it required two gates and got one.
+		expect(parseGateList("code,nonsense")).toBeNull();
+	});
+
+	it("accepts the gates, with or without the review- prefix", () => {
+		expect(parseGateList("code")).toEqual(["code"]);
+		expect(parseGateList("review-code, doc")).toEqual(["code", "doc"]);
 	});
 });

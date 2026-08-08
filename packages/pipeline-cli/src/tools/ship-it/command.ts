@@ -24,6 +24,7 @@ import {
 	type GateState,
 	gatePrecondition,
 	gatesForFiles,
+	parseGateList,
 	mergeablePrecondition,
 	ok,
 	type Precondition,
@@ -34,6 +35,9 @@ const exit = (verb: string, message: string, code: ExitCode): Effect.Effect<neve
 		process.stderr.write(`ship-it ${verb}: ${message}\n`);
 		process.exit(code);
 	});
+
+/** The `pulls/N/files` page size the tracker reads with. At this count the list may be truncated. */
+const FILE_PAGE = 100;
 
 const prFlag = Flag.integer("pr").pipe(Flag.withDescription("the pull request to test"));
 
@@ -118,21 +122,12 @@ const evaluate = (pr: number, gates: ReadonlyArray<VerdictGate>) =>
  * path classifies as code, so only an empty file list reaches here, and a pull request that changes
  * nothing is anomalous rather than clean.
  */
-const unknownScope = (pr: number, why: string): Effect.Effect<never> =>
+const unknownScope = (pr: number, why: string, verb = "check"): Effect.Effect<never> =>
 	exit(
-		"check",
+		verb,
 		`#${pr} scope: ${why} — which gates this PR requires is UNKNOWN, and unknown is not none`,
 		EXIT.PRECONDITION_UNKNOWN,
 	);
-
-const parseGates = (raw: Option.Option<string>): ReadonlyArray<VerdictGate> => {
-	const supplied = Option.getOrUndefined(raw);
-	if (!supplied) return GATES;
-	return supplied
-		.split(",")
-		.map((g) => g.trim().replace(/^review-/, ""))
-		.filter((g): g is VerdictGate => (GATES as ReadonlyArray<string>).includes(g));
-};
 
 /**
  * Which gates this PR requires, derived from **what it changes**.
@@ -155,7 +150,16 @@ const requiredGates = (pr: number, named: Option.Option<string>) =>
 		// An explicit `--gates` is an assertion by the caller, and every named gate is required
 		// whether or not a verdict exists. That is the difference between asserting the requirement
 		// and discovering it.
-		if (Option.isSome(named)) return parseGates(named);
+		if (Option.isSome(named)) {
+			const gates = parseGateList(named.value);
+			if (gates === null) {
+				return yield* unknownScope(
+					pr,
+					`--gates="${named.value}" names no gate this CLI has (valid: ${GATES.join(", ")}; the classification policy's "docs"/"skills" are "doc"/"skill" here)`,
+				);
+			}
+			return gates;
+		}
 
 		const files = yield* (yield* Tracker).listPrFiles(pr).pipe(
 			Effect.catchTags({
@@ -167,6 +171,15 @@ const requiredGates = (pr: number, named: Option.Option<string>) =>
 		);
 		if (files.length === 0) {
 			return yield* unknownScope(pr, "it reports no changed files, so nothing can be classified");
+		}
+		// The file read takes one page. At exactly the page size the list is indistinguishable from a
+		// truncated one, and a dropped path can drop the gate it would have required — a smaller diff
+		// than the real one classifies to fewer gates, never more.
+		if (files.length >= FILE_PAGE) {
+			return yield* unknownScope(
+				pr,
+				`it reports ${files.length} changed files, the read's page size — the list may be truncated, so the required gates cannot be trusted`,
+			);
 		}
 
 		const root = repositoryRoot();
