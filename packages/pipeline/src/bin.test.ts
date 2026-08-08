@@ -1,5 +1,5 @@
 import {execFileSync, spawnSync} from "node:child_process";
-import {chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
+import {chmodSync, copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {basename, join} from "node:path";
 import {afterEach, describe, expect, it} from "vitest";
@@ -11,6 +11,26 @@ const write = (path: string, text: string, executable = false): void => {
 	mkdirSync(join(path, ".."), {recursive: true});
 	writeFileSync(path, text);
 	if (executable) chmodSync(path, 0o755);
+};
+
+/**
+ * Every path under `root` except Git's own, sorted. An argument the binary refuses must leave this
+ * identical: the claim worth pinning is that nothing was written, which only the filesystem can
+ * answer — an exit code says nothing about a tree that was already mutated (#86).
+ */
+const tree = (root: string): string[] => {
+	const paths: string[] = [];
+	const walk = (relativePath: string): void => {
+		for (const entry of readdirSync(join(root, relativePath), {withFileTypes: true})) {
+			if (entry.name === ".git") continue;
+			const child = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+			paths.push(child);
+			// False for a symlink, so managed links are recorded without being followed.
+			if (entry.isDirectory()) walk(child);
+		}
+	};
+	walk("");
+	return paths.sort();
 };
 
 const command = (cwd: string, args: string[], path: string) =>
@@ -516,6 +536,65 @@ describe("pipeline init", () => {
 		// crew that was never set up must not fail the install contract on a terminal it will never use.
 		personalizeCrew(consumer, {operator: "<operator-name>", terminal: "screen"});
 		expect(command(consumer, ["check"], mockBin).stderr).not.toContain(TERMINAL_DIAGNOSTIC);
+	}, 20_000);
+
+	// The two argument-policy tests below are one bug (#86) seen from both sides: `--help` is a real
+	// verb that writes nothing, and anything unrecognised is refused instead of discarded. They run
+	// against a consumer where `init` WOULD succeed, so an ignored argument shows up as a full
+	// install rather than as an unrelated failure.
+	const ARGUMENT_POLICY_SUBCOMMANDS = ["init", "sync", "check", "status", "enable", "primary-index-guard"] as const;
+
+	it("init --help writes nothing", () => {
+		const {consumer, mockBin} = fixture();
+		const before = tree(consumer);
+		const settings = readFileSync(join(consumer, ".claude/settings.json"), "utf8");
+		const result = command(consumer, ["init", "--help"], mockBin);
+		// Filesystem first, deliberately: the bug exited 0 after a COMPLETE install, so an
+		// exit-code assertion passed while the adopter's tree was being rewritten.
+		expect(tree(consumer)).toEqual(before);
+		expect(readFileSync(join(consumer, ".claude/settings.json"), "utf8")).toBe(settings);
+		expect(result.status).toBe(0);
+		expect(result.stdout).toContain("usage: pipeline init");
+		expect(command(consumer, ["init", "-h"], mockBin).status).toBe(0);
+		expect(tree(consumer)).toEqual(before);
+	}, 20_000);
+
+	it("prints usage for --help in every subcommand", () => {
+		const {consumer, mockBin} = fixture();
+		for (const subcommand of ARGUMENT_POLICY_SUBCOMMANDS) {
+			const result = command(consumer, [subcommand, "--help"], mockBin);
+			expect(result.status).toBe(0);
+			expect(result.stdout).toContain(`usage: pipeline ${subcommand}`);
+		}
+		// `check` read its project root out of `args[0]`, so `--help` was a directory to resolve.
+		expect(command(consumer, ["check", "--help"], mockBin).stderr).not.toContain("check failed");
+		const topLevel = command(consumer, ["--help"], mockBin);
+		expect(topLevel.status).toBe(0);
+		expect(topLevel.stdout).toContain("usage: pipeline <init|sync|check|status|enable|primary-index-guard|cli|crew>");
+	}, 20_000);
+
+	it("refuses an unrecognized argument in every subcommand, naming it", () => {
+		const {consumer, mockBin} = fixture();
+		const before = tree(consumer);
+		const invocations = [
+			["init", "--nope"],
+			["sync", "--nope"],
+			["check", "--nope"],
+			["status", "--nope"],
+			["enable", "--nope"],
+			["primary-index-guard", "--nope"],
+			// A stray operand is unrecognised too: the hole was the discarded argument, not the dash.
+			["status", "nope"],
+		];
+		for (const invocation of invocations) {
+			const result = command(consumer, invocation, mockBin);
+			// An ignored argument is only dangerous because the command proceeded anyway.
+			expect(tree(consumer)).toEqual(before);
+			// Exit 1 is `packages/pipeline-cli`'s status for a usage error, not a per-site invention.
+			expect(result.status).toBe(1);
+			expect(result.stderr).toContain(`unrecognized argument for '${invocation[0]}': ${invocation[1]}`);
+			expect(result.stderr).toContain(`usage: pipeline ${invocation[0]}`);
+		}
 	}, 20_000);
 
 	it("requires a CLI tool name", () => {
