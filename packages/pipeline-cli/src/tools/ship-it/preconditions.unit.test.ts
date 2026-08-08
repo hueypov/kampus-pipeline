@@ -66,26 +66,75 @@ describe("checksPrecondition", () => {
 describe("mergeablePrecondition", () => {
 	const base = {state: "open", draft: false, merged: false, mergeableState: "clean"};
 
-	it("passes a clean open PR", () => {
-		expect(mergeablePrecondition(base).ok).toBe(true);
+	it.each(["clean", "unstable"])("passes a %s PR", (mergeableState) => {
+		// `unstable` is non-required checks failing. The required ones are the `checks` precondition,
+		// which refuses on its own — this one must not answer a question it does not own.
+		expect(mergeablePrecondition({...base, mergeableState}).ok).toBe(true);
 	});
 
 	it.each([
 		[{...base, merged: true}, "already merged"],
 		[{...base, state: "closed"}, "state is closed"],
 		[{...base, draft: true}, "still a draft"],
-		[{...base, mergeableState: "dirty"}, "conflicts with the base"],
-	])("refuses %o", (pr, detail) => {
+	])("refuses %o before it reads mergeable_state at all", (pr, detail) => {
 		const p = mergeablePrecondition(pr);
 		expect(p.ok).toBe(false);
 		expect(p.ok === false && p.code).toBe(EXIT.NOT_MERGEABLE);
 		expect(p.detail).toBe(detail);
 	});
 
-	it("does not refuse an unknown mergeable_state — only a proven-dirty one", () => {
-		// GitHub reports null while it computes mergeability; refusing on that would make the verb
-		// flaky rather than safe.
-		expect(mergeablePrecondition({...base, mergeableState: null}).ok).toBe(true);
+	// GitHub's seven documented mergeable_state values, plus one it has not invented. Each asserts
+	// the code, and that the detail names the state — a caller acts on the state, not on "not
+	// mergeable".
+	it.each([
+		["blocked", EXIT.NOT_MERGEABLE],
+		["behind", EXIT.NOT_MERGEABLE],
+		["dirty", EXIT.NOT_MERGEABLE],
+		["draft", EXIT.NOT_MERGEABLE],
+		["some_state_github_added", EXIT.NOT_MERGEABLE],
+		["unknown", EXIT.PRECONDITION_UNKNOWN],
+	])("refuses mergeable_state %s, naming it", (mergeableState, code) => {
+		const p = mergeablePrecondition({...base, mergeableState});
+		expect(p.ok).toBe(false);
+		expect(p.ok === false && p.code).toBe(code);
+		expect(p.detail).toContain(mergeableState);
+	});
+
+	it("makes a `blocked` PR the refusal both verbs exit on", () => {
+		// The live defect: branch protection requiring an approval reads as `blocked`, the denylist
+		// named only `dirty`, so the merge gate printed `mergeable ok blocked` and exited 0 on a pull
+		// request GitHub would refuse. `enforce_admins: false` means the provider did not backstop it
+		// either — an admin caller's merge landed past the unmet rule (#99). Asserted through
+		// `firstRefusal` because that is what `check` and `merge` both exit on, from one shared
+		// evaluation: neither can pass an input the other would refuse.
+		const refusal = firstRefusal([mergeablePrecondition({...base, mergeableState: "blocked"})]);
+		expect(refusal).not.toBeNull();
+		expect(refusal?.code).toBe(EXIT.NOT_MERGEABLE);
+		expect(refusal?.code).not.toBe(EXIT.OK);
+		expect(refusal?.detail).toContain("blocked");
+	});
+
+	it("refuses an absent answer with a different code from a negative one", () => {
+		// null / `unknown` is the provider still computing mergeability. NOT_MERGEABLE would tell the
+		// caller this PR cannot merge; PRECONDITION_UNKNOWN tells it nobody knows yet, which is the
+		// distinction the `checks` precondition above already draws for the same reason. The prior
+		// test asserted null PASSES, on the reasoning that refusing would make the verb flaky — that
+		// trades a retry for a merge nobody confirmed was permitted.
+		for (const mergeableState of [null, "unknown"]) {
+			const p = mergeablePrecondition({...base, mergeableState});
+			expect(p.ok).toBe(false);
+			expect(p.ok === false && p.code).toBe(EXIT.PRECONDITION_UNKNOWN);
+		}
+	});
+
+	it("passes nothing outside the permitted set", () => {
+		// The criterion itself: adding a state to the permitted set is a deliberate edit, never a
+		// fallthrough. Every documented value plus an invented one; exactly two pass.
+		const states = ["clean", "unstable", "blocked", "behind", "dirty", "draft", "unknown", "invented"];
+		expect(states.filter((s) => mergeablePrecondition({...base, mergeableState: s}).ok)).toEqual([
+			"clean",
+			"unstable",
+		]);
 	});
 });
 

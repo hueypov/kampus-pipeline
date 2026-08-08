@@ -101,6 +101,36 @@ export const checksPrecondition = (checks: {
 	}
 };
 
+/**
+ * The `mergeable_state` values that permit a merge. Every other value refuses.
+ *
+ * This is an allowlist because the denylist it replaced returned `ok` for everything it did not
+ * name, and `blocked` — the state GitHub reports when branch protection will refuse the merge — was
+ * one of those. The merge gate's own precondition therefore answered "ok blocked" and exited 0 on a
+ * pull request that could not merge, fail-open in the one verb with merge authority (#99). Adding a
+ * state here is now a deliberate edit; an unrecognised one is not permission.
+ *
+ * `unstable` is permitted because it means only NON-required checks are red. The required ones are
+ * `checksPrecondition` above, which refuses on its own — permitting `unstable` here does not weaken
+ * that, and refusing it would make this precondition answer a question it does not own.
+ */
+const MERGEABLE: ReadonlySet<string> = new Set(["clean", "unstable"]);
+
+/**
+ * Why a refused state refuses, where the value alone does not say it. The detail always names the
+ * state, so a caller reading the row learns which one to act on.
+ *
+ * `behind` refuses by policy: it is mergeable but stale, and the allowlist's premise is that an
+ * unhandled state is not permission. Moving it to `MERGEABLE` is the one-line change that reverses
+ * that call.
+ */
+const NOT_MERGEABLE_REASON: Readonly<Record<string, string>> = {
+	blocked: "branch protection has not been satisfied",
+	dirty: "conflicts with the base",
+	behind: "the base has moved ahead of it",
+	draft: "the provider still reports it as a draft",
+};
+
 /** Whether the provider says the PR can merge at all. */
 export const mergeablePrecondition = (pr: {
 	readonly state: string;
@@ -111,9 +141,24 @@ export const mergeablePrecondition = (pr: {
 	if (pr.merged) return refused("mergeable", EXIT.NOT_MERGEABLE, "already merged");
 	if (pr.state !== "open") return refused("mergeable", EXIT.NOT_MERGEABLE, `state is ${pr.state}`);
 	if (pr.draft) return refused("mergeable", EXIT.NOT_MERGEABLE, "still a draft");
-	if (pr.mergeableState === "dirty")
-		return refused("mergeable", EXIT.NOT_MERGEABLE, "conflicts with the base");
-	return ok("mergeable", pr.mergeableState ?? "clean");
+	const state = pr.mergeableState;
+	// GitHub reports `unknown` — and omits the field entirely — while it is still computing
+	// mergeability. That is an absent answer, not a negative one, so it lands on the same code as
+	// every other could-not-read precondition here rather than on NOT_MERGEABLE.
+	if (state === null || state === "unknown") {
+		return refused(
+			"mergeable",
+			EXIT.PRECONDITION_UNKNOWN,
+			`${state ?? "absent"} — the provider has not resolved mergeability, which is not the same as mergeable`,
+		);
+	}
+	if (MERGEABLE.has(state)) return ok("mergeable", state);
+	const why = NOT_MERGEABLE_REASON[state];
+	return refused(
+		"mergeable",
+		EXIT.NOT_MERGEABLE,
+		why === undefined ? `${state} — not a state this gate permits` : `${state} — ${why}`,
+	);
 };
 
 /**
