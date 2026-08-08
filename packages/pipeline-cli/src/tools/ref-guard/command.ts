@@ -10,9 +10,11 @@ import {decideHeadDetach, decideRefUpdate, decideTransaction, type RefUpdate, ZE
 
 export const REFUSE_EXIT_CODE = 3;
 const MARKER_PREFIX = "# kampus-pipeline ref-guard managed hook";
-const MARKER = `${MARKER_PREFIX} v2`;
+const MARKER = `${MARKER_PREFIX} v3`;
 /** The v1 marker, kept so a hook this tool wrote earlier is recognised as ours and upgraded. */
 const MARKER_V1 = `${MARKER_PREFIX} v1`;
+/** The v2 marker, kept for the same reason: an unedited v2 hook is ours to replace, not drift. */
+const MARKER_V2 = `${MARKER_PREFIX} v2`;
 
 const rootFlag = Flag.string("root").pipe(Flag.optional, Flag.withDescription("repository root (default: current Git root)"));
 const stateArg = Argument.string("state").pipe(Argument.withDescription("Git reference-transaction state; only prepared may refuse"));
@@ -82,6 +84,44 @@ export const hookPathFor = (root: string): string | null => {
  * still exits 0: this is a `reference-transaction` hook, so a non-zero exit aborts the
  * transaction, and bricking every git operation in a moved clone is a worse failure than the one
  * being fixed. Loud, not fatal.
+ *
+ * v3 stops selecting a candidate on `[ -f ]` alone. A `bin.ts` whose dependencies are not installed
+ * passes that test and then dies at module load, and v2 read every non-refusal status as "ran, no
+ * refusal" — so a crash, an OOM and a clean pass were one answer, and the guard was silently off
+ * behind a stack trace. That is the normal case here, not an edge: every fresh worktree has the
+ * file and no `node_modules` (#85).
+ *
+ * So a candidate is now tried rather than chosen, and only exit 0 or ${REFUSE_EXIT_CODE} — the CLI's own
+ * two verdicts — end the search. Anything else means that copy never decided, so the next candidate
+ * runs, and a worktree missing its install falls through to the toolkit recorded at install time,
+ * which has one. When no candidate decides, the hook says THE GUARD IS NOT RUNNING in the same
+ * voice as its two other degraded paths, and still exits 0.
+ *
+ * Each attempt's stderr is buffered rather than inherited, and released only if no candidate
+ * decided. A copy that dies at module load prints a full module-resolution trace, and inherited
+ * that trace reached the terminal on every ref update even once a later candidate had run the
+ * guard successfully — the noise #85 names as the harm, now describing a copy nothing depended on.
+ * Buffered, it surfaces only beside THE GUARD IS NOT RUNNING, where it is the diagnosis rather than
+ * a thing to learn to ignore. A deciding candidate's own stderr is replayed before the hook exits,
+ * so a refusal still delivers its reason; stdout is passed through fd 3 so only stderr is captured.
+ * That fd is opened by a redirection on the loop's brace group rather than by `exec`, because a
+ * redirection that fails on a special built-in exits a non-interactive shell outright — and a hook
+ * that dies there returns non-zero, which is precisely the abort this design refuses to risk.
+ *
+ * Stdin is read once and replayed per attempt: Git delivers the update lines on the pipe, and a
+ * first attempt that consumed them would leave every later attempt judging an empty transaction.
+ * That is not hypothetical — the verb reads stdin before anything else, so any failure after that
+ * point drains the pipe. The verb is read-only, so running it more than once costs nothing but the
+ * process.
+ *
+ * A candidate is skipped if an earlier one resolved to the same file. In a self-hosting checkout
+ * `.pipeline/toolkit` is a symlink to the repository root, which makes the first two candidates the
+ * SAME `bin.ts` — so a worktree without an install would otherwise pay two identical crashing Node
+ * starts before reaching a toolkit that works, about a fifth of the hook's cost, measured.
+ *
+ * On cost overall: v3 is not cheaper than v2. v2 also ran the CLI exactly once, so v3 can only ever
+ * run it the same number of times or more. What v3 costs is one extra cold Node start in precisely
+ * the case where v2 appeared free because it was doing nothing at all.
  */
 const cliBin = (): string => fileURLToPath(new URL("../../bin.ts", import.meta.url));
 
@@ -89,27 +129,41 @@ export const renderManagedHook = (recorded = cliBin()): string => `#!/bin/sh
 ${MARKER}
 # Git only aborts a reference transaction for this command's deliberate refusal.
 # The toolkit and interpreter are resolved at run time — see ref-guard/command.ts.
-status=0
 root=$(git rev-parse --show-toplevel 2>/dev/null) || root=""
-bin=""
-for candidate in \\
-  "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\
-  "$root/packages/pipeline-cli/src/bin.ts" \\
-  "${recorded}"
-do
-  if [ -f "$candidate" ]; then bin="$candidate"; break; fi
-done
-if [ -z "$bin" ]; then
-  echo "ref-guard: no toolkit under '$root' and none at the recorded path — THE GUARD IS NOT RUNNING; re-run pipeline init" >&2
-  exit 0
-fi
 node_bin=$(command -v node 2>/dev/null) || node_bin=""
 if [ -z "$node_bin" ]; then
   echo "ref-guard: no node on PATH — THE GUARD IS NOT RUNNING" >&2
   exit 0
 fi
-"$node_bin" "$bin" ref-guard reference-transaction "$1" || status=$?
-[ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1
+updates=$(cat)
+tried=""
+noise=""
+{
+for candidate in \\
+  "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\
+  "$root/packages/pipeline-cli/src/bin.ts" \\
+  "${recorded}"
+do
+  [ -f "$candidate" ] || continue
+  dir=$(CDPATH= cd -- "$(dirname -- "$candidate")" 2>/dev/null && pwd -P) || continue
+  real="$dir/$(basename -- "$candidate")"
+  case "$tried" in *"|$real|"*) continue ;; esac
+  tried="$tried|$real|"
+  errs=$(printf '%s\\n' "$updates" | "$node_bin" "$candidate" ref-guard reference-transaction "$1" 2>&1 1>&3)
+  status=$?
+  if [ "$status" -eq ${REFUSE_EXIT_CODE} ] || [ "$status" -eq 0 ]; then
+    [ -n "$errs" ] && printf '%s\\n' "$errs" >&2
+    [ "$status" -eq 0 ] && exit 0
+    exit 1
+  fi
+  if [ -n "$errs" ]; then
+    noise="$noise$errs
+"
+  fi
+done
+} 3>&1
+[ -n "$noise" ] && printf '%s' "$noise" >&2
+echo "ref-guard: no toolkit under '$root' could run the guard — THE GUARD IS NOT RUNNING; run pnpm install here, or re-run pipeline init" >&2
 exit 0
 `;
 
@@ -143,14 +197,104 @@ const V1_LINES: ReadonlyArray<string | RegExp> = [
 	"",
 ];
 
-/** A hook body this tool wrote in an earlier version, UNEDITED — the only kind `install` replaces. */
+/**
+ * v2's body as a line-by-line shape, on the same terms as `V1_LINES`.
+ *
+ * v2 varied only in the one absolute path it recorded, so that line alone is a pattern. Kept
+ * verbatim rather than re-rendered: this predicate decides whether we may overwrite somebody's
+ * file, and a shape that drifts with the current renderer would answer about v3, not v2.
+ */
+const V2_LINES: ReadonlyArray<string | RegExp> = [
+	"#!/bin/sh",
+	MARKER_V2,
+	"# Git only aborts a reference transaction for this command's deliberate refusal.",
+	"# The toolkit and interpreter are resolved at run time — see ref-guard/command.ts.",
+	"status=0",
+	'root=$(git rev-parse --show-toplevel 2>/dev/null) || root=""',
+	'bin=""',
+	"for candidate in \\",
+	'  "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\',
+	'  "$root/packages/pipeline-cli/src/bin.ts" \\',
+	/^ {2}"[^"]*"$/,
+	"do",
+	'  if [ -f "$candidate" ]; then bin="$candidate"; break; fi',
+	"done",
+	'if [ -z "$bin" ]; then',
+	`  echo "ref-guard: no toolkit under '$root' and none at the recorded path — THE GUARD IS NOT RUNNING; re-run pipeline init" >&2`,
+	"  exit 0",
+	"fi",
+	'node_bin=$(command -v node 2>/dev/null) || node_bin=""',
+	'if [ -z "$node_bin" ]; then',
+	'  echo "ref-guard: no node on PATH — THE GUARD IS NOT RUNNING" >&2',
+	"  exit 0",
+	"fi",
+	'"$node_bin" "$bin" ref-guard reference-transaction "$1" || status=$?',
+	`[ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1`,
+	"exit 0",
+	"",
+];
+
+/**
+ * The CURRENT version's shape, which the two before it never had.
+ *
+ * Without it a hook this tool wrote is `drifted` — refused as hand-edited — whenever its recorded
+ * path differs from the one we would render now, which is any re-install from a different toolkit
+ * location: a moved checkout, or a version-stamped store directory. The v1 and v2 shapes fix that
+ * retroactively, one version late, every time. This fixes it as it happens.
+ */
+const V3_LINES: ReadonlyArray<string | RegExp> = [
+	"#!/bin/sh",
+	MARKER,
+	"# Git only aborts a reference transaction for this command's deliberate refusal.",
+	"# The toolkit and interpreter are resolved at run time — see ref-guard/command.ts.",
+	'root=$(git rev-parse --show-toplevel 2>/dev/null) || root=""',
+	'node_bin=$(command -v node 2>/dev/null) || node_bin=""',
+	'if [ -z "$node_bin" ]; then',
+	'  echo "ref-guard: no node on PATH — THE GUARD IS NOT RUNNING" >&2',
+	"  exit 0",
+	"fi",
+	"updates=$(cat)",
+	'tried=""',
+	'noise=""',
+	"{",
+	"for candidate in \\",
+	'  "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\',
+	'  "$root/packages/pipeline-cli/src/bin.ts" \\',
+	/^ {2}"[^"]*"$/,
+	"do",
+	'  [ -f "$candidate" ] || continue',
+	'  dir=$(CDPATH= cd -- "$(dirname -- "$candidate")" 2>/dev/null && pwd -P) || continue',
+	'  real="$dir/$(basename -- "$candidate")"',
+	'  case "$tried" in *"|$real|"*) continue ;; esac',
+	'  tried="$tried|$real|"',
+	`  errs=$(printf '%s\\n' "$updates" | "$node_bin" "$candidate" ref-guard reference-transaction "$1" 2>&1 1>&3)`,
+	"  status=$?",
+	`  if [ "$status" -eq ${REFUSE_EXIT_CODE} ] || [ "$status" -eq 0 ]; then`,
+	`    [ -n "$errs" ] && printf '%s\\n' "$errs" >&2`,
+	'    [ "$status" -eq 0 ] && exit 0',
+	"    exit 1",
+	"  fi",
+	'  if [ -n "$errs" ]; then',
+	'    noise="$noise$errs',
+	'"',
+	"  fi",
+	"done",
+	"} 3>&1",
+	`[ -n "$noise" ] && printf '%s' "$noise" >&2`,
+	`echo "ref-guard: no toolkit under '$root' could run the guard — THE GUARD IS NOT RUNNING; run pnpm install here, or re-run pipeline init" >&2`,
+	"exit 0",
+	"",
+];
+
+/** A hook body this tool wrote in ANY version, UNEDITED — the only kind `install` replaces. */
 const isKnownManagedHook = (actual: string): boolean => {
 	const lines = actual.split("\n");
-	if (lines.length !== V1_LINES.length) return false;
-	return V1_LINES.every((want, i) => {
-		const got = lines[i] ?? "";
-		return typeof want === "string" ? got === want : want.test(got);
-	});
+	return [V1_LINES, V2_LINES, V3_LINES].some((shape) =>
+		lines.length === shape.length &&
+		shape.every((want, i) => {
+			const got = lines[i] ?? "";
+			return typeof want === "string" ? got === want : want.test(got);
+		}));
 };
 
 export type HookState = "absent" | "installed" | "outdated" | "drifted" | "foreign";
