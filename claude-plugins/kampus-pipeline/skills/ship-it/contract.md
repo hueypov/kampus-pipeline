@@ -86,22 +86,41 @@ stage the PR actually belongs to.
 
 **Scope**
 
-Which gates are required comes from `class-probe classify` over the PR's changed paths, so it is the
-repository's own classification policy rather than a list frozen here. A PR touching two classes
-needs a current-head PASS in both.
+Which gates are required comes from classifying the PR's changed paths, so it is the repository's own
+classification policy rather than a list frozen here. A PR touching two classes needs a current-head
+PASS in both.
+
+**Both sides of the policy, unioned.** A pull request has two policies — the one at its base and the
+one at its head — and they differ precisely when the PR changes the policy. Each is read from its own
+commit, and a namespace either side requires is required. Reading the policy from the caller's
+checkout instead made a policy-changing PR gated by the rule it was replacing, which is how #93
+merged requiring two namespaces where its own head policy requires three. The union is the
+fail-closed reading and needs no ruling on which side is authoritative; where the sides disagree,
+`check` says so on its `policy scope:` line rather than taking the union silently.
+
+`verdict post` resolves the same two refs through the same function, so a reviewer and a shipper
+cannot compute different required sets for one PR.
 
 **Zero scope fails closed.** A PR whose changed-path read returns nothing is `PRECONDITION_UNKNOWN`,
-not "no gates required" — the second reading would let an unreadable diff merge ungated.
+not "no gates required" — the second reading would let an unreadable diff merge ungated. So is a PR
+that cannot be read at all: without it neither policy has a ref to resolve against.
 
 **Examples**
 
 ```
 $ pipeline cli ship-it check --pr 431
+policy scope: base d112a19 and head 30e98f4 agree — code
 gates required: code
 gate code            ok    PASS @ 30e98f4 (current head)
 checks               ok    1 required, all green
 approval             ok    not required by policy
 mergeable            ok    clean
+```
+
+```
+$ pipeline cli ship-it check --pr 93
+policy scope: base d112a19 → code, doc; head 66b0f0d → code, doc, skill; union required because skill is required by one side only
+gates required: code, doc, skill
 ```
 
 ```

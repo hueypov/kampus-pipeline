@@ -111,6 +111,9 @@ the routing rules with a shell `grep` or a second Node classifier.
   surface. No product, framework, or UI path is a hidden command default.
 - For delivery decisions, pass `--policy-ref <base-sha-or-ref>`. The tool reads policy through
   `git show`, preventing a PR from relaxing the rules used to decide its own required review set.
+  Classifying against the base alone also prevents a PR from TIGHTENING them, which under-gates the
+  policy change itself; `ship-it` and `verdict post` therefore classify against both the base and
+  the head and require the union (#120).
 - A non-empty diff outside every configured class receives `review-code`. Missing, malformed,
   unreadable, or invalid policy over-dispatches every namespace; an empty diff emits no namespace.
 

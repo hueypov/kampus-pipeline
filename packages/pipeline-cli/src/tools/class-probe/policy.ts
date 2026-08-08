@@ -83,3 +83,29 @@ export const readClassificationPolicy = (root: string, policyRef: string | null)
 		return {policy: FAIL_CLOSED_POLICY, trusted: false, source: location, reason: "classification policy is not valid JSON"};
 	}
 };
+
+/** A pull request's classification policy as each of its two sides states it. */
+export type PullRequestPolicies = {
+	readonly base: LoadedClassificationPolicy;
+	readonly head: LoadedClassificationPolicy;
+};
+
+/**
+ * Read both sides of a pull request's policy, each from its OWN ref.
+ *
+ * A policy read from the worktree is the policy of whichever checkout the caller happens to stand
+ * in — for a PR that CHANGES the policy that is the side being replaced, so the PR is gated by the
+ * rule it exists to retire (#120). Naming the two refs makes the question answerable: neither side
+ * is implicit, and a caller in any checkout gets the same two policies for the same PR.
+ *
+ * `root` still comes from the caller's Git root, because resolving a ref needs a repository — but it
+ * supplies only the object store now, never the policy content.
+ */
+export const readPullRequestPolicies = (
+	root: string,
+	baseRef: string,
+	headRef: string,
+): PullRequestPolicies => ({
+	base: readClassificationPolicy(root, baseRef),
+	head: readClassificationPolicy(root, headRef),
+});
