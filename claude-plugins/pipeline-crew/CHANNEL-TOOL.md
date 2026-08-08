@@ -7,9 +7,9 @@ needs to actually call it**: the exact allowlist token its `tools:` frontmatter 
 and how to behave in the brief window right after boot before the channel has connected. The
 four crew defs cite this; they never re-derive it inline.
 
-When adopting this plugin, replace `<organization>` everywhere in this document and in the
-agent frontmatter with the organization that provides the channel server. Then derive the
-allowlist token from that exact server name; do not copy the placeholder token literally.
+When adopting this plugin against a differently-named channel server, derive the allowlist
+token from that exact server name using the rule below and update the agent frontmatter to
+match; never copy a token from an install whose server name differs from yours.
 
 ## The allowlist token — `mcp__pipeline-crew-mcp__channel_send`
 

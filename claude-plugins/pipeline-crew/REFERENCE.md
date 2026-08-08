@@ -33,9 +33,9 @@ Every def's `tools:` array carries the crew channel-send tool by its exact MCP t
 mcp__pipeline-crew-mcp__channel_send
 ```
 
-The token is derived, not guessed: `mcp__` + the server name `pipeline-crew-mcp`
-sanitized (`[^a-zA-Z0-9_-]` → `_`, so `@`/`/` become `_`, hyphens preserved) + `__` +
-`channel_send`. The leading `_` of the sanitized name makes the join a **triple** underscore.
+The token is derived, not guessed: `mcp__` + the server name sanitized
+(`[^a-zA-Z0-9_-]` → `_`) + `__` + `channel_send`. `pipeline-crew-mcp` contains only characters
+that class permits, so sanitization is a no-op and the joins are plain double underscores.
 A wrong string fails closed (present-but-uncallable). Single source: [`CHANNEL-TOOL.md`](CHANNEL-TOOL.md).
 
 The **engineering-manager** (the one engine) carries a **second** channel token on top of
