@@ -29,7 +29,10 @@ export const decideRefUpdate = (update: RefUpdate, guardedRef: string, facts: Co
 	// `git stash push` and `git reset --hard HEAD` re-write the current branch at its current oid —
 	// and refusing one strands a merely-BEHIND primary: with origin ahead, the divergence test below
 	// reads the standstill as a rewrite and aborts the stash/reset that precedes the very pull that
-	// would catch the branch up (first hit self-hosting, pulling main after #68 merged).
+	// would catch the branch up (first hit self-hosting, pulling main after #68 merged). The match
+	// is only as wide as what git itself proved: the old value is validated against the ref before
+	// the prepared hook fires, and a caller that asserts no old value arrives zero-filled — such a
+	// write stays on the strict ancestry path below, fail-closed.
 	if (update.newOid === update.oldOid) return {kind: "allow", reason: `${guardedRef} is unchanged (same-value write)`};
 	if (facts.comparisonOid === null) return {kind: "allow", reason: `comparison ref is unavailable; allowing ${guardedRef} update`};
 	if (update.newOid === facts.comparisonOid) return {kind: "allow", reason: `${guardedRef} matches its comparison ref`};

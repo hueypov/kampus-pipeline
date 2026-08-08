@@ -483,8 +483,10 @@ provide.
 
 Safe by construction (the pure `ref-guard.ts` decides; `command.ts` only gathers Git facts):
 
-- Updates outside the resolved primary ref are untouched. A delete of the primary is refused; an
-  equal-tip or provable fast-forward is allowed; an identified primary divergence, including an
+- Updates outside the resolved primary ref are untouched. A delete of the primary is refused; a
+  same-value write is allowed (a standstill moves nothing — git validates an asserted old value
+  before the hook fires, and an unasserted one arrives zero-filled and stays on the strict path);
+  an equal-tip or provable fast-forward is allowed; an identified primary divergence, including an
   unprovable ancestry probe, is refused.
 - A missing comparison ref allows a non-delete update: a fresh clone has no remote tip from which
   to diverge. An unresolvable primary branch is a no-op rather than an implicit `main`/`origin`
