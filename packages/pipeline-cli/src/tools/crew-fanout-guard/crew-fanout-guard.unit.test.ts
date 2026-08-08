@@ -1,19 +1,22 @@
 /**
- * Pure-core tests for `crew-fanout-guard` (the originating work item): the frontmatter/disallowedTools parse,
- * the enforced-allowlist coverage decision, the future-agent fail-closed hole, and the
- * zero-scope / missing-bridge / stale-allowlist fail-closed verdicts (the zero-scope fail-closed invariant). No IO —
- * the filesystem seam is crossed in `gate.ts`.
+ * Pure-core tests for `crew-fanout-guard` (the originating work item): the frontmatter/charter
+ * parse, the def-shape checks that keep a bridge's declared toolset resolvable (#121), the
+ * enforced-allowlist coverage decision, the future-agent fail-closed hole, and the zero-scope /
+ * missing-bridge / stale-allowlist fail-closed verdicts (the zero-scope fail-closed invariant).
+ * No IO — the filesystem seam is crossed in `gate.ts` and exercised in `gate.live.test.ts`.
  */
 import {describe, expect, it} from "@effect/vitest";
 import {
 	type AgentDef,
 	BRIDGE_ALLOWLIST,
+	charterExclusions,
 	type CrewFanoutInput,
-	disallowedTaskTypes,
+	defBody,
 	judge,
 	parseAgentDef,
 	parseFrontmatter,
 	renderReport,
+	stringList,
 } from "./crew-fanout-guard.ts";
 
 // The full mutating roster the current crew ships (kampus-pipeline agents + the crew engine),
@@ -37,13 +40,16 @@ const CREW_AGENTS = [
 ];
 const FULL_ROSTER = [...PIPELINE_AGENTS, ...CREW_AGENTS];
 
-const bridge = (name: string, disallowedTaskTypes: ReadonlyArray<string>): AgentDef => ({
+/** A well-shaped bridge def: `Task` granted, no self-denial, no ungrantable name. */
+const bridge = (name: string, charterExclusions: ReadonlyArray<string>): AgentDef => ({
 	name,
-	disallowedTaskTypes,
+	tools: ["Read", "Bash", "Task", "mcp__pipeline-crew-mcp__channel_send"],
+	declaresDisallowedTools: false,
+	charterExclusions,
 });
 
 // The three bridge defs, scoped to exactly cover their non-allowlisted mutating roster —
-// i.e. the live the originating work item disallowedTools, expressed as agent-type names.
+// i.e. the live `**Never spawn**` charter paragraphs, as agent-type names.
 const CARTOGRAPHER = bridge("crew-cartographer", [
 	"reviewer",
 	"shipper",
@@ -81,21 +87,31 @@ const currentInput = (): CrewFanoutInput => ({
 	bridges: [CARTOGRAPHER, CHIEF, INTAKE],
 });
 
-describe("parseFrontmatter / parseAgentDef", () => {
-	it("extracts name + disallowedTools from a real bridge def's frontmatter", () => {
+describe("parseFrontmatter / defBody / parseAgentDef", () => {
+	it("extracts name, tools and the charter exclusions from a real bridge def", () => {
 		const md = [
 			"---",
 			"name: crew-cartographer",
 			"model: inherit",
-			'tools: ["Read", "Task"]',
-			'disallowedTools: ["Task(reviewer)", "Task(shipper)"]',
+			'tools: ["Read", "Bash", "Task"]',
 			"---",
 			"",
-			"body text",
+			"## Spawn scope",
+			"",
+			"**May spawn:** `crew-investigator`, `coder`.",
+			"",
+			"**Never spawn:** `reviewer`, `shipper`,",
+			"`crew-engineering-manager`.",
+			"",
+			"Excluding `reviewer` keeps the merge gate off a bridge.",
 		].join("\n");
 		expect(parseAgentDef(md)).toEqual({
 			name: "crew-cartographer",
-			disallowedTaskTypes: ["reviewer", "shipper"],
+			tools: ["Read", "Bash", "Task"],
+			declaresDisallowedTools: false,
+			// only the `**Never spawn**` paragraph is read — not the may-spawn list, and not the
+			// prose below it that mentions `reviewer` again.
+			charterExclusions: ["reviewer", "shipper", "crew-engineering-manager"],
 		});
 	});
 
@@ -104,26 +120,74 @@ describe("parseFrontmatter / parseAgentDef", () => {
 		expect(parseAgentDef("---\nmodel: inherit\n---\nbody")).toBeNull();
 	});
 
-	it("parses a def with no disallowedTools as an empty deny list", () => {
-		const md = '---\nname: crew-engineering-manager\ntools: ["Task"]\n---\nbody';
-		expect(parseAgentDef(md)).toEqual({name: "crew-engineering-manager", disallowedTaskTypes: []});
+	it("flags a def that still declares disallowedTools", () => {
+		const md = '---\nname: crew-intake-desk\ntools: ["Task"]\ndisallowedTools: ["Task(coder)"]\n---\nbody';
+		expect(parseAgentDef(md)?.declaresDisallowedTools).toBe(true);
 	});
 
-	it("parseFrontmatter tolerates CRLF fences", () => {
+	it("parseFrontmatter tolerates CRLF fences; defBody returns the prose after them", () => {
 		expect(parseFrontmatter("---\r\nname: x\r\n---\r\nbody")).toEqual({name: "x"});
+		expect(defBody("---\r\nname: x\r\n---\r\nbody")).toBe("body");
+		expect(defBody("no frontmatter")).toBe("no frontmatter");
+	});
+
+	it("stringList keeps strings and tolerates a non-array", () => {
+		expect(stringList(["Read", 7, " Task "])).toEqual(["Read", "Task"]);
+		expect(stringList(undefined)).toEqual([]);
+		expect(stringList("Task")).toEqual([]);
 	});
 });
 
-describe("disallowedTaskTypes — extract agent-types from Task(...) denies only", () => {
-	it("keeps Task(x) entries, drops non-Task and malformed tokens", () => {
-		expect(
-			disallowedTaskTypes(["Task(reviewer)", "Task( shipper )", "Bash", "Task()", "Edit"]),
-		).toEqual(["reviewer", "shipper"]);
+describe("charterExclusions — read the `**Never spawn**` paragraph only", () => {
+	it("returns empty when no charter paragraph is present (fail-closed downstream)", () => {
+		expect(charterExclusions("You never spawn a reviewer, honest.")).toEqual([]);
 	});
 
-	it("returns empty for a non-array", () => {
-		expect(disallowedTaskTypes(undefined)).toEqual([]);
-		expect(disallowedTaskTypes("Task(reviewer)")).toEqual([]);
+	it("ignores an inline-code token outside the charter paragraph", () => {
+		const body = "Spawn `planner` freely.\n\n**Never spawn:** `shipper`.\n\nAnd never `merge`.";
+		expect(charterExclusions(body)).toEqual(["shipper"]);
+	});
+});
+
+describe("judge — the def-shape checks (#121)", () => {
+	it("FAILS CLOSED when a bridge self-denies with disallowedTools", () => {
+		const selfDenying = {...CARTOGRAPHER, declaresDisallowedTools: true};
+		const v = judge({rosterAgents: FULL_ROSTER, bridges: [selfDenying, CHIEF, INTAKE]});
+		expect(v.pass).toBe(false);
+		if (!v.pass && v.reason === "def-shape") {
+			expect(v.problems).toContainEqual({
+				bridge: "crew-cartographer",
+				kind: "self-denial",
+				detail: "declares `disallowedTools`",
+			});
+		} else {
+			throw new Error("expected a def-shape verdict");
+		}
+	});
+
+	it("FAILS CLOSED when a bridge does not grant Task — its charter fanout could not resolve", () => {
+		const noTask = {...CHIEF, tools: ["Read", "Bash"]};
+		const v = judge({rosterAgents: FULL_ROSTER, bridges: [CARTOGRAPHER, noTask, INTAKE]});
+		expect(v.pass).toBe(false);
+		if (!v.pass && v.reason === "def-shape") {
+			expect(v.problems.map((p) => p.kind)).toContain("missing-fanout-grant");
+		} else {
+			throw new Error("expected a def-shape verdict");
+		}
+	});
+
+	it("FAILS CLOSED when a bridge declares an ungrantable tool name", () => {
+		const withGrep = {...INTAKE, tools: [...INTAKE.tools, "Grep", "Glob"]};
+		const v = judge({rosterAgents: FULL_ROSTER, bridges: [CARTOGRAPHER, CHIEF, withGrep]});
+		expect(v.pass).toBe(false);
+		if (!v.pass && v.reason === "def-shape") {
+			expect(v.problems.map((p) => p.detail)).toEqual([
+				"declares ungrantable `Grep`",
+				"declares ungrantable `Glob`",
+			]);
+		} else {
+			throw new Error("expected a def-shape verdict");
+		}
 	});
 });
 
@@ -139,7 +203,7 @@ describe("judge — the enforced-allowlist coverage decision", () => {
 		}
 	});
 
-	it("FAILS CLOSED on a FUTURE mutating agent-type no bridge allowlists or denies (the #3606 hole)", () => {
+	it("FAILS CLOSED on a FUTURE mutating agent-type no bridge allowlists or excludes (the #3606 hole)", () => {
 		const input: CrewFanoutInput = {
 			rosterAgents: [...FULL_ROSTER, "crew-auditor"],
 			bridges: [CARTOGRAPHER, CHIEF, INTAKE],
@@ -147,7 +211,7 @@ describe("judge — the enforced-allowlist coverage decision", () => {
 		const v = judge(input);
 		expect(v.pass).toBe(false);
 		if (!v.pass && v.reason === "uncovered") {
-			// every bridge is missing a deny for the new type, and none allowlists it
+			// every bridge is missing an exclusion for the new type, and none allowlists it
 			expect(v.gaps.map((g) => g.bridge).sort()).toEqual([
 				"crew-cartographer",
 				"crew-chief-of-staff",
@@ -159,11 +223,11 @@ describe("judge — the enforced-allowlist coverage decision", () => {
 		}
 	});
 
-	it("FAILS CLOSED when a bridge silently drops a Task(x) deny for a non-allowlisted type", () => {
-		// reviewer is NOT on the cartographer allowlist; removing its deny must red.
+	it("FAILS CLOSED when a bridge silently drops a charter exclusion for a non-allowlisted type", () => {
+		// reviewer is NOT on the cartographer allowlist; removing its exclusion must red.
 		const weakened = bridge(
 			"crew-cartographer",
-			CARTOGRAPHER.disallowedTaskTypes.filter((t) => t !== "reviewer"),
+			CARTOGRAPHER.charterExclusions.filter((t) => t !== "reviewer"),
 		);
 		const v = judge({rosterAgents: FULL_ROSTER, bridges: [weakened, CHIEF, INTAKE]});
 		expect(v.pass).toBe(false);
@@ -174,11 +238,12 @@ describe("judge — the enforced-allowlist coverage decision", () => {
 		}
 	});
 
-	it("does NOT require a bridge to deny an agent-type on its own allowlist", () => {
-		// intake-desk allowlists planner/canon/adr — dropping those denies stays green.
+	it("does NOT require a bridge to exclude an agent-type on its own allowlist", () => {
+		// intake-desk allowlists planner/canon/adr — it names none of them, and stays green.
 		const v = judge({rosterAgents: FULL_ROSTER, bridges: [CARTOGRAPHER, CHIEF, INTAKE]});
 		expect(v.pass).toBe(true);
 		expect(BRIDGE_ALLOWLIST["crew-intake-desk"]).toContain("planner");
+		expect(INTAKE.charterExclusions).not.toContain("planner");
 	});
 
 	it("fails closed on zero roster and on zero bridges (the zero-scope fail-closed invariant)", () => {
@@ -229,6 +294,16 @@ describe("renderReport", () => {
 		});
 		const report = renderReport(v);
 		expect(report).toContain("crew-auditor");
-		expect(report).toContain("neither allowlists nor denies");
+		expect(report).toContain("neither allowlists nor charter-excludes");
+	});
+
+	it("explains the whole-tool subtraction on a def-shape fail", () => {
+		const v = judge({
+			rosterAgents: FULL_ROSTER,
+			bridges: [{...CARTOGRAPHER, declaresDisallowedTools: true}, CHIEF, INTAKE],
+		});
+		const report = renderReport(v);
+		expect(report).toContain("subtracts the whole");
+		expect(report).toContain("Never spawn");
 	});
 });
