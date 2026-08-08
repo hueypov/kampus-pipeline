@@ -22,6 +22,40 @@ const V1_HOOK = [
 	"",
 ].join("\n");
 
+/**
+ * v2 verbatim, as this tool shipped it. Transcribed rather than re-rendered on purpose: it is the
+ * body real installs carry, so if v3's upgrade path stops recognising it, this is what says so.
+ */
+const V2_HOOK = [
+	"#!/bin/sh",
+	"# kampus-pipeline ref-guard managed hook v2",
+	"# Git only aborts a reference transaction for this command's deliberate refusal.",
+	"# The toolkit and interpreter are resolved at run time — see ref-guard/command.ts.",
+	"status=0",
+	'root=$(git rev-parse --show-toplevel 2>/dev/null) || root=""',
+	'bin=""',
+	"for candidate in \\",
+	'  "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\',
+	'  "$root/packages/pipeline-cli/src/bin.ts" \\',
+	'  "/recorded/at/install/bin.ts"',
+	"do",
+	'  if [ -f "$candidate" ]; then bin="$candidate"; break; fi',
+	"done",
+	'if [ -z "$bin" ]; then',
+	`  echo "ref-guard: no toolkit under '$root' and none at the recorded path — THE GUARD IS NOT RUNNING; re-run pipeline init" >&2`,
+	"  exit 0",
+	"fi",
+	'node_bin=$(command -v node 2>/dev/null) || node_bin=""',
+	'if [ -z "$node_bin" ]; then',
+	'  echo "ref-guard: no node on PATH — THE GUARD IS NOT RUNNING" >&2',
+	"  exit 0",
+	"fi",
+	'"$node_bin" "$bin" ref-guard reference-transaction "$1" || status=$?',
+	'[ "$status" -eq 3 ] && exit 1',
+	"exit 0",
+	"",
+].join("\n");
+
 describe("ref-guard managed hook contract", () => {
 	it("maps only the dedicated refusal to a Git-hook abort", () => {
 		const hook = renderManagedHook();
@@ -57,12 +91,35 @@ describe("ref-guard managed hook contract", () => {
 		expect(hook).toMatch(/THE GUARD IS NOT RUNNING[\s\S]*?exit 0/);
 	});
 
+	it("tries a candidate rather than choosing one, so an uninstalled copy cannot silence the guard", () => {
+		const hook = renderManagedHook("/recorded/at/install/bin.ts");
+		// The bug (#85): `[ -f ]` selected a bin.ts whose dependencies were absent, which then died
+		// at module load — and every non-refusal status read as "ran, no refusal", so the guard was
+		// off behind a stack trace. Only the CLI's own two verdicts may end the search.
+		expect(hook).toContain('[ -f "$candidate" ] || continue');
+		expect(hook).toContain(`[ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1`);
+		expect(hook).toContain('[ "$status" -eq 0 ] && exit 0');
+		// Git delivers the updates on stdin; a first attempt that drained them would leave the next
+		// candidate judging an empty transaction.
+		expect(hook).toContain("updates=$(cat)");
+		expect(hook).toMatch(/printf '%s\\n' "\$updates" \| "\$node_bin" "\$candidate"/);
+	});
+
 	it("distinguishes absent, installed, outdated, drifted, and foreign hooks", () => {
 		const expected = renderManagedHook();
 		expect(inspectHook("/this/path/does/not/exist", expected)).toBe("absent");
 		expect(inspectHook(tmpHook(expected), expected)).toBe("installed");
 		expect(inspectHook(tmpHook(V1_HOOK), expected)).toBe("outdated");
+		// Every real install carries v2; if it stopped reading as ours, `install` would refuse it as
+		// hand-edited and nobody would ever receive the fix.
+		expect(inspectHook(tmpHook(V2_HOOK), expected)).toBe("outdated");
 		expect(inspectHook(tmpHook("#!/bin/sh\necho someone elses hook\n"), expected)).toBe("foreign");
+	});
+
+	it("treats a hand-edited v2 hook as drifted, not outdated", () => {
+		const expected = renderManagedHook();
+		const edited = V2_HOOK.replace('  if [ -f "$candidate" ]; then bin="$candidate"; break; fi', "  bin=$candidate");
+		expect(inspectHook(tmpHook(edited), expected)).toBe("drifted");
 	});
 
 	it("treats a hand-edited managed hook as drifted, not outdated", () => {

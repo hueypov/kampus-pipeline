@@ -10,9 +10,11 @@ import {decideHeadDetach, decideRefUpdate, decideTransaction, type RefUpdate, ZE
 
 export const REFUSE_EXIT_CODE = 3;
 const MARKER_PREFIX = "# kampus-pipeline ref-guard managed hook";
-const MARKER = `${MARKER_PREFIX} v2`;
+const MARKER = `${MARKER_PREFIX} v3`;
 /** The v1 marker, kept so a hook this tool wrote earlier is recognised as ours and upgraded. */
 const MARKER_V1 = `${MARKER_PREFIX} v1`;
+/** The v2 marker, kept for the same reason: an unedited v2 hook is ours to replace, not drift. */
+const MARKER_V2 = `${MARKER_PREFIX} v2`;
 
 const rootFlag = Flag.string("root").pipe(Flag.optional, Flag.withDescription("repository root (default: current Git root)"));
 const stateArg = Argument.string("state").pipe(Argument.withDescription("Git reference-transaction state; only prepared may refuse"));
@@ -82,6 +84,22 @@ export const hookPathFor = (root: string): string | null => {
  * still exits 0: this is a `reference-transaction` hook, so a non-zero exit aborts the
  * transaction, and bricking every git operation in a moved clone is a worse failure than the one
  * being fixed. Loud, not fatal.
+ *
+ * v3 stops selecting a candidate on `[ -f ]` alone. A `bin.ts` whose dependencies are not installed
+ * passes that test and then dies at module load, and v2 read every non-refusal status as "ran, no
+ * refusal" — so a crash, an OOM and a clean pass were one answer, and the guard was silently off
+ * behind a stack trace. That is the normal case here, not an edge: every fresh worktree has the
+ * file and no `node_modules` (#85).
+ *
+ * So a candidate is now tried rather than chosen, and only exit 0 or ${REFUSE_EXIT_CODE} — the CLI's own
+ * two verdicts — end the search. Anything else means that copy never decided, so the next candidate
+ * runs, and a worktree missing its install falls through to the toolkit recorded at install time,
+ * which has one. When no candidate decides, the hook says THE GUARD IS NOT RUNNING in the same
+ * voice as its two other degraded paths, and still exits 0.
+ *
+ * Stdin is read once and replayed per attempt: Git delivers the update lines on the pipe, and a
+ * first attempt that consumed them would leave every later attempt judging an empty transaction.
+ * The verb is read-only, so running it more than once costs nothing but the process.
  */
 const cliBin = (): string => fileURLToPath(new URL("../../bin.ts", import.meta.url));
 
@@ -89,27 +107,25 @@ export const renderManagedHook = (recorded = cliBin()): string => `#!/bin/sh
 ${MARKER}
 # Git only aborts a reference transaction for this command's deliberate refusal.
 # The toolkit and interpreter are resolved at run time — see ref-guard/command.ts.
-status=0
 root=$(git rev-parse --show-toplevel 2>/dev/null) || root=""
-bin=""
-for candidate in \\
-  "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\
-  "$root/packages/pipeline-cli/src/bin.ts" \\
-  "${recorded}"
-do
-  if [ -f "$candidate" ]; then bin="$candidate"; break; fi
-done
-if [ -z "$bin" ]; then
-  echo "ref-guard: no toolkit under '$root' and none at the recorded path — THE GUARD IS NOT RUNNING; re-run pipeline init" >&2
-  exit 0
-fi
 node_bin=$(command -v node 2>/dev/null) || node_bin=""
 if [ -z "$node_bin" ]; then
   echo "ref-guard: no node on PATH — THE GUARD IS NOT RUNNING" >&2
   exit 0
 fi
-"$node_bin" "$bin" ref-guard reference-transaction "$1" || status=$?
-[ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1
+updates=$(cat)
+for candidate in \\
+  "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\
+  "$root/packages/pipeline-cli/src/bin.ts" \\
+  "${recorded}"
+do
+  [ -f "$candidate" ] || continue
+  printf '%s\\n' "$updates" | "$node_bin" "$candidate" ref-guard reference-transaction "$1"
+  status=$?
+  [ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1
+  [ "$status" -eq 0 ] && exit 0
+done
+echo "ref-guard: no toolkit under '$root' could run the guard — THE GUARD IS NOT RUNNING; run pnpm install here, or re-run pipeline init" >&2
 exit 0
 `;
 
@@ -143,14 +159,52 @@ const V1_LINES: ReadonlyArray<string | RegExp> = [
 	"",
 ];
 
+/**
+ * v2's body as a line-by-line shape, on the same terms as `V1_LINES`.
+ *
+ * v2 varied only in the one absolute path it recorded, so that line alone is a pattern. Kept
+ * verbatim rather than re-rendered: this predicate decides whether we may overwrite somebody's
+ * file, and a shape that drifts with the current renderer would answer about v3, not v2.
+ */
+const V2_LINES: ReadonlyArray<string | RegExp> = [
+	"#!/bin/sh",
+	MARKER_V2,
+	"# Git only aborts a reference transaction for this command's deliberate refusal.",
+	"# The toolkit and interpreter are resolved at run time — see ref-guard/command.ts.",
+	"status=0",
+	'root=$(git rev-parse --show-toplevel 2>/dev/null) || root=""',
+	'bin=""',
+	"for candidate in \\",
+	'  "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\',
+	'  "$root/packages/pipeline-cli/src/bin.ts" \\',
+	/^ {2}"[^"]*"$/,
+	"do",
+	'  if [ -f "$candidate" ]; then bin="$candidate"; break; fi',
+	"done",
+	'if [ -z "$bin" ]; then',
+	`  echo "ref-guard: no toolkit under '$root' and none at the recorded path — THE GUARD IS NOT RUNNING; re-run pipeline init" >&2`,
+	"  exit 0",
+	"fi",
+	'node_bin=$(command -v node 2>/dev/null) || node_bin=""',
+	'if [ -z "$node_bin" ]; then',
+	'  echo "ref-guard: no node on PATH — THE GUARD IS NOT RUNNING" >&2',
+	"  exit 0",
+	"fi",
+	'"$node_bin" "$bin" ref-guard reference-transaction "$1" || status=$?',
+	`[ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1`,
+	"exit 0",
+	"",
+];
+
 /** A hook body this tool wrote in an earlier version, UNEDITED — the only kind `install` replaces. */
 const isKnownManagedHook = (actual: string): boolean => {
 	const lines = actual.split("\n");
-	if (lines.length !== V1_LINES.length) return false;
-	return V1_LINES.every((want, i) => {
-		const got = lines[i] ?? "";
-		return typeof want === "string" ? got === want : want.test(got);
-	});
+	return [V1_LINES, V2_LINES].some((shape) =>
+		lines.length === shape.length &&
+		shape.every((want, i) => {
+			const got = lines[i] ?? "";
+			return typeof want === "string" ? got === want : want.test(got);
+		}));
 };
 
 export type HookState = "absent" | "installed" | "outdated" | "drifted" | "foreign";
