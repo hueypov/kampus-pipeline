@@ -3,6 +3,7 @@
 	"portableCore": {
 		"skills": [
 			"adr",
+			"architecture-audit",
 			"author-skill",
 			"canon",
 			"deslop-comments",
@@ -46,6 +47,16 @@
 			"entryPoint": ".claude/skills/adr",
 			"prerequisites": [
 				"glossary",
+				"report"
+			],
+			"authorityBoundary": "Repository-owned policy governs external operations."
+		},
+		{
+			"name": "architecture-audit",
+			"artifactType": "skill",
+			"deliveryClass": "core-installed",
+			"entryPoint": ".claude/skills/architecture-audit",
+			"prerequisites": [
 				"report"
 			],
 			"authorityBoundary": "Repository-owned policy governs external operations."

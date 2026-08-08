@@ -53,7 +53,8 @@ So `gh-issue-intake-formats.md` is part of the review-family unit of work, not a
 it. Thirty-two link targets with spaces in them survive across eight files, and they travel with the
 same repair.
 
-**Reachability is a real discriminator, and it overturned a verdict.** `wayfinder` was set for
+**Reachability is a real discriminator, and it overturned two verdicts** — `wayfinder`'s before the
+fact, and `architecture-audit`'s after it (see the retraction below). `wayfinder` was set for
 deletion on a grep that found one inbound reference, which read as noise. It is not noise: the
 `pipeline-crew` plugin ships a dedicated `crew-cartographer` agent whose stated behaviour *is* the
 wayfinder skill, and the `wayfinder-map` CLI verb exists with its own parse/validate core and tests.
@@ -61,20 +62,49 @@ That is deliberate wiring across three layers, and the test says keep. It is rec
 the near-miss is the argument for having a test at all — reading the skill would not have surfaced
 any of it.
 
-## Deleted — two
+## Deleted — one
 
 **`what-shipped`** (237 lines). A stakeholder "what did we ship" readout. Same class as `release`
-and `campaign`, which are already gone: it is a reporting product, not pipeline machinery. Zero
-inbound references, no agent, and the mechanical half it needs already exists as the `ship-digest`
+and `campaign`, which are already gone: it is a reporting product, not pipeline machinery. One
+inbound reference, no agent, and the mechanical half it needs already exists as the `ship-digest`
 verb — so what goes is the narration around a verb that stays.
 
-**`architecture-audit`** (284 lines). Walks a codebase and files an issue per "deepening
-opportunity". General on its face, and deleted on the other two tests: nothing routes to it — no
-agent, no crew role, no stage — and `report` already files issues. An unbounded finding generator
-also sits against the intake rule that every issue must move something forward. A skill whose output
-triage exists to reject is not one to ship.
+That verb now has no skill invoking it, and `gh-issue-intake-formats.md` still carries a section
+explaining that "`ship-digest` is the consumer" of category metadata for a readout nothing produces.
+Reversible on request; recorded here so the loose end is visible rather than discovered later.
 
-## Kept — fifteen
+## Retracted — `architecture-audit` was deleted on a measurement error
+
+It was deleted, and it should not have been. The verdict rested on a claim in the section above —
+*"every skill deleted has zero inbound references"* — and that claim was false, produced by measuring
+the deletions and the keeps with **two different greps**: a `skills/<name>` path form for one, a
+backtick form for the other. Measured consistently at the commit before the deletion:
+
+| Skill | Referencing files | Verdict given |
+|---|---|---|
+| `architecture-audit` | **3** — `agents/canon.md`, `canon/SKILL.md`, `glossary/SKILL.md` | deleted |
+| `glossary` | 2 | kept |
+| `doctor` | 1 | kept |
+| `author-skill` | **0** | kept |
+
+It had more inbound references than anything kept on "general and directly invoked" grounds, and
+`author-skill` — kept on exactly those grounds — had none. Against the three tests it fails nothing:
+the job is general, three files route to it, and it names artifacts any repository has.
+
+The three references were then rewritten to point at `report` as part of "repairing dangling
+pointers" — so the evidence contradicting the verdict was edited away in the same change that acted
+on it. Nobody intended that; it is what happens when the repair follows the verdict without
+re-checking it.
+
+`canon` and `glossary` maintain a repository's own decisions and patterns. Both define their scope
+*against* an architecture audit, which is a different job — that distinction is the reason those
+references exist, and collapsing all three into `report` erased a real boundary.
+
+The skill and all three pointers are restored. **The lesson is a rule for this document, not a
+footnote:** measure every candidate with one query, and never let the cleanup for a verdict run
+before the verdict is checked.
+
+## Kept — sixteen
 
 **Agent-reachable, so reachable by construction:** `adr`, `canon`, the four review gates the
 `reviewer` agent lists (`review-design`, `review-doc`, `review-plan`, `review-skill`), and

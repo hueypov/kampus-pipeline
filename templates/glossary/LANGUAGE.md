@@ -11,7 +11,7 @@ This file is **two layers**:
 1. **The general architecture vocabulary** — module / interface / implementation /
    depth / seam / adapter / leverage / locality, the deletion test, and the other
    principles. Evergreen and project-agnostic; it ports the vocabulary the
-   architecture work is grounded in.
+   architecture-audit work is grounded in.
 2. **The domain terms** — names owned by the adopting project. Add them to
    `.glossary/TERMS.md`; this template deliberately does not prescribe any product,
    storage, deployment, or organization vocabulary.
