@@ -18,6 +18,13 @@ describe("ref-guard pure decisions", () => {
 		expect(decideRefUpdate(update(), guarded, {comparisonOid: null, comparisonIsAncestorOfNew: false}).kind).toBe("allow");
 	});
 
+	it("allows a same-value write of a merely-behind primary", () => {
+		// git stash push / reset --hard HEAD re-write the branch at its current oid. With origin
+		// ahead (comparison not an ancestor of new), the write moves nothing and must pass — the
+		// standstill is not a rewrite, and refusing it aborts the stash that precedes a catch-up pull.
+		expect(decideRefUpdate(update({newOid: OID_A}), guarded, {comparisonOid: OID_B, comparisonIsAncestorOfNew: false}).kind).toBe("allow");
+	});
+
 	it("refuses only an unpaired concrete HEAD move on the primary", () => {
 		expect(decideHeadDetach([{oldOid: OID_A, newOid: OID_B, refName: HEAD_REF}], {isPrimaryCheckout: true}).kind).toBe("refuse");
 		expect(decideHeadDetach([{oldOid: OID_A, newOid: OID_B, refName: HEAD_REF}, update()], {isPrimaryCheckout: true}).kind).toBe("allow");

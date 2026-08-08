@@ -65,6 +65,18 @@ describe("ref-guard installed hook", () => {
 		expect(git(clone, "rev-parse", "refs/heads/trunk")).toBe(base);
 	});
 
+	it("allows git stash push while the primary is behind its remote", () => {
+		// The stash's internal `reset --hard HEAD` re-writes trunk at its current oid. Behind
+		// upstream, that standstill used to fail the ancestry probe and abort the stash mid-way —
+		// stash entry created, tree still dirty — instead of refusing cleanly (#77).
+		writeFileSync(join(clone, "wip.txt"), "stash me\n");
+		git(clone, "add", "wip.txt");
+		expect(() => execFileSync("git", ["stash", "push", "-q"], {cwd: clone, stdio: "pipe"})).not.toThrow();
+		expect(git(clone, "rev-parse", "refs/heads/trunk")).toBe(base);
+		expect(git(clone, "status", "--porcelain", "--untracked-files=no")).toBe("");
+		// A stash fires several reference transactions, each a cold node start of the hook.
+	}, 30_000);
+
 	it("allows a raw primary fast-forward without a pipeline caller", () => {
 		expect(() => execFileSync("git", ["update-ref", "refs/heads/trunk", remoteTip], {cwd: clone, stdio: "pipe"})).not.toThrow();
 		expect(git(clone, "rev-parse", "refs/heads/trunk")).toBe(remoteTip);

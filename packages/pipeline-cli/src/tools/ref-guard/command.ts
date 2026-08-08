@@ -251,7 +251,10 @@ const referenceTransaction = Command.make(
 		if (target.branch === null) return;
 		const guardedRef = `refs/heads/${target.branch}`;
 		const comparisonRef = target.remote === null ? null : `refs/remotes/${target.remote}/${target.branch}`;
-		const refDecisions = updates.map((update) => decideRefUpdate(update, guardedRef, update.refName === guardedRef && update.newOid !== ZERO_OID ? comparisonFacts(root, comparisonRef, update.newOid) : {comparisonOid: null, comparisonIsAncestorOfNew: false}));
+		// Facts are gathered only for updates the pure ladder will actually test against them: a
+		// same-value write is decided before the ancestry rung, so probing it would spawn two git
+		// processes per stash/reset whose answers are discarded.
+		const refDecisions = updates.map((update) => decideRefUpdate(update, guardedRef, update.refName === guardedRef && update.newOid !== ZERO_OID && update.newOid !== update.oldOid ? comparisonFacts(root, comparisonRef, update.newOid) : {comparisonOid: null, comparisonIsAncestorOfNew: false}));
 		const headDecision = decideHeadDetach(updates, {isPrimaryCheckout: primaryCheckout(root)});
 		const verdict = decideTransaction([headDecision, ...refDecisions]);
 		if (verdict.kind === "refuse") {
