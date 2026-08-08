@@ -11,11 +11,10 @@
  */
 import {Console, Effect, Option} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
-import {FAIL_CLOSED_POLICY} from "../class-probe/class-probe.ts";
 import {
 	type PullRequestPolicies,
-	readPullRequestPolicies,
 	repositoryRoot,
+	resolvePullRequestPolicies,
 } from "../class-probe/policy.ts";
 import {GithubTrackerLive, type ReadPrResult, Tracker} from "../tracker/tracker.ts";
 import {Github as VerdictGithub, GithubLive as VerdictGithubLive} from "../verdict/github.ts";
@@ -151,7 +150,7 @@ const gateList = (gates: ReadonlyArray<VerdictGate> | null): string =>
  */
 const reportScope = (
 	prState: ReadPrResult,
-	loaded: PullRequestPolicies | null,
+	loaded: PullRequestPolicies,
 	scope: PrGateScope,
 ): Effect.Effect<void> =>
 	Effect.gen(function* () {
@@ -159,10 +158,10 @@ const reportScope = (
 			["base", prState.base],
 			["head", prState.head],
 		] as const) {
-			const state = loaded === null ? null : loaded[side];
-			if (state === null || !state.trusted) {
+			const state = loaded[side];
+			if (!state.trusted) {
 				yield* Console.log(
-					`policy scope: the ${side} policy at ${short(ref)} could not be trusted (${state?.reason ?? "no repository root to resolve the ref in"}) — classified fail-closed`,
+					`policy scope: the ${side} policy at ${short(ref)} could not be trusted (${state.reason}) — classified fail-closed`,
 				);
 			}
 		}
@@ -190,8 +189,11 @@ const reportScope = (
  * treating it as clean is the same vacuous pass in a different costume.
  *
  * The classification runs against both sides of the PR's policy and requires their union — see
- * `prGateScope` for why. It used to run against whatever `.pipeline/agent-policy.json` sat in the
- * caller's cwd (#120).
+ * `prGateScope` and ADR 0002 for why. It used to run against whatever `.pipeline/agent-policy.json`
+ * sat in the caller's cwd (#120). Reading two commits means both must be in the object store, which
+ * a caller that has not fetched since the author's last push does not have; `resolvePullRequestPolicies`
+ * fetches them, and a ref it still cannot resolve is UNKNOWN scope like any other unreadable
+ * precondition.
  */
 const requiredGates = (
 	pr: number,
@@ -243,16 +245,25 @@ const requiredGates = (
 		// The root supplies the object store the two refs are resolved in — never the policy content
 		// itself, which is what made the answer depend on the caller's checkout.
 		const root = repositoryRoot();
-		const loaded =
-			root === null
-				? null
-				: readPullRequestPolicies(root, prState.value.base, prState.value.head);
-		// An unreadable policy classifies everything rather than nothing — the classifier's own
-		// fail-closed default, reused here rather than re-decided.
-		const scope = prGateScope(files, {
-			base: loaded?.base.policy ?? FAIL_CLOSED_POLICY,
-			head: loaded?.head.policy ?? FAIL_CLOSED_POLICY,
-		});
+		if (root === null) {
+			return yield* unknownScope(pr, "there is no repository here to resolve its two policy refs in");
+		}
+		const resolution = resolvePullRequestPolicies(root, prState.value.base, prState.value.head);
+		// A ref that will not resolve even after the fetch is UNKNOWN scope, not a strict one. Loading
+		// it as the classify-everything fallback would union to every namespace — including one this
+		// repository configures with no include pattern, so no reviewer can ever be routed to it and
+		// the merge gate can never be satisfied. Wrong, and phrased like a legitimate answer.
+		if (resolution._tag === "unresolved") {
+			return yield* unknownScope(
+				pr,
+				`${resolution.refs.map(short).join(" and ")} could not be resolved${resolution.remote === null ? " and this repository has no remote to fetch from" : ` after fetching from ${resolution.remote}`}, so that side's policy cannot be read`,
+			);
+		}
+		const loaded = resolution.policies;
+		// Both refs resolved, so a policy that still will not load is malformed at that commit — a
+		// real, actionable condition rather than an unknown one. That keeps the classifier's own
+		// fail-closed default, reused here rather than re-decided, and `reportScope` names the side.
+		const scope = prGateScope(files, {base: loaded.base.policy, head: loaded.head.policy});
 		if (scope.gates === null) {
 			return yield* unknownScope(pr, `${files.length} changed file(s) matched no review namespace`);
 		}

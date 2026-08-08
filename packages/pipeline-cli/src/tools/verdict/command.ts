@@ -29,7 +29,7 @@
 import {readFileSync} from "node:fs";
 import {Console, Effect, Option} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
-import {readPullRequestPolicies, repositoryRoot} from "../class-probe/policy.ts";
+import {repositoryRoot, resolvePullRequestPolicies} from "../class-probe/policy.ts";
 import {guardPolicies, namespaceCheck} from "../ship-it/preconditions.ts";
 import {GithubTrackerLive, Tracker} from "../tracker/tracker.ts";
 import * as Exit from "../../exit-codes.ts";
@@ -228,12 +228,15 @@ const post = Command.make(
 		);
 		// Both sides of the PR's policy, each from its own ref, resolved by the SAME function ship-it
 		// derives the merge scope from — so a reviewer and a shipper standing in different checkouts
-		// cannot require different sets (see `prGateScope`, #120).
+		// cannot require different sets (see `prGateScope`, #120). The resolver fetches a commit this
+		// checkout does not have; a ref it still cannot resolve stays null and lands in `unchecked`
+		// below, which is this verb's whole failure direction — see ADR 0002.
 		const root = repositoryRoot();
-		const loaded =
+		const resolution =
 			root === null || Option.isNone(prState)
 				? null
-				: readPullRequestPolicies(root, prState.value.base, prState.value.head);
+				: resolvePullRequestPolicies(root, prState.value.base, prState.value.head);
+		const loaded = resolution?._tag === "resolved" ? resolution.policies : null;
 		// Through guardPolicies, which honours each loader's trust flag — the loader never returns
 		// null, so a bare `?? null` here was dead code and the untrusted classify-everything fallback
 		// flowed into the guard, fail-opening it in every worktree (caught by review, live).
@@ -243,7 +246,11 @@ const post = Command.make(
 			// Said aloud rather than skipped silently — a check that did not run must never read as
 			// one that passed. ship-it re-derives this scope at the merge and refuses there.
 			yield* Console.error(
-				`verdict post: #${pr}'s namespace check did NOT run (no readable policy or file list from ${root ?? "an unresolved root"}) — ship-it re-derives this at the merge`,
+				`verdict post: #${pr}'s namespace check did NOT run (${
+					resolution?._tag === "unresolved"
+						? `${resolution.refs.map((ref) => ref.slice(0, 7)).join(" and ")} could not be resolved, so that side's policy could not be read`
+						: `no readable policy or file list from ${root ?? "an unresolved root"}`
+				}) — ship-it re-derives this at the merge`,
 			);
 		}
 

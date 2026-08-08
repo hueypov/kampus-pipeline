@@ -164,8 +164,13 @@ export type SidedPolicies = {
  * fail-closed reading and the only one needing no ruling on which side is authoritative. The
  * alternative — refusing outright whenever the sides disagree — would make every policy-changing PR
  * wait on a human to assert what the gate could have derived, which is the workaround this defect
- * already forced once (#120). The disagreement is not swallowed to buy that: it is reported on
- * `only`, so a caller can still route a policy change to a human on its own terms.
+ * already forced once (#120). See ADR 0002.
+ *
+ * `only` names the namespaces exactly one side asked for, and `ship-it check` prints them. That is
+ * **information, not routing**: it carries no exit code, no precondition, and no label, and nothing
+ * tells an agent shipper to read it — a human watching the run learns the sides disagreed, the agent
+ * that merges does not. What refuse-on-disagreement would have bought is genuinely given up;
+ * recording the disagreement is what makes that loss legible, not what compensates for it.
  *
  * `null` gates means the scope could not be established at all — an empty file list — and carries
  * the same meaning it does in `gatesForFiles`: refuse, never "no gates required".

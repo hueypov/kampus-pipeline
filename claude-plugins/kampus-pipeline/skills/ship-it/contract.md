@@ -96,10 +96,28 @@ commit, and a namespace either side requires is required. Reading the policy fro
 checkout instead made a policy-changing PR gated by the rule it was replacing, which is how #93
 merged requiring two namespaces where its own head policy requires three. The union is the
 fail-closed reading and needs no ruling on which side is authoritative; where the sides disagree,
-`check` says so on its `policy scope:` line rather than taking the union silently.
+`check` names both sides on its `policy scope:` line rather than taking the union silently. That line
+is a report, not a route — there is no separate exit code, precondition, or label for a
+disagreement, and nothing here asks you to act on it. The reasoning and the rejected alternatives are
+recorded in `.decisions/0002-both-sides-of-a-pull-requests-policy.md`.
 
 `verdict post` resolves the same two refs through the same function, so a reviewer and a shipper
 cannot compute different required sets for one PR.
+
+**Both commits must be in the local object store, and `check` puts them there.** Reading a policy
+from a ref means resolving that ref where the verb runs, and the head commit is routinely absent — it
+moves on every push, so a checkout that has not fetched since the author's last one does not have it,
+and neither do `--single-branch` clones, `fetch-depth: 1` checkouts, or a first look at a cross-fork
+PR. `check` fetches whichever of the two commits is missing before reading either. A ref that will
+not resolve even then is `PRECONDITION_UNKNOWN` naming the ref and the remote that was tried — never
+a fail-closed policy, which would union to every namespace including ones a repository configures no
+pattern for, producing a required set no reviewer can ever satisfy.
+
+**The base ref is the base branch's tip, not the merge base.** That is the right side to read the
+policy from — the merge is going into that tip, and its rules are the ones that will be in force —
+but it means an open PR's required set can change when the base branch moves, with no push to the PR
+and no action by its author. Re-run `check` rather than trusting an earlier answer; `merge` already
+re-derives it for the same reason it re-asserts every other precondition.
 
 **Zero scope fails closed.** A PR whose changed-path read returns nothing is `PRECONDITION_UNKNOWN`,
 not "no gates required" — the second reading would let an unreadable diff merge ungated. So is a PR

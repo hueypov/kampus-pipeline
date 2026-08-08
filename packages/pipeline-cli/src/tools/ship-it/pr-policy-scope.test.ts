@@ -12,7 +12,10 @@ import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {afterAll, beforeAll, describe, expect, it} from "vitest";
-import {readPullRequestPolicies} from "../class-probe/policy.ts";
+import {
+	readPullRequestPolicies,
+	resolvePullRequestPolicies,
+} from "../class-probe/policy.ts";
 import {gatesForFiles, guardPolicies, prGateScope} from "./preconditions.ts";
 
 /** #93's classification policy as its BASE commit stated it: no rule for eval sets. */
@@ -111,5 +114,132 @@ describe("a policy-changing PR is gated by both of its policies (#120)", () => {
 		expect(guardPolicies(loaded)).toBeNull();
 		const scope = prGateScope(CHANGED_FILES, {base: loaded.base.policy, head: loaded.head.policy});
 		expect(scope.gates).toEqual(["code", "doc", "skill", "design"]);
+	});
+});
+
+/**
+ * The repair for the unsatisfiable merge gate: a caller that does not yet HAVE the head commit.
+ *
+ * The two-ref read resolves each policy with `git show <sha>:…` against the caller's object store.
+ * A clone that has not fetched since the author's last push does not contain the head — the head SHA
+ * moves on every push, and `ship-it check` runs right after review — and neither do `--single-branch`
+ * clones, `fetch-depth: 1` checkouts, or a fresh look at any cross-fork PR. Unfetched, the head loads
+ * as the untrusted classify-everything policy and the union demands `design`, which this repository
+ * configures with no include pattern at all: nothing can route that gate, no reviewer can produce
+ * that verdict, and the merge gate is permanently unsatisfiable while printing a required set that
+ * reads like a legitimate answer.
+ *
+ * The first case asserts on the GATES rather than on the presence of the resolver, so removing the
+ * fetch again fails it on the requirement itself and not on a missing symbol.
+ */
+describe("both policy refs are made resolvable before either is read", () => {
+	let origin: string;
+	let clone: string;
+	let baseSha: string;
+	let headSha: string;
+
+	beforeAll(() => {
+		origin = mkdtempSync(join(tmpdir(), "pr-policy-origin-"));
+		mkdirSync(join(origin, ".pipeline"), {recursive: true});
+		git(origin, ["init", "-q", "-b", "main"]);
+		git(origin, ["config", "user.email", "test@example.invalid"]);
+		git(origin, ["config", "user.name", "Test"]);
+		writeFileSync(join(origin, ".pipeline", "agent-policy.json"), policyFile(BASE_CLASSIFICATION), "utf8");
+		git(origin, ["add", "."]);
+		git(origin, ["commit", "-qm", "base policy"]);
+		baseSha = git(origin, ["rev-parse", "HEAD"]);
+		// The head lives on its own branch, exactly as a PR head does — so a clone of the default
+		// branch alone has the base and not the head, which is the state this repair is about.
+		git(origin, ["checkout", "-q", "-b", "pr-head"]);
+		writeFileSync(join(origin, ".pipeline", "agent-policy.json"), policyFile(HEAD_CLASSIFICATION), "utf8");
+		git(origin, ["add", "."]);
+		git(origin, ["commit", "-qm", "head policy"]);
+		headSha = git(origin, ["rev-parse", "HEAD"]);
+		git(origin, ["checkout", "-q", "main"]);
+
+		clone = mkdtempSync(join(tmpdir(), "pr-policy-clone-"));
+		// `--no-local` matters: cloning a path without it hardlinks the whole object store, so the
+		// clone would silently hold the head commit it was never asked for and the reproduction would
+		// prove nothing. This forces the real transport, which honours `--single-branch`.
+		execFileSync("git", [
+			"clone",
+			"-q",
+			"--no-local",
+			"--single-branch",
+			"--branch",
+			"main",
+			origin,
+			clone,
+		]);
+	});
+
+	afterAll(() => {
+		rmSync(origin, {recursive: true, force: true});
+		rmSync(clone, {recursive: true, force: true});
+	});
+
+	const present = (root: string, sha: string): boolean => {
+		try {
+			execFileSync("git", ["cat-file", "-e", `${sha}^{commit}`], {cwd: root, stdio: "ignore"});
+			return true;
+		} catch {
+			return false;
+		}
+	};
+
+	it("fetches the absent head and requires the union, not every namespace", () => {
+		// The precondition is asserted here rather than in its own case: the fetch below makes the
+		// head present, so a separate pin would pass or fail on test order.
+		expect(present(clone, baseSha)).toBe(true);
+		expect(present(clone, headSha)).toBe(false);
+		// The defect itself, stated as a required set: the raw two-ref read the merge gate used loads
+		// the absent head as the untrusted classify-everything policy, and the union then demands
+		// `design` — the namespace this repository configures with no include pattern, so nothing can
+		// route it and no verdict can ever satisfy the gate.
+		const unfetched = readPullRequestPolicies(clone, baseSha, headSha);
+		expect(unfetched.head.trusted).toBe(false);
+		expect(
+			prGateScope(CHANGED_FILES, {base: unfetched.base.policy, head: unfetched.head.policy}).gates,
+		).toEqual(["code", "doc", "skill", "design"]);
+
+		// No remote argument: the default resolver has to find one. A `--single-branch` clone has no
+		// `refs/remotes/origin/HEAD`, so asking the primary-BRANCH resolver reported "no remote to
+		// fetch from" in a clone that plainly had one — caught by running the built verb against this
+		// repository's own PR from exactly such a clone.
+		const resolution = resolvePullRequestPolicies(clone, baseSha, headSha);
+		expect(resolution._tag).toBe("resolved");
+		const policies = resolution._tag === "resolved" ? resolution.policies : null;
+		expect(policies?.head.trusted).toBe(true);
+		const scope = prGateScope(CHANGED_FILES, {
+			base: policies!.base.policy,
+			head: policies!.head.policy,
+		});
+		expect(scope.gates).toEqual(["code", "doc", "skill"]);
+		expect(scope.gates).not.toContain("design");
+	});
+
+	it("reports a ref no fetch can supply as unresolved rather than as a strict policy", () => {
+		// Not knowing the rules is a different fact from knowing they are strict. Returning the
+		// fail-closed policy here is what produced a required set nothing could satisfy, phrased as
+		// though the scope had been established.
+		const absent = "0".repeat(40);
+		const resolution = resolvePullRequestPolicies(clone, baseSha, absent);
+		expect(resolution._tag).toBe("unresolved");
+		expect(resolution._tag === "unresolved" && resolution.refs).toEqual([absent]);
+		// The remote it tried is named, so the refusal says where it looked rather than only that it
+		// failed — and it proves the discovery ran rather than being handed the answer.
+		expect(resolution._tag === "unresolved" && resolution.remote).toBe("origin");
+	});
+
+	it("says so rather than guessing when there is no remote to fetch from", () => {
+		const isolated = mkdtempSync(join(tmpdir(), "pr-policy-noremote-"));
+		try {
+			git(isolated, ["init", "-q"]);
+			const resolution = resolvePullRequestPolicies(isolated, baseSha, headSha);
+			expect(resolution._tag).toBe("unresolved");
+			expect(resolution._tag === "unresolved" && resolution.remote).toBeNull();
+		} finally {
+			rmSync(isolated, {recursive: true, force: true});
+		}
 	});
 });
