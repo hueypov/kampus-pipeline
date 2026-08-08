@@ -58,13 +58,24 @@ const OBSERVABLE = [
 	/\bexit(?:s|ed)?\b[^.]{0,20}\b\d+\b/i,
 	/\bexit (?:code|status)\b/i,
 	/\bstdout\b|\bstderr\b/i,
-	/`[^`]+`/,
 	/\bnon-zero\b/i,
 ];
 
-/** Does this one assertion name an observable? */
+/** Verbs that make a backtick span an EXECUTION, rather than a thing being judged. */
+const EXECUTION_CUE = /\b(?:invoke[sd]?|run[s]?|execute[sd]?|print[s]?|write[s]?|create[s]?|call[s]?)\b/i;
+
+/**
+ * Does this one assertion name an observable?
+ *
+ * A backtick span alone deliberately does not qualify. "Judges the tone of `CLAUDE.md`" is pure
+ * judgment wearing a code span, and deriving it mechanical reports an ungraded green — the exact
+ * direction the derivation's asymmetry exists to prevent. Review of the first version found the
+ * hole; a span counts only alongside an execution verb, so "invokes `pipeline cli …`" stays
+ * mechanical and a judged filename stays graded.
+ */
 export const namesObservable = (assertion: string): boolean =>
-	OBSERVABLE.some((re) => re.test(assertion));
+	OBSERVABLE.some((re) => re.test(assertion)) ||
+	(/`[^`]+`/.test(assertion) && EXECUTION_CUE.test(assertion));
 
 /**
  * The tier for a whole case: mechanical only when EVERY assertion is mechanically checkable.
@@ -136,6 +147,14 @@ export const lintEvalSet = (
 	options: {readonly skill: string; readonly ambient: string},
 ): ReadonlyArray<Finding> => {
 	const findings: Finding[] = [];
+	if (typeof set.skill_name === "string" && set.skill_name !== options.skill) {
+		findings.push({
+			severity: "defect",
+			caseId: "-",
+			rule: "skill-name-mismatch",
+			detail: `the set says skill_name "${set.skill_name}" but is being linted as "${options.skill}" — a misnamed set silently detaches from the skill it grades`,
+		});
+	}
 	const cases = Array.isArray(set.evals) ? (set.evals as ReadonlyArray<EvalCase>) : [];
 
 	if (cases.length === 0) {
@@ -169,7 +188,10 @@ export const lintEvalSet = (
 
 		// A prompt naming the skill leaves the baseline arm nothing to run, and the with/without
 		// comparison is the only thing that makes an eval measure the skill rather than the model.
-		const invokes = new RegExp(`(^|\\s)/${set.skill_name ?? options.skill}\\b`).test(prompt);
+		// Built from the REQUESTED skill, never the file's own skill_name: a set that misnames
+		// itself would otherwise disable its own rule, and the name is validated as an identifier
+		// before it reaches the regex so no content can smuggle syntax in.
+		const invokes = new RegExp(`(^|\\s)/${options.skill}\\b`).test(prompt);
 		if (invokes) {
 			findings.push({
 				severity: "defect",

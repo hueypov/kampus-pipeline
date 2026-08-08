@@ -36,6 +36,7 @@ describe("namesObservable / deriveTier", () => {
 		"the exit status is non-zero",
 		"invokes `pipeline cli tracker create-issue`",
 		"prints nothing on stdout",
+		"runs `validate-skills.sh` from the root",
 	])("treats %j as mechanically checkable", (a) => {
 		expect(namesObservable(a)).toBe(true);
 	});
@@ -46,6 +47,14 @@ describe("namesObservable / deriveTier", () => {
 		"Can articulate why it chose that seam",
 	])("treats %j as judgment", (a) => {
 		expect(namesObservable(a)).toBe(false);
+	});
+
+	it("does not let a bare code span make judgment mechanical", () => {
+		// The review's exact counter-example: a backtick span with no execution verb is a thing
+		// being JUDGED, and deriving it mechanical reports an ungraded green — the dangerous
+		// direction the derivation's asymmetry exists to prevent.
+		expect(namesObservable("Judges the tone of `CLAUDE.md` to be appropriate")).toBe(false);
+		expect(deriveTier(["Judges the tone of `CLAUDE.md` to be appropriate"])).toBe("graded");
 	});
 
 	it("is deterministic only when EVERY assertion is mechanical", () => {
@@ -62,6 +71,15 @@ describe("namesObservable / deriveTier", () => {
 
 describe("ambientOverlap — the grades-the-repository check", () => {
 	const ambient = "File autonomously. Do not propose-first or ask the user for permission.";
+
+	it("scores per sentence, discriminably from whole-document comparison", () => {
+		// The review swapped the sentence split for whole-document comparison and every test stayed
+		// green — the old fixture scored identically under both. This one discriminates: every
+		// token of the assertion appears in the DOCUMENT, but spread across sentences, so
+		// per-sentence scores low and whole-document would score 1.0.
+		const spread = "Never ask twice. The user decides alone. Permission is not yours to grant.";
+		expect(ambientOverlap("ask the user for permission", spread)).toBeLessThan(AMBIENT_RESTATEMENT);
+	});
 
 	it("scores a near-restatement above the threshold", () => {
 		// The real defect shape: an assertion that a run reading only the ambient context satisfies,
@@ -101,6 +119,29 @@ describe("lintEvalSet", () => {
 	it("refuses an empty set rather than calling it clean", () => {
 		// An empty set passes every run and measures nothing — the vacuous pass this tool exists for.
 		expect(rules(lintEvalSet(set([]), {skill: "report", ambient: ""}))).toEqual(["empty-set"]);
+	});
+
+	it("has a prompt rule pinned in BOTH directions", () => {
+		// The review deleted the no-prompt rule and all tests stayed green. Both directions now.
+		const noPrompt = lintEvalSet(set([{...good, prompt: "   "}]), {skill: "report", ambient: ""});
+		expect(rules(noPrompt)).toContain("no-prompt");
+		expect(rules(lintEvalSet(set([good]), {skill: "report", ambient: ""}))).not.toContain("no-prompt");
+	});
+
+	it("refuses a set whose skill_name does not match the skill being linted", () => {
+		// The evasion the review demonstrated: the invoke-rule regex was built from the SET's own
+		// skill_name, so a set naming itself "evade-v2" with a /evade prompt linted clean. The name
+		// now mismatch-defects, and the invoke rule is built from the requested skill only.
+		const r = lintEvalSet(set([good], "evade-v2"), {skill: "report", ambient: ""});
+		expect(r.find((f) => f.rule === "skill-name-mismatch")?.severity).toBe("defect");
+	});
+
+	it("catches a /skill prompt even when the set misnames itself", () => {
+		const r = lintEvalSet(set([{...good, prompt: "/report the retry bug"}], "evade-v2"), {
+			skill: "report",
+			ambient: "",
+		});
+		expect(rules(r)).toContain("skill-invoked-in-prompt");
 	});
 
 	it("refuses a prompt that invokes the skill by name", () => {

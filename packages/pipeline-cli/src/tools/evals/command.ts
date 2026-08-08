@@ -35,9 +35,18 @@ const rootFlag = Flag.string("root").pipe(
 const ambientFlag = Flag.string("ambient").pipe(
 	Flag.optional,
 	Flag.withDescription(
-		"path to the standing instructions a baseline run already reads (default: CLAUDE.md at the root, when present)",
+		"path to the standing instructions a baseline run already reads (default: CLAUDE.md at the root)",
 	),
 );
+
+const noAmbientFlag = Flag.boolean("no-ambient").pipe(
+	Flag.withDescription(
+		"assert this repository HAS no standing instructions, making the skipped grades-the-repository check a stated fact instead of an accident",
+	),
+);
+
+/** The one shape a skill name may have before it reaches a RegExp. */
+const SKILL_NAME = /^[a-z0-9][a-z0-9-]*$/;
 
 interface Loaded {
 	readonly set: EvalSet;
@@ -73,18 +82,27 @@ const readAmbient = (root: string, override: Option.Option<string>): string => {
 
 const lint = Command.make(
 	"lint",
-	{skill: skillArg, root: rootFlag, ambient: ambientFlag},
-	Effect.fn(function* ({skill, root, ambient}) {
+	{skill: skillArg, root: rootFlag, ambient: ambientFlag, noAmbient: noAmbientFlag},
+	Effect.fn(function* ({skill, root, ambient, noAmbient}) {
+		if (!SKILL_NAME.test(skill)) {
+			// The name feeds a RegExp; anything else refuses as bad input rather than crashing as a bug.
+			return yield* refuse("lint", `'${skill}' is not a skill name`, Exit.MALFORMED_INPUT);
+		}
 		const {set} = yield* loadSet(root, skill, "lint");
 		const ambientText = readAmbient(root, ambient);
-		const findings = lintEvalSet(set, {skill, ambient: ambientText});
 
-		if (ambientText === "") {
-			// Say so rather than let a skipped check read as a passed one.
-			yield* Console.error(
-				"evals lint: no ambient context found — the grades-the-repository check did NOT run",
+		if (ambientText === "" && !noAmbient) {
+			// The review demonstrated the silent-skip shape: the same set reported a defect with an
+			// ambient file present and "clean, exit 0" with the path mistyped. A check that flips off
+			// on a missing file is a vacuous pass wearing a clean exit, so an absent ambient is
+			// INDETERMINATE unless the caller asserts the repository truly has none.
+			return yield* refuse(
+				"lint",
+				"no ambient context found, so the grades-the-repository check cannot run — pass --ambient <path>, or --no-ambient to assert the repository has no standing instructions",
+				Exit.INDETERMINATE,
 			);
 		}
+		const findings = lintEvalSet(set, {skill, ambient: ambientText});
 
 		if (findings.length === 0) {
 			yield* Console.log(`evals lint: ${skill} — clean (${(set.evals as unknown[]).length} case(s))`);
