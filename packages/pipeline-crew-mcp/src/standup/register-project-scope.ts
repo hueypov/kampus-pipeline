@@ -58,7 +58,7 @@ export interface CrewMcpEntry {
 
 /** A project-scope write or a boot-gate seed could not be committed — the crew launch fails closed on it (AC3, the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure). */
 export class ProjectScopeWriteError extends Schema.TaggedErrorClass<ProjectScopeWriteError>()(
-	"@kampus/pipeline-crew-mcp/standup/ProjectScopeWriteError",
+	"pipeline-crew-mcp/standup/ProjectScopeWriteError",
 	{
 		configPath: Schema.String,
 		reason: Schema.String,

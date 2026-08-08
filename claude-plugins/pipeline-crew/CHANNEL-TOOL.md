@@ -1,8 +1,8 @@
 # The crew channel tool — its allowlist token, and the boot-window wait
 
 Every crew role coordinates over one MCP tool, `channel_send`, served by the crew channel
-MCP server (`@kampus/pipeline-crew-mcp`, wired per session via `--channels
-server:@kampus/pipeline-crew-mcp`). **This doc is the single source for two things a role
+MCP server (`pipeline-crew-mcp`, wired per session via `--channels
+server:pipeline-crew-mcp`). **This doc is the single source for two things a role
 needs to actually call it**: the exact allowlist token its `tools:` frontmatter must carry,
 and how to behave in the brief window right after boot before the channel has connected. The
 four crew defs cite this; they never re-derive it inline.
@@ -11,7 +11,7 @@ When adopting this plugin, replace `<organization>` everywhere in this document 
 agent frontmatter with the organization that provides the channel server. Then derive the
 allowlist token from that exact server name; do not copy the placeholder token literally.
 
-## The allowlist token — `mcp___kampus_pipeline-crew-mcp__channel_send`
+## The allowlist token — `mcp__pipeline-crew-mcp__channel_send`
 
 A crew session boots as a top-level `claude --agent crew-<role>` session, so the role's
 agent-def `tools:` allowlist is the hard gate on what the model can call. A connected MCP
@@ -24,16 +24,18 @@ channel (the required channel-tool declaration, the root cause of the channel-di
 So each crew def's `tools:` allowlist **must list the channel tool by its full MCP token**:
 
 ```
-mcp___kampus_pipeline-crew-mcp__channel_send
+mcp__pipeline-crew-mcp__channel_send
 ```
 
 That token is not a guess — it is how claude-code derives an MCP tool's callable name:
 `mcp__` + the server name sanitized by `replace(/[^a-zA-Z0-9_-]/g, "_")` + `__` + the tool
-name. For the server `@kampus/pipeline-crew-mcp` the `@` and `/` sanitize to `_`
-(`_kampus_pipeline-crew-mcp`, hyphens preserved), and the leading `_` is what makes the
-`mcp__` + `_kampus…` join a **triple** underscore. Grounded against the claude-code 2.1.214
-tool-name builder and confirmed against the live `/mcp` tool name — a wrong string
-silently fails closed and re-blocks cutover, so it is copied exactly, never approximated.
+name. The server name `pipeline-crew-mcp` contains only characters that class permits, so
+sanitization leaves it unchanged and the joins are plain double underscores. (The historical
+scoped name `@kampus/pipeline-crew-mcp` sanitized its `@` and `/` to `_`, whose leading `_`
+made the first join a *triple* underscore — the trap to know about if an old def string ever
+resurfaces.) Grounded against the claude-code 2.1.214 tool-name builder and confirmed against
+the live `/mcp` tool name — a wrong string silently fails closed and re-blocks cutover, so it
+is copied exactly, never approximated.
 
 ## The engine's second tool — `channel_claim` (resource deconfliction)
 
@@ -41,7 +43,7 @@ The **engineering-manager** (the one engine role) additionally carries a second 
 `channel_claim` — the token derived the same way:
 
 ```
-mcp___kampus_pipeline-crew-mcp__channel_claim
+mcp__pipeline-crew-mcp__channel_claim
 ```
 
 `channel_send` and `channel_claim` are **different mechanisms, not variants**: `channel_send`

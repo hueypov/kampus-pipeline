@@ -45,7 +45,7 @@ import {
 } from "./index.ts";
 
 const PINNED = "2.1.212";
-const SERVER = "@kampus/pipeline-crew-mcp";
+const SERVER = "pipeline-crew-mcp";
 
 // The per-session bind reaches the platform through the FileSystem/Path seam; provide the real Node
 // platform (the bin's NodeServices.layer) so runStandUp discharges it in-test. These tests inject
@@ -777,7 +777,7 @@ describe("standup/orchestrate — launch-liveness + ensure-session (the tmux-hos
 // confirmation dialog renders + waits (attended boot) instead of a direct exec exiting 1 at the dialog.
 describe("paneClaudeCommand — the dev-channel dialog shell-wrap (the startup-order rule: use an interactive login shell so a required channel-approval dialog can complete before the pane exits)", () => {
 	it("wraps claude+argv as an interactive login shell command, argv re-parsed verbatim", () => {
-		const argv = ["--model", "opus", "--channels", "server:@kampus/pipeline-crew-mcp"];
+		const argv = ["--model", "opus", "--channels", "server:pipeline-crew-mcp"];
 		const cmd = paneClaudeCommand(argv);
 
 		// shape: <shell> -lic '<single command string>' — a 3-token pane command, never a direct `claude`.

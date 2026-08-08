@@ -115,7 +115,7 @@ export const makeCrewChannel = Effect.fn("crew.makeCrewChannel")(function* (
 /** A per-address unix socket path for a peer inbox — deterministic, collision-free, short. */
 export const inboxSocketPathFor = (address: string): string => {
 	const digest = createHash("sha256").update(address).digest("hex").slice(0, 16);
-	return `/tmp/kampus-crew-inbox-${digest}.sock`;
+	return `/tmp/pipeline-crew-inbox-${digest}.sock`;
 };
 
 /**

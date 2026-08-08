@@ -29,7 +29,7 @@ import * as Schema from "effect/Schema";
 
 /** A repo has no canonical rendezvous when git can't name its shared dir — an error, never a fallback (the canonical-rendezvous rule: derive the tracker location from the repository shared Git directory so every worktree joins one tracker; fail rather than fall back when Git cannot identify it: derive the tracker location from the repository shared Git directory so every worktree joins one tracker; fail rather than fall back when Git cannot identify it). */
 export class RendezvousResolutionError extends Schema.TaggedErrorClass<RendezvousResolutionError>()(
-	"@kampus/pipeline-crew-mcp/tracker/RendezvousResolutionError",
+	"pipeline-crew-mcp/tracker/RendezvousResolutionError",
 	{startDir: Schema.String, reason: Schema.String},
 ) {}
 
@@ -60,7 +60,7 @@ export const canonicalizeGitCommonDir = (rawGitCommonDir: string, cwd: string): 
 export const rendezvousSocketPathFor = (repoKey: string): string => {
 	const digest = createHash("sha256").update(repoKey).digest("hex").slice(0, 16);
 	const base = process.env.XDG_RUNTIME_DIR ?? tmpdir();
-	return join(base, `kampus-crew-${digest}.sock`);
+	return join(base, `pipeline-crew-${digest}.sock`);
 };
 
 /** Ask git, from `startDir`, for this repo's shared git dir. */

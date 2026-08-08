@@ -87,7 +87,7 @@ export class CrewTracker extends Context.Service<
 		 */
 		readonly lookup: (role: string) => Effect.Effect<ReadonlyArray<RolePresence>>;
 	}
->()("@kampus/pipeline-crew-mcp/crew/CrewTracker") {
+>()("pipeline-crew-mcp/crew/CrewTracker") {
 	/** Build the service from a live registry client (real socket or in-memory `RpcTest`). */
 	static readonly fromClient = (client: TrackerRegistryClient): Layer.Layer<CrewTracker> =>
 		Layer.succeed(CrewTracker, {

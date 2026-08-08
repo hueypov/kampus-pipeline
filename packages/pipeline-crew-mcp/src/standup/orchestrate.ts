@@ -65,7 +65,7 @@ import {
 
 /** A `claude` session that could not be launched into its pane of the crew window — carries the role + pane it named. */
 export class StandUpLaunchError extends Schema.TaggedErrorClass<StandUpLaunchError>()(
-	"@kampus/pipeline-crew-mcp/standup/StandUpLaunchError",
+	"pipeline-crew-mcp/standup/StandUpLaunchError",
 	{
 		role: Schema.String,
 		pane: Schema.String,
@@ -79,7 +79,7 @@ export class StandUpLaunchError extends Schema.TaggedErrorClass<StandUpLaunchErr
  * current session and never creates one (founder ruling the tmux-host rule: derive placement from the caller session at launch rather than persisted config) — a created session is the fallback alone.
  */
 export class TmuxSessionEnsureError extends Schema.TaggedErrorClass<TmuxSessionEnsureError>()(
-	"@kampus/pipeline-crew-mcp/standup/TmuxSessionEnsureError",
+	"pipeline-crew-mcp/standup/TmuxSessionEnsureError",
 	{
 		session: Schema.String,
 		reason: Schema.String,

@@ -9,7 +9,7 @@ import {Schema} from "effect";
 
 /** A second live session tried to hold a role another session already holds — rejected, not shared. */
 export class RoleUniquenessError extends Schema.TaggedErrorClass<RoleUniquenessError>()(
-	"@kampus/pipeline-crew-mcp/crew/RoleUniquenessError",
+	"pipeline-crew-mcp/crew/RoleUniquenessError",
 	{
 		role: Schema.String,
 		heldBy: Schema.String,

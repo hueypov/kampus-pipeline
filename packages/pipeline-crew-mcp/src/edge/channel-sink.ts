@@ -17,7 +17,7 @@ export class ChannelSink extends Context.Service<
 	{
 		readonly wake: (payload: ChannelNotificationPayload) => Effect.Effect<void>;
 	}
->()("@kampus/pipeline-crew-mcp/edge/ChannelSink") {
+>()("pipeline-crew-mcp/edge/ChannelSink") {
 	/** Emit the wake through the running `McpServer`'s notification client. */
 	static readonly layerFromMcpServer: Layer.Layer<ChannelSink, never, McpServer.McpServer> =
 		Layer.effect(

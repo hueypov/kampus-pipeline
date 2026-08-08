@@ -27,7 +27,7 @@ export interface KindContract {
  * contract.
  */
 export class ChannelContractError extends Schema.TaggedErrorClass<ChannelContractError>()(
-	"@kampus/pipeline-crew-mcp/ChannelContractError",
+	"pipeline-crew-mcp/ChannelContractError",
 	{
 		unresolved: Schema.Array(Schema.String),
 		reason: Schema.String,

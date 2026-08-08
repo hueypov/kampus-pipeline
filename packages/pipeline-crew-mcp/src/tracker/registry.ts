@@ -45,7 +45,7 @@ export class Registry extends Context.Service<
 		/** Free every lease `peer` holds and reap its claims — a connection close (connection-is-lease). */
 		readonly release: (peer: string) => Effect.Effect<void>;
 	}
->()("@kampus/pipeline-crew-mcp/tracker/Registry") {}
+>()("pipeline-crew-mcp/tracker/Registry") {}
 
 export const RegistryLive: Layer.Layer<Registry> = Layer.effect(Registry)(
 	Effect.gen(function* () {

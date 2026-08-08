@@ -42,7 +42,7 @@ export interface PlacementTarget {
  * result site.
  */
 export class TmuxPaneCollisionError extends Schema.TaggedErrorClass<TmuxPaneCollisionError>()(
-	"@kampus/pipeline-crew-mcp/standup/TmuxPaneCollisionError",
+	"pipeline-crew-mcp/standup/TmuxPaneCollisionError",
 	{
 		paneLabel: Schema.String,
 		sessionRefs: Schema.Array(Schema.String),

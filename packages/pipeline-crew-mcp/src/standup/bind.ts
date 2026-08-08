@@ -218,7 +218,7 @@ export interface SessionBindInput {
  * was not). Refuse the launch: a bound bind now implies the bin actually resolves.
  */
 export class CrewSessionBinUnresolvableError extends Schema.TaggedErrorClass<CrewSessionBinUnresolvableError>()(
-	"@kampus/pipeline-crew-mcp/standup/CrewSessionBinUnresolvableError",
+	"pipeline-crew-mcp/standup/CrewSessionBinUnresolvableError",
 	{
 		binPath: Schema.String,
 	},
@@ -230,7 +230,7 @@ export class CrewSessionBinUnresolvableError extends Schema.TaggedErrorClass<Cre
  * launch (AC2).
  */
 export class CrewServerNotRegisteredError extends Schema.TaggedErrorClass<CrewServerNotRegisteredError>()(
-	"@kampus/pipeline-crew-mcp/standup/CrewServerNotRegisteredError",
+	"pipeline-crew-mcp/standup/CrewServerNotRegisteredError",
 	{
 		serverName: Schema.String,
 		servers: Schema.Array(Schema.String),
@@ -243,7 +243,7 @@ export class CrewServerNotRegisteredError extends Schema.TaggedErrorClass<CrewSe
  * channels allowlist"). Dev mode is the sanctioned escape hatch, so this fires only under `--channels`.
  */
 export class ChannelPluginNotAllowedError extends Schema.TaggedErrorClass<ChannelPluginNotAllowedError>()(
-	"@kampus/pipeline-crew-mcp/standup/ChannelPluginNotAllowedError",
+	"pipeline-crew-mcp/standup/ChannelPluginNotAllowedError",
 	{
 		plugin: Schema.String,
 		ref: Schema.String,

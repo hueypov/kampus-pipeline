@@ -44,7 +44,7 @@ import {
 	writeCrewMcpJson,
 } from "./register-project-scope.ts";
 
-const SERVER = "@kampus/pipeline-crew-mcp";
+const SERVER = "pipeline-crew-mcp";
 const cfg = (role: string): CrewServerConfig => ({
 	command: "/usr/bin/node",
 	args: ["/abs/bin.ts", "session", "--role", role],

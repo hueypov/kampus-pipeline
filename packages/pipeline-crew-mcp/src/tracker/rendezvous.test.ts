@@ -75,7 +75,7 @@ describe("resolveRendezvous — one repo, one rendezvous", () => {
 			assert.strictEqual(fromWorktree.repoKey, fromRoot.repoKey);
 			assert.strictEqual(fromNested.socketPath, fromRoot.socketPath);
 			assert.strictEqual(fromWorktree.socketPath, fromRoot.socketPath);
-			assert.match(fromRoot.socketPath, /kampus-crew-[0-9a-f]{16}\.sock$/);
+			assert.match(fromRoot.socketPath, /pipeline-crew-[0-9a-f]{16}\.sock$/);
 
 			rmSync(root, {recursive: true, force: true});
 		}),
@@ -114,6 +114,6 @@ describe("rendezvousSocketPathFor — the key is the only input", () => {
 		const socketPath = rendezvousSocketPathFor("/repo/.git");
 		if (previous === undefined) delete process.env.XDG_RUNTIME_DIR;
 		else process.env.XDG_RUNTIME_DIR = previous;
-		assert.match(socketPath, /^\/run\/user\/501\/kampus-crew-[0-9a-f]{16}\.sock$/);
+		assert.match(socketPath, /^\/run\/user\/501\/pipeline-crew-[0-9a-f]{16}\.sock$/);
 	});
 });

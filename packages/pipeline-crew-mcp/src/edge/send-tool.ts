@@ -20,7 +20,7 @@ import {crewMessageKinds, payloadSchemaForKind} from "../protocol/index.ts";
  * this typed reject instead of a delivered-to-inbox ack, so a wrong shape never reaches a peer.
  */
 export class InvalidMessageError extends Schema.TaggedErrorClass<InvalidMessageError>()(
-	"@kampus/pipeline-crew-mcp/InvalidMessageError",
+	"pipeline-crew-mcp/InvalidMessageError",
 	{
 		kind: Schema.String,
 		reason: Schema.String,
@@ -45,7 +45,7 @@ export class ChannelSend extends Context.Service<
 			body: unknown,
 		) => Effect.Effect<InboxAck, PeerUnreachableError>;
 	}
->()("@kampus/pipeline-crew-mcp/edge/ChannelSend") {}
+>()("pipeline-crew-mcp/edge/ChannelSend") {}
 
 /**
  * Decode `body` against the catalog schema for `kind` and RETURN the decoded struct — the single

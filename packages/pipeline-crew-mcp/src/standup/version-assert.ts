@@ -23,7 +23,7 @@ import {CLI_VERSION_RE, type LaunchConfig} from "./config.ts";
  * `reason` names both versions (a fail-fast, loud, operator-facing message).
  */
 export class CliVersionAssertError extends Schema.TaggedErrorClass<CliVersionAssertError>()(
-	"@kampus/pipeline-crew-mcp/standup/CliVersionAssertError",
+	"pipeline-crew-mcp/standup/CliVersionAssertError",
 	{
 		pinned: Schema.String,
 		installed: Schema.NullOr(Schema.String),
