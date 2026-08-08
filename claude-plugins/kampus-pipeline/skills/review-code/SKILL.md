@@ -109,15 +109,21 @@ Two checks before the post, both executed:
 - `gh api user --jq .login` — you post as the identity you **are**, and it must not be the PR's
   author. `--as` is an assertion the verb compares against the author; it cannot tell who is
   actually authenticated, so an unchecked identity posts a void verdict under the wrong name.
-- `pipeline cli class-probe classify --namespaces` with the changed paths on stdin — its output
-  lines, **read whole, never filtered**, are the set of `--gate` values your verdicts must cover.
-  A namespace that has its own working gate skill is reviewed under that skill's checklist; under
-  whichever checklist, a verdict in a namespace the diff does not require satisfies nothing and
-  leaves the required gate unmet — two merges shipped that way before the scope check existed
-  (#60).
+- `pipeline cli class-probe classify --namespaces` with the changed paths on stdin and `--root`
+  pointing at a checkout that carries `.pipeline/agent-policy.json` — review worktrees do not: the
+  policy is untracked, and without it the classifier fail-closes to EVERY namespace. That four-line
+  answer is a dispatch notice, not a classification; its status line lands on stderr, so read both
+  streams and treat `policy trusted from <path>` as part of the answer. The stdout lines, whole,
+  are the `--gate` values your verdicts must cover. No readable policy anywhere → stop and report,
+  exactly as with a missing linked issue: a verdict you cannot ground in a classification
+  fabricates the gate it posts in. A namespace with its own working gate skill is reviewed under
+  that checklist — where none is usable yet, apply this skill's discipline and say so in the
+  verdict. Sixteen of this repository's first twenty-two merges shipped with a required namespace
+  unverdicted, four with no verdict at all (#60); this check is what ends that.
 
-Done when the verb exits 0. It refuses a self-verdict, a malformed marker, and a body carrying a
-machine-local path — each of those is an input to fix, never a reason to post another way.
+Done when every required namespace carries your verdict and each post exited 0. The verb refuses a
+self-verdict, a malformed marker, and a body carrying a machine-local path — each of those is an
+input to fix, never a reason to post another way.
 
 ## Calibration
 
