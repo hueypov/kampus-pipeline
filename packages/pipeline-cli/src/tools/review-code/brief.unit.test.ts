@@ -108,6 +108,16 @@ describe("acceptanceCriteria", () => {
 		expect(acceptanceCriteria(b)).toEqual(["the criterion"]);
 	});
 
+	it("does not fold a LEVEL-1 heading into the criterion above it", () => {
+		// The review's mutation test caught the case above passing for the wrong reason: the section
+		// slicer already cuts at any 2+ hash heading before the fold loop runs, so the loop's own
+		// heading guard was reachable only for `# ` — and nothing exercised it. Removing the guard
+		// left every test green while folding "# Notes prose" into the criterion. This input is the
+		// one that kills that mutant.
+		const b = "## Acceptance criteria\n- [ ] the criterion\n# Notes\nprose\n";
+		expect(acceptanceCriteria(b)).toEqual(["the criterion"]);
+	});
+
 	it("still drops an item whose text is empty even after folding", () => {
 		expect(acceptanceCriteria("## Acceptance criteria\n- [ ] \n\n- [ ] real\n")).toEqual(["real"]);
 	});
