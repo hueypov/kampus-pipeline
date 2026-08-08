@@ -451,6 +451,17 @@ describe("pipeline init", () => {
 		expect(command(consumer, ["check"], mockBin).stderr).not.toContain(TERMINAL_DIAGNOSTIC);
 	}, 20_000);
 
+	it("check probes tmux with the flag tmux actually answers", () => {
+		const {consumer, mockBin} = fixture();
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		// Flag-faithful stub: like the real binary, tmux answers `-V` and rejects `--version` —
+		// a blanket exit-0 stub is exactly what let the generic `--version` probe report the
+		// DEFAULT terminal as missing on every machine that had it.
+		write(join(mockBin, "tmux"), '#!/usr/bin/env bash\n[ "$1" = "-V" ] || exit 1\nexit 0\n', true);
+		personalizeCrew(consumer, {operator: "op", terminal: "tmux"});
+		expect(command(consumer, ["check"], mockBin).stderr).not.toContain(TERMINAL_DIAGNOSTIC);
+	}, 20_000);
+
 	it("check reports the configured crew terminal when its binary is absent", () => {
 		const {consumer, mockBin} = fixture();
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);

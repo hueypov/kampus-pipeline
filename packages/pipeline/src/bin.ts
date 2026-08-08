@@ -135,8 +135,8 @@ const assertToolkit = (projectRoot: string): string => {
 	return toolkit;
 };
 
-const commandExists = (command: string): boolean => {
-	const result = spawnSync(command, ["--version"], {stdio: "ignore"});
+const commandExists = (command: string, versionFlag = "--version"): boolean => {
+	const result = spawnSync(command, [versionFlag], {stdio: "ignore"});
 	return !result.error && result.status === 0;
 };
 
@@ -633,6 +633,12 @@ const ensureGitignoreEntry = (projectRoot: string, entry: string): void => {
 
 /** The terminals the crew launcher can place its panes in — the `terminal` config dimension's vocabulary. */
 const CREW_TERMINALS = new Set(["tmux", "herdr"]);
+/**
+ * The version probe each supported terminal actually answers. tmux rejects `--version` outright
+ * (only `-V`), so the generic probe reported the DEFAULT terminal as missing on every machine that
+ * had it — first surfaced by this repository's own personalized config under self-host.
+ */
+const CREW_TERMINAL_VERSION_FLAGS: Record<string, string> = {tmux: "-V", herdr: "--version"};
 /** The terminal a crew config launches under when it omits the dimension entirely. */
 const DEFAULT_CREW_TERMINAL = "tmux";
 
@@ -701,7 +707,7 @@ const checkCrewTerminal = (projectRoot: string): string | undefined => {
 	if (!CREW_TERMINALS.has(terminal)) {
 		return `unsupported crew terminal in ${CREW_CONFIG_RELATIVE_PATH}: ${terminal} (expected one of ${Array.from(CREW_TERMINALS).join(", ")})`;
 	}
-	if (!commandExists(terminal)) {
+	if (!commandExists(terminal, CREW_TERMINAL_VERSION_FLAGS[terminal])) {
 		return `missing required command for the configured crew terminal: ${terminal} (set "terminal" in ${CREW_CONFIG_RELATIVE_PATH}, or install ${terminal})`;
 	}
 	return undefined;
