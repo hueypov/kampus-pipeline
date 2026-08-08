@@ -12,17 +12,30 @@ import {checkVerbPath, refusalMessage, verbTree, type CommandLike} from "./verb-
 const cmd = (
 	name: string,
 	children: ReadonlyArray<CommandLike> = [],
-	args: ReadonlyArray<{kind?: string; max?: {_tag?: string; value?: unknown}}> = [],
+	args: ReadonlyArray<{_tag?: string; kind?: string; max?: {_tag?: string; value?: unknown}}> = [],
+	flags: ReadonlyArray<{name?: string; primitiveType?: {_tag?: string}; param?: unknown}> = [],
 ): CommandLike => ({
 	name,
 	subcommands: children.length > 0 ? [{commands: children}] : [],
-	config: {arguments: args},
+	config: {arguments: args, flags},
 });
 
+const single = {_tag: "Single", kind: "argument"} as const;
+const variadic = {_tag: "Variadic", kind: "argument", max: {_tag: "None"}} as const;
+const strFlag = (name: string) => ({name, primitiveType: {_tag: "String"}});
+const boolFlag = (name: string) => ({name, primitiveType: {_tag: "Boolean"}});
+/** An `Optional`-wrapped flag: the real declaration nests under `.param`, as the framework emits. */
+const wrapped = (name: string) => ({param: {name, primitiveType: {_tag: "String"}}});
+
 const TREE = verbTree("cli", [
-	cmd("triage", [cmd("claim", [], [{kind: "argument"}]), cmd("queue")]),
+	cmd("triage", [
+		cmd("claim", [], [single], [strFlag("session")]),
+		cmd("queue", [], [], [strFlag("stage"), boolFlag("json")]),
+		cmd("enrich", [], [single], [wrapped("note"), boolFlag("epic")]),
+	]),
 	cmd("version"),
-	cmd("wide", [cmd("open", [], [{kind: "argument", max: {_tag: "None"}}])]),
+	cmd("wide", [cmd("open", [], [variadic])]),
+	cmd("mapped", [cmd("op", [], [{_tag: "Map", kind: "argument"}])]),
 ]);
 
 describe("verbTree", () => {
@@ -58,6 +71,30 @@ describe("checkVerbPath — what it refuses", () => {
 	it("refuses any operand on a leaf that declares none", () => {
 		expect(checkVerbPath(TREE, ["triage", "queue", "stray"])?._tag).toBe("ExtraOperand");
 	});
+
+	it("refuses a stray operand AFTER a flag and its value", () => {
+		// The case an earlier revision accepted, having wrongly recorded flag arity as unreadable.
+		expect(checkVerbPath(TREE, ["triage", "queue", "--stage", "x", "stray"])?._tag).toBe(
+			"ExtraOperand",
+		);
+	});
+
+	it("refuses a stray operand after a boolean flag, which consumes nothing", () => {
+		expect(checkVerbPath(TREE, ["triage", "queue", "--json", "stray"])?._tag).toBe("ExtraOperand");
+	});
+
+	it("reads a flag nested under a wrapper, not just a bare one", () => {
+		// `Optional`/`Map` nest the declaration under `.param`. Reading one level finds an undefined
+		// name and looks like missing metadata — the misreading this guard was first built on.
+		expect(checkVerbPath(TREE, ["triage", "enrich", "36", "--note", "x"])).toBeNull();
+		expect(checkVerbPath(TREE, ["triage", "enrich", "36", "--note", "x", "stray"])?._tag).toBe(
+			"ExtraOperand",
+		);
+	});
+
+	it("handles --flag=value without consuming the next token", () => {
+		expect(checkVerbPath(TREE, ["triage", "queue", "--stage=x", "stray"])?._tag).toBe("ExtraOperand");
+	});
 });
 
 describe("checkVerbPath — what it must never refuse", () => {
@@ -85,10 +122,20 @@ describe("checkVerbPath — what it must never refuse", () => {
 		expect(checkVerbPath(TREE, ["wide", "open", "a", "b", "c", "d"])).toBeNull();
 	});
 
-	it("does not guard operands after a flag — the documented bound", () => {
-		// Telling `--pr 47` from `--json 47` needs flag arity the framework does not expose reliably.
-		// This test records the gap so it is a known bound rather than an assumed guarantee.
-		expect(checkVerbPath(TREE, ["triage", "queue", "--stage", "x", "extratoken"])).toBeNull();
+	it("does not mistake a flag's value for an operand", () => {
+		expect(checkVerbPath(TREE, ["triage", "queue", "--stage", "x"])).toBeNull();
+	});
+
+	it("does not count operands past an unrecognised flag", () => {
+		// A global flag like --log-level belongs to the root, not the leaf, so its arity is unknown
+		// here. Stopping accepts less coverage; guessing would refuse working commands.
+		expect(checkVerbPath(TREE, ["triage", "queue", "--log-level", "info", "x"])).toBeNull();
+	});
+
+	it("does not count operands for an argument behind a wrapper it cannot read", () => {
+		// A Map/Transform wrapper carries no `max` of its own, so treating it as single would
+		// recreate the leak-guard false refusal one wrapper deeper.
+		expect(checkVerbPath(TREE, ["mapped", "op", "a", "b", "c"])).toBeNull();
 	});
 });
 
@@ -107,6 +154,29 @@ describe("checkVerbPath — against the live registry", () => {
 				expect(checkVerbPath(live, [tool.name, sub.name]), `${tool.name} ${sub.name}`).toBeNull();
 			}
 		}
+	});
+
+	it("derives an unbounded operand count for every variadic verb in the registry", () => {
+		// The guard's own tests would otherwise never touch a real argument shape: a framework
+		// upgrade renaming `Variadic.max` would leave every synthetic case green while the live
+		// `leak-guard scan` started being refused again.
+		const scan = live.children.find((c) => c.name === "leak-guard")?.children.find((c) => c.name === "scan");
+		expect(scan, "leak-guard scan").toBeDefined();
+		expect(scan?.maxPositionals, "a variadic verb must not be operand-bounded").toBeNull();
+		expect(checkVerbPath(live, ["leak-guard", "scan", "a", "b", "c", "d"])).toBeNull();
+	});
+
+	it("reads a flag arity for every leaf that declares flags", () => {
+		// 219 flags across the registry unwrap to a name; none is unreadable. If a future wrapper
+		// shape breaks that, this reds rather than silently disabling the operand guard.
+		const leaves: Array<{path: string; flags: number}> = [];
+		const walk = (node: typeof live, path: string[]) => {
+			if (node.children.length === 0) leaves.push({path: path.join(" "), flags: node.flags.size});
+			for (const c of node.children) walk(c, [...path, c.name]);
+		};
+		walk(live, []);
+		expect(leaves.length).toBeGreaterThan(50);
+		expect(leaves.some((l) => l.flags > 0), "some leaf must expose readable flags").toBe(true);
 	});
 
 	it("refuses a fabricated subcommand under every group", () => {
