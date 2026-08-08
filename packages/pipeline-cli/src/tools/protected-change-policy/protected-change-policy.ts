@@ -39,7 +39,9 @@ export const classifyProtectedChanges = (
  * Render the configured boundary for POSIX `grep -E` consumers. Policy patterns must
  * already be start-anchored; removing that one leading anchor and supplying a single
  * outer anchor keeps the generated expression both portable and derived only from the
- * configured policy. `^$` intentionally matches no repository-relative changed path.
+ * configured policy. `^$` intentionally matches no repository-relative changed path — it is this
+ * pure function's total-input contract, not a reachable gate state, because a trusted policy can
+ * no longer carry an empty boundary (`parseProtectedChangePolicy` refuses one).
  */
 export const renderProtectedChangeRegex = (patterns: ReadonlyArray<string>): string => {
 	if (patterns.length === 0) return "^$";

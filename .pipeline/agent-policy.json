@@ -107,7 +107,19 @@
 		},
 		"shipping": {
 			"enabled": true,
-			"controlPlanePaths": [],
+			"controlPlanePaths": [
+				"^\\.claude/",
+				"^\\.github/",
+				"^claude-plugins/kampus-pipeline/skills/(ship-it|review-code|review-doc|review-design|review-plan|review-skill|review-trivial|triage|write-code|plan-epic|release)/",
+				"^claude-plugins/kampus-pipeline/skills/([^/]+/)*[^/]+\\.sh$",
+				"^claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats\\.md$",
+				"^claude-plugins/kampus-pipeline/agents/",
+				"^claude-plugins/kampus-pipeline/hooks(/|\\.json$)",
+				"^packages/ci-required/",
+				"^packages/pipeline-cli/",
+				"^biome\\.jsonc$",
+				"^biome-plugins/"
+			],
 			"requiredApprovals": 0,
 			"shipDigest": {
 				"categories": {
