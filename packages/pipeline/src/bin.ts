@@ -411,6 +411,15 @@ fi
 exit 0
 `;
 
+/**
+ * The pre-de-brand rendering of the same hook — byte-identical but for its marker COMMENT line.
+ *
+ * Compared exactly rather than by substring: a hook someone hand-edited still contains the marker,
+ * and treating that as ours would overwrite their edit silently.
+ */
+const legacyPrimaryIndexGuardHook = (): string =>
+	renderPrimaryIndexGuardHook().replace(PRIMARY_INDEX_GUARD_HOOK_MARKER, LEGACY_PRIMARY_INDEX_GUARD_HOOK_MARKER);
+
 type PrimaryIndexGuardHookState = {state: "installed" | "missing-or-drifted"; path?: string; error?: string};
 
 const primaryIndexGuardHookState = (projectRoot: string): PrimaryIndexGuardHookState => {
@@ -421,7 +430,12 @@ const primaryIndexGuardHookState = (projectRoot: string): PrimaryIndexGuardHookS
 	if (!stat) return {state: "missing-or-drifted", path, error: "managed pre-commit hook is missing"};
 	if (!stat.isFile()) return {state: "missing-or-drifted", path, error: "pre-commit exists but is not a managed regular file"};
 	try {
-		if (readFileSync(path, "utf8") !== renderPrimaryIndexGuardHook()) {
+		const body = readFileSync(path, "utf8");
+		// A hook installed before the de-brand differs only in that marker comment, so it RUNS
+		// identically. Calling it drifted would fail `init --check` — and the doctor skill with it —
+		// on a working guard this tool wrote, with nothing in `init` to repair it. `install-hook`
+		// rewrites it to the current marker whenever the adopter next runs it.
+		if (body !== renderPrimaryIndexGuardHook() && body !== legacyPrimaryIndexGuardHook()) {
 			return {state: "missing-or-drifted", path, error: "pre-commit is not the expected managed primary-index-guard wrapper"};
 		}
 	} catch {
@@ -452,7 +466,7 @@ const installPrimaryIndexGuardHook = (projectRoot: string): void => {
 		let managed = false;
 		try {
 			const body = existing.isFile() ? readFileSync(path, "utf8") : "";
-			managed = body.includes(PRIMARY_INDEX_GUARD_HOOK_MARKER) || body.includes(LEGACY_PRIMARY_INDEX_GUARD_HOOK_MARKER);
+			managed = body.includes(PRIMARY_INDEX_GUARD_HOOK_MARKER) || body === legacyPrimaryIndexGuardHook();
 		} catch {}
 		if (!managed) fail(primaryIndexGuardHookIntegration());
 	} else {
@@ -592,6 +606,24 @@ const mergePackageScript = (projectRoot: string): void => {
 	writeJson(packagePath, packageJson);
 };
 
+/**
+ * Whether a path standing where a managed link belongs is ours to write.
+ *
+ * `expected` is already the link we want. `ours` is the link we last recorded, pointing at a payload
+ * path that has since moved — ours to retarget. `force` cannot cover that case: it compares the
+ * recorded target to the NEW one, so it only ever repairs a link that drifted in place, never one
+ * whose target was renamed, which is exactly what a payload rename produces. Anything else is the
+ * adopter's, by the same rule `retireLegacyPluginLink` uses to decide what it may remove.
+ */
+const managedLinkOwnership = (path: string, expectedTarget: string, recordedTarget: string | undefined): {expected: boolean; ours: boolean} => {
+	try {
+		const link = lstatSync(path).isSymbolicLink() ? readlinkSync(path) : null;
+		return {expected: link === expectedTarget, ours: link !== null && recordedTarget === link};
+	} catch {
+		return {expected: false, ours: false};
+	}
+};
+
 const linkEntries = (projectRoot: string, toolkitRoot: string, sourceRelative: string, destinationRelative: string, accept: (name: string) => boolean, force: boolean, prior: Map<string, string>): ManagedPath[] => {
 	const source = join(toolkitRoot, sourceRelative);
 	const destination = join(projectRoot, destinationRelative);
@@ -604,22 +636,11 @@ const linkEntries = (projectRoot: string, toolkitRoot: string, sourceRelative: s
 			const relativePath = relative(projectRoot, path);
 			const expectedTarget = relative(dirname(path), target);
 			if (existsSync(path) || (() => { try { return lstatSync(path).isSymbolicLink(); } catch { return false; } })()) {
-				let isExpected = false;
-				let isOursRetargeted = false;
-				try {
-					const link = lstatSync(path).isSymbolicLink() ? readlinkSync(path) : null;
-					isExpected = link === expectedTarget;
-					// Still exactly the link we last recorded, but the payload it points at has since
-					// moved — ours to retarget. The `force` clause below cannot cover this: it compares
-					// the recorded target to the NEW one, so it only ever repairs a link that drifted in
-					// place, never one whose target was renamed. Same rule as `retireLegacyPluginLink` —
-					// a path the adopter replaced with their own file is still theirs.
-					isOursRetargeted = link !== null && prior.get(relativePath) === link;
-				} catch {}
-				if (!isExpected && !isOursRetargeted && !(force && prior.get(relativePath) === expectedTarget)) {
+				const {expected, ours} = managedLinkOwnership(path, expectedTarget, prior.get(relativePath));
+				if (!expected && !ours && !(force && prior.get(relativePath) === expectedTarget)) {
 					fail(`refusing to replace existing ${relativePath}`);
 				}
-				if (!isExpected) rmSync(path, {recursive: true, force: true});
+				if (!expected) rmSync(path, {recursive: true, force: true});
 			}
 			if (!existsSync(path)) symlinkSync(expectedTarget, path, entry.isDirectory() ? "dir" : "file");
 			return {path: relativePath, target: expectedTarget};
@@ -633,16 +654,8 @@ const linkManagedFile = (projectRoot: string, toolkitRoot: string, sourceRelativ
 	const target = relative(dirname(destination), source);
 	const existing = lstatSyncSafe(destination);
 	if (existing) {
-		let expected = false;
-		let oursRetargeted = false;
-		try {
-			const link = existing.isSymbolicLink() ? readlinkSync(destination) : null;
-			expected = link === target;
-			// Ours, pointing at a payload path that moved — retarget rather than refuse. See the
-			// matching branch in `linkEntries` for why `force` does not cover this case.
-			oursRetargeted = link !== null && prior.get(destinationRelative) === link;
-		} catch {}
-		if (!expected && !oursRetargeted && !(force && prior.get(destinationRelative) === target)) {
+		const {expected, ours} = managedLinkOwnership(destination, target, prior.get(destinationRelative));
+		if (!expected && !ours && !(force && prior.get(destinationRelative) === target)) {
 			fail(`refusing to replace existing ${destinationRelative}`);
 		}
 		if (!expected) rmSync(destination, {recursive: true, force: true});

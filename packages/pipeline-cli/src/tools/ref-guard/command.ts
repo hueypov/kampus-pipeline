@@ -152,21 +152,60 @@ const V1_LINES: ReadonlyArray<string | RegExp> = [
 	"",
 ];
 
-/**
- * v2's body as this tool renders it today, but carrying the RETIRED marker — what an install from
- * before the de-brand left on disk. The body is otherwise byte-identical, so it is derived from the
- * live renderer rather than transcribed: a future edit to the hook cannot drift this shape out of
- * sync with it.
- */
+/** The baked fallback path varies per install, so every v2 shape leaves that one line open. */
+const V2_RECORDED = /^ {2}"[^"]*"$/;
 const RECORDED_SENTINEL = "@@recorded@@";
-const V2_LEGACY_LINES: ReadonlyArray<string | RegExp> = renderManagedHook(RECORDED_SENTINEL)
+
+/**
+ * v2's body as this tool renders it TODAY, with the recorded path left open.
+ *
+ * Derived from the live renderer on purpose: it describes what `install` writes right now, so it
+ * must track the renderer. Without it, a repository that was moved after installing — the very case
+ * v2 exists to fix — matches no shape, reads as `drifted`, and `install` refuses to repair the hook
+ * it wrote itself, failing `pipeline init` with it.
+ */
+const V2_CURRENT_LINES: ReadonlyArray<string | RegExp> = renderManagedHook(RECORDED_SENTINEL)
 	.split("\n")
-	.map((line, index) =>
-		index === 1
-			? `${LEGACY_MARKER_PREFIX} v2`
-			// The recorded fallback path is baked at install time, so it is left open.
-			: line.includes(RECORDED_SENTINEL) ? /^ {2}"[^"]*"$/ : line,
-	);
+	.map((line) => (line.includes(RECORDED_SENTINEL) ? V2_RECORDED : line));
+
+/**
+ * v2's body as it was written BEFORE the toolkit dropped its `kampus` names — a frozen historical
+ * artifact, so it is transcribed rather than derived.
+ *
+ * Deriving it from the live renderer would be wrong in a way that hides itself: the day someone
+ * edits the hook body, the shape would re-derive to the new text and stop matching any hook actually
+ * on disk from before the rename, silently retiring this migration with no test failing. `V1_LINES`
+ * above is frozen for the same reason.
+ */
+const V2_LEGACY_LINES: ReadonlyArray<string | RegExp> = [
+	"#!/bin/sh",
+	`${LEGACY_MARKER_PREFIX} v2`,
+	"# Git only aborts a reference transaction for this command's deliberate refusal.",
+	"# The toolkit and interpreter are resolved at run time — see ref-guard/command.ts.",
+	"status=0",
+	'root=$(git rev-parse --show-toplevel 2>/dev/null) || root=""',
+	'bin=""',
+	"for candidate in \\",
+	'  "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\',
+	'  "$root/packages/pipeline-cli/src/bin.ts" \\',
+	V2_RECORDED,
+	"do",
+	'  if [ -f "$candidate" ]; then bin="$candidate"; break; fi',
+	"done",
+	'if [ -z "$bin" ]; then',
+	`  echo "ref-guard: no toolkit under '$root' and none at the recorded path — THE GUARD IS NOT RUNNING; re-run pipeline init" >&2`,
+	"  exit 0",
+	"fi",
+	'node_bin=$(command -v node 2>/dev/null) || node_bin=""',
+	'if [ -z "$node_bin" ]; then',
+	`  echo "ref-guard: no node on PATH — THE GUARD IS NOT RUNNING" >&2`,
+	"  exit 0",
+	"fi",
+	'"$node_bin" "$bin" ref-guard reference-transaction "$1" || status=$?',
+	`[ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1`,
+	"exit 0",
+	"",
+];
 
 const matchesShape = (actual: string, shape: ReadonlyArray<string | RegExp>): boolean => {
 	const lines = actual.split("\n");
@@ -179,7 +218,7 @@ const matchesShape = (actual: string, shape: ReadonlyArray<string | RegExp>): bo
 
 /** A hook body this tool wrote in an earlier version, UNEDITED — the only kind `install` replaces. */
 const isKnownManagedHook = (actual: string): boolean =>
-	matchesShape(actual, V1_LINES) || matchesShape(actual, V2_LEGACY_LINES);
+	matchesShape(actual, V1_LINES) || matchesShape(actual, V2_CURRENT_LINES) || matchesShape(actual, V2_LEGACY_LINES);
 
 export type HookState = "absent" | "installed" | "outdated" | "drifted" | "foreign";
 

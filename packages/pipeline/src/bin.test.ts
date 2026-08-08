@@ -436,7 +436,9 @@ describe("pipeline init", () => {
 		expect(command(consumer, ["primary-index-guard", "install-hook"], mockBin).status).toBe(0);
 		const commonDir = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {cwd: consumer, encoding: "utf8"}).trim();
 		const hook = join(commonDir, "hooks/pre-commit");
-		expect(readFileSync(hook, "utf8")).toContain("pipeline primary-index-guard managed hook");
+		// Anchored on the leading "# " so the retired `# kampus-pipeline …` marker cannot satisfy it
+		// as a substring — without the anchor this assertion passes either spelling and pins nothing.
+		expect(readFileSync(hook, "utf8")).toContain("# pipeline primary-index-guard managed hook");
 		expect(lstatSync(hook).mode & 0o111).not.toBe(0);
 		expect(command(consumer, ["primary-index-guard", "check-hook"], mockBin).status).toBe(0);
 		for (const [cliStatus, expectedHookStatus] of [["0", 0], ["3", 1], ["2", 0]] as const) {
@@ -450,6 +452,33 @@ describe("pipeline init", () => {
 		expect(readFileSync(join(consumer, ".pipeline/toolkit/bin/pipeline.calls"), "utf8")).toContain("primary-index-guard pre-commit");
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
 		expect(JSON.parse(command(consumer, ["status", "--json"], mockBin).stdout).core).toContainEqual(expect.objectContaining({name: "primary-index-guard", type: "git-hook", state: "installed"}));
+	}, 20_000);
+
+	it("accepts a pre-commit hook installed before the de-brand, and still refuses a hand-edited one", () => {
+		const {consumer, mockBin} = fixture();
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		write(join(consumer, ".pipeline/agent-policy.json"), `${enabledPrimaryIndexGuardPolicy}\n`);
+		expect(command(consumer, ["primary-index-guard", "install-hook"], mockBin).status).toBe(0);
+		const commonDir = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {cwd: consumer, encoding: "utf8"}).trim();
+		const hook = join(commonDir, "hooks/pre-commit");
+		const current = readFileSync(hook, "utf8");
+		const legacy = current.replace("# pipeline primary-index-guard managed hook", "# kampus-pipeline primary-index-guard managed hook");
+		expect(legacy).not.toBe(current);
+
+		// The marker is a comment, so a pre-de-brand hook runs identically. It must not read as
+		// drifted: nothing in `init` repairs this hook, so doctor would stay red on a working guard.
+		writeFileSync(hook, legacy);
+		expect(command(consumer, ["primary-index-guard", "check-hook"], mockBin).status).toBe(0);
+		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
+		// And it is still ours to rewrite to the current marker.
+		expect(command(consumer, ["primary-index-guard", "install-hook"], mockBin).status).toBe(0);
+		expect(readFileSync(hook, "utf8")).toBe(current);
+
+		// Recognition is exact, not a marker substring: an edited legacy hook is the adopter's.
+		writeFileSync(hook, `${legacy}\n# local tweak\n`);
+		const refused = command(consumer, ["primary-index-guard", "install-hook"], mockBin);
+		expect(refused.status).toBe(1);
+		expect(readFileSync(hook, "utf8")).toBe(`${legacy}\n# local tweak\n`);
 	}, 20_000);
 
 	it("preserves an unrelated pre-commit hook and rejects invalid enabled policy", () => {

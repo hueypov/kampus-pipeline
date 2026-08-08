@@ -98,6 +98,14 @@ describe("ref-guard managed hook contract", () => {
 		expect(inspectHook(tmpHook(other), expected)).toBe("outdated");
 	});
 
+	it("upgrades a current v2 hook whose baked path moved, instead of refusing to repair it", () => {
+		const expected = renderManagedHook();
+		// A repository moved or re-cloned after installing: same body, different recorded fallback.
+		// Reading this as `drifted` makes `install` refuse — and `pipeline init` fails with it — on
+		// the exact moved-clone case v2 exists to fix.
+		expect(inspectHook(tmpHook(renderManagedHook("/where/the/toolkit/used/to/be/bin.ts")), expected)).toBe("outdated");
+	});
+
 	it("upgrades a v2 hook carrying the retired marker instead of disowning it", () => {
 		const expected = renderManagedHook();
 		// Every hook installed before the toolkit dropped its `kampus` names carries the old marker.
