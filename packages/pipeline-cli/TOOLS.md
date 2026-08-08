@@ -112,7 +112,11 @@ the routing rules with a shell `grep` or a second Node classifier.
 - For delivery decisions, pass `--policy-ref <base-sha-or-ref>`. The tool reads policy through
   `git show`, preventing a PR from relaxing the rules used to decide its own required review set.
 - A non-empty diff outside every configured class receives `review-code`. Missing, malformed,
-  unreadable, or invalid policy over-dispatches every namespace; an empty diff emits no namespace.
+  unreadable, or invalid policy over-dispatches every namespace.
+- The changed-path list is a precondition, not an answer. A list that was read and held nothing
+  exits `EMPTY_INPUT` (3) and a list that could not be read exits `FAILED` (1), both printing no
+  namespaces: an unread diff is not a diff that requires no review, and a caller piping from a
+  network read gets an empty list on any transient failure.
 
 ```bash
 gh api --paginate "repos/$REPO/pulls/$PR/files?per_page=100" --jq '.[].filename' \
