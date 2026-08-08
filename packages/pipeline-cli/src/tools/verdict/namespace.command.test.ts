@@ -55,12 +55,28 @@ const post = (cwd: string, gate: string, bodyFile: string): Promise<RunResult> =
 	});
 
 const authed = ghAuthed();
-if (!authed) {
-	// eslint-disable-next-line no-console
-	console.error(
-		"namespace.command.test: SKIPPED — no authenticated gh, so the live-PR probes cannot run. The guardPolicy seam is still pinned by the unit suite.",
-	);
-}
+/** GitHub Actions and most CI set this; locally it is absent. */
+const inCI = process.env.CI === "true" || process.env.CI === "1";
+
+/**
+ * A skip must not be able to masquerade as coverage.
+ *
+ * The first version printed its reason with `console.error` and skipped. Under vitest's DEFAULT
+ * reporter — the one `pnpm -r test` and therefore CI runs — that reason is never displayed: the
+ * output is `Tests 2 skipped (2)`, exit 0, and the guard's only wiring witnesses are silently
+ * absent. Review caught the claim "skips loudly" being false exactly there.
+ *
+ * So the skip is local-only. In CI, being unable to run these is itself the defect: CI is where the
+ * coverage is claimed, and a harness that cannot authenticate has removed a witness rather than
+ * excused one.
+ */
+describe("verdict-namespace guard — spawned witnesses (#66)", () => {
+	it.skipIf(authed || !inCI)("CI must be able to run the live-PR probes", () => {
+		assert.fail(
+			"no authenticated gh in CI, so the spawned namespace witnesses cannot run — set GH_TOKEN on the test step. A skip here would report coverage that does not exist.",
+		);
+	});
+});
 
 describe.skipIf(!authed)("verdict-namespace guard — spawned witnesses (#66)", () => {
 	let dir: string;
