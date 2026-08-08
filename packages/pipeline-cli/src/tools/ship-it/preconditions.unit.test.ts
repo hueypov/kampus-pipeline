@@ -9,6 +9,7 @@ import {
 	firstRefusal,
 	gatePrecondition,
 	gatesForFiles,
+	namespaceCheck,
 	parseGateList,
 	mergeablePrecondition,
 	ok,
@@ -180,5 +181,56 @@ describe("parseGateList — an explicit --gates must not weaken the gate", () =>
 	it("accepts the gates, with or without the review- prefix", () => {
 		expect(parseGateList("code")).toEqual(["code"]);
 		expect(parseGateList("review-code, doc")).toEqual(["code", "doc"]);
+	});
+});
+
+describe("namespaceCheck — a verdict may only land in a namespace the diff requires", () => {
+	const policy = {
+		code: {includePatterns: ["^(packages|src)/"], excludePatterns: []},
+		// Mirrors the real policy's shape: docs EXCLUDES skill dirs, exactly as the in-force
+		// agent-policy.json does — an earlier fixture omitted that exclusion and disagreed with the
+		// code about a skill diff, which was the fixture's defect, not the code's.
+		docs: {includePatterns: ["\\.md$"], excludePatterns: ["^(packages|src)/", "(^|/)skills/"]},
+		skills: {includePatterns: ["(^|/)skills/"], excludePatterns: []},
+		design: {includePatterns: ["\\.css$"], excludePatterns: []},
+	};
+
+	it("allows a gate the diff requires", () => {
+		expect(namespaceCheck("code", ["packages/a.ts"], policy)).toEqual({_tag: "allowed"});
+	});
+
+	it("refuses the habitual gate on a diff that classifies elsewhere, naming what it requires", () => {
+		// The defect class behind #60's history: skill diffs carrying review-code verdicts, the
+		// required gates unmet while the reviewer believed it reviewed.
+		expect(namespaceCheck("code", ["skills/triage/SKILL.md"], policy)).toEqual({
+			_tag: "refused",
+			required: ["skill"],
+		});
+	});
+
+	it("allows any one gate of a mixed diff's several", () => {
+		// Posting one of N required gates is legitimate; COVERAGE of all N is ship-it's check, not
+		// this one. Refusing here would force one reviewer to fabricate the sibling checklists.
+		expect(namespaceCheck("doc", ["packages/a.ts", "docs/b.md"], policy)).toEqual({_tag: "allowed"});
+	});
+
+	it("returns unchecked for an empty file list rather than refusing", () => {
+		// Deliberately weaker than ship-it's refusal on the same input: a merge on unknown scope is
+		// unsafe, a review withheld on unknown scope is just lost. The caller warns aloud.
+		expect(namespaceCheck("code", [], policy)).toEqual({_tag: "unchecked"});
+	});
+
+	it("returns unchecked for a NULL policy — never allowed", () => {
+		// The inversion the first live probe demonstrated: defaulting a missing policy to the
+		// classify-everything fail-closed policy makes every gate "required", so the refusal guard
+		// never refuses — fail-open in exactly the worktrees reviews run from. Null means the check
+		// cannot run, and the caller says so aloud.
+		expect(namespaceCheck("design", ["packages/a.ts"], null)).toEqual({_tag: "unchecked"});
+	});
+
+	it("still refuses under an explicit classify-everything policy only by inclusion", () => {
+		// If a caller DOES hand over the fail-closed policy, every namespace is genuinely in scope
+		// and allowing is correct — the defect was the silent defaulting, not this input.
+		expect(namespaceCheck("design", ["whatever"], FAIL_CLOSED_POLICY)).toEqual({_tag: "allowed"});
 	});
 });

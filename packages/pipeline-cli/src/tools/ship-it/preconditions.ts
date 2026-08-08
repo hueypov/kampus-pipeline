@@ -164,3 +164,36 @@ export const parseGateList = (raw: string): ReadonlyArray<VerdictGate> | null =>
 	const gates = tokens.filter((g): g is VerdictGate => (GATES as ReadonlyArray<string>).includes(g));
 	return gates.length === tokens.length ? gates : null;
 };
+
+/** The verdict-post namespace decision, pure so the refusal that guards the gate record is tested. */
+export type NamespaceCheck =
+	| {readonly _tag: "allowed"}
+	| {readonly _tag: "refused"; readonly required: ReadonlyArray<VerdictGate>}
+	| {readonly _tag: "unchecked"};
+
+/**
+ * May a verdict in `gate` be posted for a diff of `files`?
+ *
+ * `policy` is nullable, and null means UNCHECKED — never "classify fail-closed". The fail-closed
+ * default is correct for `ship-it`, where classifying everything requires MORE gates and the gate
+ * gets stricter; fed to a refusal guard it inverts, because a scope of every-namespace contains
+ * every `--gate` value and nothing is ever refused. The first live probe of this guard proved it:
+ * run from a worktree with no policy file, it fail-OPENED and posted a design verdict on a code
+ * diff — the exact stray this guard exists to stop.
+ *
+ * `unchecked` — a missing policy or an empty file list — warns rather than refuses: this is not
+ * the last line of defence (`ship-it` re-derives the same scope at the merge and refuses there),
+ * and blocking every review on an unreadable scope would stop all work to prevent something
+ * already caught downstream. A merge on unknown scope is unsafe; a review withheld on unknown
+ * scope is just lost.
+ */
+export const namespaceCheck = (
+	gate: VerdictGate,
+	files: ReadonlyArray<string>,
+	policy: ClassificationPolicy | null,
+): NamespaceCheck => {
+	if (policy === null) return {_tag: "unchecked"};
+	const required = gatesForFiles(files, policy);
+	if (required === null) return {_tag: "unchecked"};
+	return required.includes(gate) ? {_tag: "allowed"} : {_tag: "refused", required};
+};

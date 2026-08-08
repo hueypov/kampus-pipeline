@@ -29,6 +29,8 @@
 import {readFileSync} from "node:fs";
 import {Console, Effect, Option} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
+import {readClassificationPolicy, repositoryRoot} from "../class-probe/policy.ts";
+import {namespaceCheck} from "../ship-it/preconditions.ts";
 import {GithubTrackerLive, Tracker} from "../tracker/tracker.ts";
 import * as Exit from "../../exit-codes.ts";
 import {Github, GithubLive} from "./github.ts";
@@ -136,6 +138,30 @@ const asFlag = Flag.string("as").pipe(
 
 
 /** Refuse a self-verdict with its own exit code, so it is never confused with a malformed body. */
+/**
+ * Refuse a verdict in a namespace this diff does not classify to.
+ *
+ * A verdict is a gate artifact, and a gate the diff does not require is one nothing will read. The
+ * damage is not that the stray verdict is ignored — it is that the REQUIRED gate stays unmet while
+ * the reviewer believes it reviewed. Two of this repository's own merges went that way: skill diffs
+ * carrying a `review-code` PASS, with the missing `review-skill` invisible because the merge gate
+ * was separately deriving its scope from the verdicts that existed (#60).
+ *
+ * `ship-it` catches this at the merge. Catching it here is better: the reviewer learns while it
+ * still has the diff in hand, and the stray verdict never enters the record.
+ */
+const refuseWrongNamespace = (
+	pr: number,
+	gate: VerdictGate,
+	required: ReadonlyArray<VerdictGate>,
+): Effect.Effect<never> =>
+	Effect.sync(() => {
+		process.stderr.write(
+			`verdict post: #${pr} classifies to ${required.map((g) => `review-${g}`).join(", ")}, not review-${gate} — a verdict in a namespace the diff does not require leaves the one it does require unmet\n`,
+		);
+		process.exit(Exit.ZERO_SCOPE);
+	});
+
 const refuseSelfVerdict = (pr: number): Effect.Effect<never> =>
 	Effect.sync(() => {
 		process.stderr.write(
@@ -179,6 +205,36 @@ const post = Command.make(
 				`cannot resolve the reviewing identity or #${pr}'s author — refusing rather than posting an ungated verdict`,
 			);
 		}
+		// The namespace must be one the diff actually requires. Deliberately AFTER the split-role
+		// check, because who is posting matters more than where.
+		//
+		// A classification that cannot be made warns and allows, rather than refusing. This is not
+		// the last line of defence — `ship-it` re-derives the same scope at the merge and refuses
+		// there — and blocking every review on an unreadable classification would stop all work to
+		// prevent something already caught downstream.
+		const changed = yield* (yield* Tracker).listPrFiles(pr).pipe(
+			Effect.catchTags({
+				"@kampus/gh-io/GhCommandError": () => Effect.succeed([] as ReadonlyArray<string>),
+				"@kampus/gh-io/GhParseError": () => Effect.succeed([] as ReadonlyArray<string>),
+				"@kampus/gh-io/RepoResolutionError": () => Effect.succeed([] as ReadonlyArray<string>),
+				SchemaError: () => Effect.succeed([] as ReadonlyArray<string>),
+			}),
+		);
+		const root = repositoryRoot();
+		const policy = root === null ? null : readClassificationPolicy(root, null);
+		// The policy passes through nullable — NEVER defaulted to the fail-closed classify-everything
+		// policy, which contains every gate and turns this refusal guard fail-open (its first live
+		// probe posted a design verdict on a code diff from a policy-less worktree that way).
+		const scope = namespaceCheck(g, changed, policy?.policy ?? null);
+		if (scope._tag === "refused") return yield* refuseWrongNamespace(pr, g, scope.required);
+		if (scope._tag === "unchecked") {
+			// Said aloud rather than skipped silently — a check that did not run must never read as
+			// one that passed. ship-it re-derives this scope at the merge and refuses there.
+			yield* Console.error(
+				`verdict post: #${pr}'s namespace check did NOT run (no readable policy or file list from ${root ?? "an unresolved root"}) — ship-it re-derives this at the merge`,
+			);
+		}
+
 		// Carry the repair-round count across the upsert. Counting FAIL markers cannot work: one
 		// verdict per gate is upserted, so the FAIL a repair answered is destroyed by the PASS that
 		// follows it (#21). The count lives in the surviving marker and the verb maintains it, so a
