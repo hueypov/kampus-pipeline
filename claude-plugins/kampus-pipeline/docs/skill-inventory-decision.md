@@ -2,9 +2,9 @@
 
 Decided 2026-08-08, closing [#41](https://github.com/hueypov/kampus-pipeline/issues/41).
 
-All 23 skills under `skills/` ship. `pipeline init` installs every one of them into an adopting
-repository, so each is a routing surface in somebody else's project whether or not anyone here
-uses it. That is the reason this decision exists and the reason it is not "leave it, it's harmless".
+All 23 skills under `skills/` shipped when this was decided; 22 do now. `pipeline init` installs
+every one of them into an adopting repository, so each is a routing surface in somebody else's
+project whether or not anyone here uses it. That is the reason this decision exists and the reason it is not "leave it, it's harmless".
 
 Three skills — `campaign`, `release`, `rite-audit` — were deleted rather than rewritten, on a
 judgment made case by case with no stated rule. This records the rule, applies it to the rest, and
@@ -75,10 +75,21 @@ Reversible on request; recorded here so the loose end is visible rather than dis
 
 ## Retracted — `architecture-audit` was deleted on a measurement error
 
-It was deleted, and it should not have been. The verdict rested on a claim in the section above —
-*"every skill deleted has zero inbound references"* — and that claim was false, produced by measuring
-the deletions and the keeps with **two different greps**: a `skills/<name>` path form for one, a
-backtick form for the other. Measured consistently at the commit before the deletion:
+It was deleted, and it should not have been. The verdict rested on a reachability claim that was
+false, produced by measuring the deletions and the keeps with **two different greps**: a
+`skills/<name>` path form for the deletions — which returns **zero for every skill in the
+repository**, including the ones kept — and a backtick form for the keeps.
+
+The exact words that error produced, at commit `34d06d7`, were *"nothing routes to it — no agent, no
+crew role, no stage"* for `architecture-audit`, and *"Zero inbound references"* for `what-shipped`.
+Both were written with the broken measurement in hand.
+
+*(An earlier revision of this retraction quoted a sentence — "every skill deleted has zero inbound
+references" — that appears nowhere in the original. It was a paraphrase presented as a quotation.
+Corrected here, and noted rather than silently fixed, because inventing a citation inside a document
+about a measurement error is the same failure wearing different clothes.)*
+
+Measured consistently at the commit before the deletion:
 
 | Skill | Referencing files | Verdict given |
 |---|---|---|
@@ -100,20 +111,22 @@ re-checking it.
 *against* an architecture audit, which is a different job — that distinction is the reason those
 references exist, and collapsing all three into `report` erased a real boundary.
 
-The skill and all three pointers are restored. **The lesson is a rule for this document, not a
-footnote:** measure every candidate with one query, and never let the cleanup for a verdict run
-before the verdict is checked.
+The skill and all four pointers are restored. **The lesson is a rule for this document, not a
+footnote:** measure every candidate with one query, check that query returns non-zero for something
+you intend to keep, and never let a verdict's cleanup run before the verdict is re-checked.
 
-## Kept — sixteen
+The `skills/<name>` pattern would have failed that middle test immediately — it returns zero for
+`adr`, `report`, and every other skill in the repository. A query that finds nothing anywhere is not
+evidence of absence; it is a broken query.
+
+## Kept — sixteen (fifteen below, plus `architecture-audit` — see the retraction)
 
 **Agent-reachable, so reachable by construction:** `adr`, `canon`, the four review gates the
 `reviewer` agent lists (`review-design`, `review-doc`, `review-plan`, `review-skill`), and
 `wayfinder` via the crew's `crew-cartographer`.
 
 `wayfinder` is the one kept against its own reading. At 571 lines it is the largest skill here, it
-keys on a `wayfinder:map` label a fresh adopter does not have, and it is the sole dependant of
-[#6](https://github.com/hueypov/kampus-pipeline/issues/6), an unbuilt CLI it has waited on since
-July. Grounded is satisfied only because `doctor` already treats that label as a Tier-3 optional and
+keys on a `wayfinder:map` label a fresh adopter does not have. Grounded is satisfied only because `doctor` already treats that label as a Tier-3 optional and
 reports its absence rather than matching nothing — which is the toolkit handling the case correctly,
 not the skill. It stays because two other layers were built to call it; revisit if the cartographer
 role is ever retired.
