@@ -7,13 +7,13 @@
  */
 import {describe, expect, it} from "@effect/vitest";
 import {registeredTools} from "./registry.ts";
-import {checkVerbPath, refusalMessage, verbTree, type CommandLike} from "./verb-path.ts";
+import {checkVerbPath, refusalMessage, verbTree, type CommandLike, type FlagLike} from "./verb-path.ts";
 
 const cmd = (
 	name: string,
 	children: ReadonlyArray<CommandLike> = [],
 	args: ReadonlyArray<{_tag?: string; kind?: string; max?: {_tag?: string; value?: unknown}}> = [],
-	flags: ReadonlyArray<{name?: string; primitiveType?: {_tag?: string}; param?: unknown}> = [],
+	flags: ReadonlyArray<FlagLike> = [],
 ): CommandLike => ({
 	name,
 	subcommands: children.length > 0 ? [{commands: children}] : [],
