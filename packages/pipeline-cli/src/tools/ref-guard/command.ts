@@ -97,6 +97,17 @@ export const hookPathFor = (root: string): string | null => {
  * which has one. When no candidate decides, the hook says THE GUARD IS NOT RUNNING in the same
  * voice as its two other degraded paths, and still exits 0.
  *
+ * Each attempt's stderr is buffered rather than inherited, and released only if no candidate
+ * decided. A copy that dies at module load prints a full module-resolution trace, and inherited
+ * that trace reached the terminal on every ref update even once a later candidate had run the
+ * guard successfully — the noise #85 names as the harm, now describing a copy nothing depended on.
+ * Buffered, it surfaces only beside THE GUARD IS NOT RUNNING, where it is the diagnosis rather than
+ * a thing to learn to ignore. A deciding candidate's own stderr is replayed before the hook exits,
+ * so a refusal still delivers its reason; stdout is passed through fd 3 so only stderr is captured.
+ * That fd is opened by a redirection on the loop's brace group rather than by `exec`, because a
+ * redirection that fails on a special built-in exits a non-interactive shell outright — and a hook
+ * that dies there returns non-zero, which is precisely the abort this design refuses to risk.
+ *
  * Stdin is read once and replayed per attempt: Git delivers the update lines on the pipe, and a
  * first attempt that consumed them would leave every later attempt judging an empty transaction.
  * That is not hypothetical — the verb reads stdin before anything else, so any failure after that
@@ -126,6 +137,8 @@ if [ -z "$node_bin" ]; then
 fi
 updates=$(cat)
 tried=""
+noise=""
+{
 for candidate in \\
   "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\
   "$root/packages/pipeline-cli/src/bin.ts" \\
@@ -136,11 +149,20 @@ do
   real="$dir/$(basename -- "$candidate")"
   case "$tried" in *"|$real|"*) continue ;; esac
   tried="$tried|$real|"
-  printf '%s\\n' "$updates" | "$node_bin" "$candidate" ref-guard reference-transaction "$1"
+  errs=$(printf '%s\\n' "$updates" | "$node_bin" "$candidate" ref-guard reference-transaction "$1" 2>&1 1>&3)
   status=$?
-  [ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1
-  [ "$status" -eq 0 ] && exit 0
+  if [ "$status" -eq ${REFUSE_EXIT_CODE} ] || [ "$status" -eq 0 ]; then
+    [ -n "$errs" ] && printf '%s\\n' "$errs" >&2
+    [ "$status" -eq 0 ] && exit 0
+    exit 1
+  fi
+  if [ -n "$errs" ]; then
+    noise="$noise$errs
+"
+  fi
 done
+} 3>&1
+[ -n "$noise" ] && printf '%s' "$noise" >&2
 echo "ref-guard: no toolkit under '$root' could run the guard — THE GUARD IS NOT RUNNING; run pnpm install here, or re-run pipeline init" >&2
 exit 0
 `;
@@ -233,6 +255,8 @@ const V3_LINES: ReadonlyArray<string | RegExp> = [
 	"fi",
 	"updates=$(cat)",
 	'tried=""',
+	'noise=""',
+	"{",
 	"for candidate in \\",
 	'  "$root/.pipeline/toolkit/packages/pipeline-cli/src/bin.ts" \\',
 	'  "$root/packages/pipeline-cli/src/bin.ts" \\',
@@ -243,11 +267,20 @@ const V3_LINES: ReadonlyArray<string | RegExp> = [
 	'  real="$dir/$(basename -- "$candidate")"',
 	'  case "$tried" in *"|$real|"*) continue ;; esac',
 	'  tried="$tried|$real|"',
-	`  printf '%s\\n' "$updates" | "$node_bin" "$candidate" ref-guard reference-transaction "$1"`,
+	`  errs=$(printf '%s\\n' "$updates" | "$node_bin" "$candidate" ref-guard reference-transaction "$1" 2>&1 1>&3)`,
 	"  status=$?",
-	`  [ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1`,
-	'  [ "$status" -eq 0 ] && exit 0',
+	`  if [ "$status" -eq ${REFUSE_EXIT_CODE} ] || [ "$status" -eq 0 ]; then`,
+	`    [ -n "$errs" ] && printf '%s\\n' "$errs" >&2`,
+	'    [ "$status" -eq 0 ] && exit 0',
+	"    exit 1",
+	"  fi",
+	'  if [ -n "$errs" ]; then',
+	'    noise="$noise$errs',
+	'"',
+	"  fi",
 	"done",
+	"} 3>&1",
+	`[ -n "$noise" ] && printf '%s' "$noise" >&2`,
 	`echo "ref-guard: no toolkit under '$root' could run the guard — THE GUARD IS NOT RUNNING; run pnpm install here, or re-run pipeline init" >&2`,
 	"exit 0",
 	"",

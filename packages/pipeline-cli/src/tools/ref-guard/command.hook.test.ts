@@ -95,6 +95,62 @@ describe("ref-guard installed hook", () => {
 		}
 	}, HOOK_TIMEOUT);
 
+	/**
+	 * The plant is an uninstalled dependency, not a quiet `exit 1`: #85's symptom is the trace
+	 * itself, so a fixture that prints nothing measures the fixture. This one reproduces the
+	 * reported condition — a real `ERR_MODULE_NOT_FOUND` on stderr, exit 1 — and the two cases below
+	 * pin the two halves of the answer: held back when it explains nothing, released when it is the
+	 * diagnosis.
+	 */
+	const plantUninstalledCandidate = (): string => {
+		const dir = join(clone, "packages/pipeline-cli/src");
+		mkdirSync(dir, {recursive: true});
+		writeFileSync(join(dir, "bin.ts"), 'import "@kampus-pipeline/definitely-not-installed";\n');
+		return join(clone, "packages");
+	};
+
+	it("withholds a crashing candidate's stack trace once a later candidate decides", () => {
+		// #85's headline: the guard fail-opened BEHIND a stack trace. Trying candidates fixes the
+		// fail-open, but with stderr inherited the trace still landed on every ref update — now
+		// describing a copy the hook had already moved past, which is noise that teaches people to
+		// ignore the channel the refusal also arrives on.
+		const planted = plantUninstalledCandidate();
+		try {
+			const result = spawnSync("git", ["update-ref", "refs/heads/trunk", divergent], {cwd: clone, encoding: "utf8"});
+			// The recorded candidate ran and refused, so the crashing one explained nothing.
+			expect(result.status).not.toBe(0);
+			expect(git(clone, "rev-parse", "refs/heads/trunk")).toBe(base);
+			expect(result.stderr).not.toContain("ERR_MODULE_NOT_FOUND");
+			// The refusal's own stderr must survive the buffering — it is the whole point of refusing.
+			expect(result.stderr).toContain("ref-guard:");
+		} finally {
+			rmSync(planted, {recursive: true, force: true});
+		}
+	}, HOOK_TIMEOUT);
+
+	it("releases the buffered trace when no candidate decided", () => {
+		const planted = plantUninstalledCandidate();
+		const hookPath = join(clone, ".git/hooks/reference-transaction");
+		const installed = readFileSync(hookPath, "utf8");
+		writeFileSync(hookPath, installed.replaceAll(BIN, join(clone, "no-such-toolkit/bin.ts")), {mode: 0o755});
+		try {
+			const result = spawnSync("git", ["update-ref", "refs/heads/trunk", divergent], {cwd: clone, encoding: "utf8"});
+			expect(result.status).toBe(0);
+			// Nothing decided, so the trace is the only evidence of WHY — suppressing it here would
+			// trade a misleading message for an unactionable one.
+			expect(result.stderr).toContain("ERR_MODULE_NOT_FOUND");
+			expect(result.stderr).toContain("THE GUARD IS NOT RUNNING");
+		} finally {
+			rmSync(planted, {recursive: true, force: true});
+			// Rewind before restoring, for the reason spelled out in the case below.
+			try {
+				execFileSync("git", ["update-ref", "refs/heads/trunk", base], {cwd: clone, stdio: "pipe"});
+			} finally {
+				writeFileSync(hookPath, installed, {mode: 0o755});
+			}
+		}
+	}, HOOK_TIMEOUT);
+
 	it("announces itself when no candidate can run, and does not abort the transaction", () => {
 		// Fail-open is deliberate — a reference-transaction hook that exits non-zero bricks every
 		// git operation — but it must say so rather than pass for a clean run.

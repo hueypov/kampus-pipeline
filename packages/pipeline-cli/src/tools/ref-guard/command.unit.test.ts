@@ -56,10 +56,19 @@ const V2_HOOK = [
 	"",
 ].join("\n");
 
+/**
+ * These pin the RENDERER — the hook's text, and the shapes `isKnownManagedHook` must keep in step
+ * with it. What the hook DOES when it runs (which status ends the search, whose stderr reaches the
+ * terminal) is behaviour, and is pinned in `command.hook.test.ts` against real Git. A string
+ * assertion here is a contract line, not coverage of the fix.
+ */
 describe("ref-guard managed hook contract", () => {
 	it("maps only the dedicated refusal to a Git-hook abort", () => {
 		const hook = renderManagedHook();
-		expect(hook).toContain(`[ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1`);
+		// The abort is reachable from exactly one place. Any second `exit 1` would be a status the
+		// hook aborts git on without having been refused, which is the failure this hook cannot have.
+		expect(hook.match(/^\s*exit 1$/gm)).toHaveLength(1);
+		expect(hook).toContain(`if [ "$status" -eq ${REFUSE_EXIT_CODE} ] || [ "$status" -eq 0 ]; then`);
 		expect(hook).toContain("ref-guard reference-transaction");
 	});
 
@@ -97,12 +106,24 @@ describe("ref-guard managed hook contract", () => {
 		// at module load — and every non-refusal status read as "ran, no refusal", so the guard was
 		// off behind a stack trace. Only the CLI's own two verdicts may end the search.
 		expect(hook).toContain('[ -f "$candidate" ] || continue');
-		expect(hook).toContain(`[ "$status" -eq ${REFUSE_EXIT_CODE} ] && exit 1`);
 		expect(hook).toContain('[ "$status" -eq 0 ] && exit 0');
 		// Git delivers the updates on stdin; a first attempt that drained them would leave the next
 		// candidate judging an empty transaction.
 		expect(hook).toContain("updates=$(cat)");
 		expect(hook).toMatch(/printf '%s\\n' "\$updates" \| "\$node_bin" "\$candidate"/);
+	});
+
+	it("captures each attempt's stderr instead of inheriting it", () => {
+		const hook = renderManagedHook("/recorded/at/install/bin.ts");
+		// `2>&1 1>&3` is the whole mechanism: stderr goes to the capture, stdout to the saved fd, so
+		// a crashing candidate's trace is held rather than printed. Order matters and cannot be
+		// swapped — `1>&3 2>&1` would send BOTH to real stdout and capture nothing.
+		expect(hook).toMatch(/errs=\$\(printf .* 2>&1 1>&3\)/);
+		// fd 3 must come from a redirection on the loop's group. `exec 3>&1` would do the same job
+		// until the day it failed, and a failed redirection on a special built-in exits the shell —
+		// a non-zero hook, which aborts the transaction.
+		expect(hook).toContain("} 3>&1");
+		expect(hook).not.toContain("exec 3>&1");
 	});
 
 	it("distinguishes absent, installed, outdated, drifted, and foreign hooks", () => {
