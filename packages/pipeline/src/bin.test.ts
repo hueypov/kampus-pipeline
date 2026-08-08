@@ -43,7 +43,7 @@ const fixture = (): {consumer: string; mockBin: string} => {
 		write(join(toolkit, "templates/pipeline/agent-policy.json"), '{"schemaVersion":1,"github":{}}\n');
 		write(join(toolkit, "templates/pipeline/optional-workflow-policy.json"), '{"schemaVersion":1,"workflows":{}}\n');
 		write(join(toolkit, "templates/pipeline/cli-capability-matrix.md"), "# Fixture capability matrix\n");
-	write(join(toolkit, "templates/github/workflows/pipeline-toolkit.yml"), "name: Fixture toolkit\n");
+	write(join(toolkit, "templates/github/workflows/pipeline-verify.yml"), "name: Fixture verify\n");
 	write(join(toolkit, "templates/github/workflows/pipeline-doc-safety.yml"), "name: Fixture docs\n");
 	write(join(toolkit, "templates/github/workflows/pipeline-delivery-gate.yml"), "name: Fixture delivery gate\n");
 	write(join(toolkit, "templates/github/workflows/pipeline-gitleaks.yml"), "name: Fixture Gitleaks\n");
@@ -101,6 +101,11 @@ const enabledPrimaryIndexGuardPolicy = JSON.stringify({
 });
 
 describe("pipeline init", () => {
+	// The trailing timeout below is 90s of headroom, not a 90s test: measured, this runs in about
+	// 14s, and adding `pipeline-verify` to the payload did not change that. It is slow because it
+	// drives real `git` through two full installs per fixture, and it once crossed the old 20s limit
+	// while sharing the machine with this package's other test file. The margin absorbs that
+	// variance. It is not covering a regression, and the assertion is unchanged.
 	it("creates project-local wiring, preserves settings, and is idempotent", () => {
 		const {consumer, mockBin} = fixture();
 		expect(command(consumer, ["init"], mockBin).status).toBe(0);
@@ -131,9 +136,9 @@ describe("pipeline init", () => {
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-gitleaks.yml"))).toBe(false);
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-doc-links.yml"))).toBe(false);
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-settings-env-guard.yml"))).toBe(false);
-		// pipeline-toolkit is not installable at all: it runs the TOOLKIT's own suite, which gated an
-		// adopter's merges on our unit tests passing in their runner.
-		expect(existsSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"))).toBe(false);
+		// pipeline-verify is opt-in like the rest, even though ship-it cannot pass without it — a
+		// required check nobody chose is still a required check nobody chose.
+		expect(existsSync(join(consumer, ".github/workflows/pipeline-verify.yml"))).toBe(false);
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-unresolved-threads.yml"))).toBe(false);
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-doc-safety.yml"))).toBe(false);
 		expect(existsSync(join(consumer, "claude-plugins/kampus-pipeline"))).toBe(false);
@@ -192,9 +197,9 @@ describe("pipeline init", () => {
 		expect(readFileSync(join(consumer, ".glossary/LANGUAGE.md"), "utf8")).toBe("# Consumer language\n");
 		expect(readFileSync(join(consumer, "CLAUDE.md"), "utf8")).toBe("# Consumer guidance\n");
 		expect(readFileSync(join(consumer, ".pipeline/agent-policy.json"), "utf8")).toBe('{"schemaVersion":1,"github":{"issueMutation":true}}\n');
-		write(join(consumer, ".github/workflows/pipeline-toolkit.yml"), "name: Consumer workflow\n");
+		write(join(consumer, ".github/workflows/adopter-owned.yml"), "name: Consumer workflow\n");
 		expect(command(consumer, ["sync"], mockBin).status).toBe(0);
-		expect(readFileSync(join(consumer, ".github/workflows/pipeline-toolkit.yml"), "utf8")).toBe("name: Consumer workflow\n");
+		expect(readFileSync(join(consumer, ".github/workflows/adopter-owned.yml"), "utf8")).toBe("name: Consumer workflow\n");
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
 		rmSync(join(consumer, ".claude/skills/deslop-comments"), {recursive: true});
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(1);
@@ -242,7 +247,7 @@ describe("pipeline init", () => {
 		expect(command(consumer, ["sync"], mockBin).status).toBe(0);
 		expect(existsSync(join(consumer, ".github/workflows/pipeline-doc-links.yml"))).toBe(false);
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
-	}, 20_000);
+	}, 90_000);
 
 	it("refuses an unmanaged conflict unless force replaces a prior managed path", () => {
 		const {consumer, mockBin} = fixture();

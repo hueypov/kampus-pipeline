@@ -124,17 +124,28 @@ after advancing the submodule pointer.
 
 ### 2a. Generic GitHub Actions pack
 
-The generated pack deliberately excludes Phoenix deployment, application-path,
-Cloudflare, release, and approval-topology workflows. It contains only:
+The pack carries no deployment, application-path, or release workflows — those are
+specific to whatever a repository actually builds, and the toolkit cannot know it.
+Seven templates ship, all **opt-in**; `init` writes none of them unless the
+repository enables it by name.
 
-- `pipeline-toolkit.yml` — checks out the consumer with its submodule, installs
-  the pinned toolkit workspace, and runs the toolkit package test suites.
-- `pipeline-doc-safety.yml` — validates ADR filename/frontmatter consistency
-  and scans changed Markdown, ADR, pattern, and glossary files for
-  machine-local-path leaks using the pinned local CLI.
+- `pipeline-verify.yml` — runs the adopting repository's own `.pipeline/verify.sh`,
+  and fails when that script is absent rather than passing. It deliberately detects
+  no stack: a wrong guess reports green while verifying the wrong thing. This is the
+  one that completes the pipeline, because `ship-it` refuses a merge on a head no
+  check has reported on.
+- `pipeline-doc-safety.yml` — validates ADR filename/frontmatter consistency and
+  scans changed Markdown, ADR, pattern, and glossary files for machine-local-path
+  leaks using the pinned local CLI.
+- `pipeline-delivery-gate.yml` — enforces the review verdicts in CI.
+- `pipeline-gitleaks.yml` — scans new commits for secrets, at a pinned version and
+  checksum.
+- `pipeline-doc-links.yml` — offline link checking.
+- `pipeline-settings-env-guard.yml` and `pipeline-unresolved-threads.yml` — the two
+  repository-hygiene guards.
 
-The pack is a starting CI baseline. Repositories may add their own application
-tests and deployment workflows without changing toolkit-managed files.
+Repositories may add their own application tests and deployment workflows without
+changing toolkit-managed files.
 
 ### 3. Run the toolkit
 

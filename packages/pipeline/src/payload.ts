@@ -32,10 +32,14 @@ export const CORE_AGENT_SKILL_NAMES: Readonly<Record<string, ReadonlyArray<strin
 
 /**
  * CI workflows an adopter may opt into. None ships enabled: installing a workflow somebody did not
- * ask for turns it into a required check they did not choose (#32). `pipeline-toolkit` is not here
- * at all — it runs the toolkit's own suite, which is never a consumer's concern.
+ * ask for turns it into a required check they did not choose (#32).
+ *
+ * `pipeline-verify` is first because it is the one that makes the pipeline complete. Without a
+ * check reporting on a head, `ship-it` refuses every merge with PRECONDITION_UNKNOWN, so an adopter
+ * who enables nothing else still has to enable this one to finish a run.
  */
 const GENERATED_WORKFLOWS = [
+	["pipeline-verify", ".github/workflows/pipeline-verify.yml"],
 	["pipeline-doc-safety", ".github/workflows/pipeline-doc-safety.yml"],
 	["pipeline-delivery-gate", ".github/workflows/pipeline-delivery-gate.yml"],
 	["pipeline-gitleaks", ".github/workflows/pipeline-gitleaks.yml"],

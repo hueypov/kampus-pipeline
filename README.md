@@ -123,7 +123,14 @@ pnpm pipeline sync
 pnpm pipeline init --check
 ```
 
-Initialization also writes the generic GitHub Actions baseline:
-`.github/workflows/pipeline-toolkit.yml` and
-`.github/workflows/pipeline-doc-safety.yml`. It never replaces a consumer
-workflow that already exists.
+Initialization writes no workflow unless the repository asks for one — a check
+nobody chose is still a check nobody chose. Enable them by name:
+
+```bash
+./.pipeline/toolkit/bin/pipeline enable pipeline-verify
+```
+
+`pipeline-verify` is the one that completes the pipeline: it runs a
+repository-owned `.pipeline/verify.sh`, and without a check reporting on a head
+`ship-it` refuses every merge as unconfirmed. Initialization never replaces a
+consumer workflow that already exists.

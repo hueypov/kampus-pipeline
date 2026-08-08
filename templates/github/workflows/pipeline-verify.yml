@@ -1,0 +1,76 @@
+# The adopting repository's own build signal — the one check `ship-it` gates a merge on.
+#
+# Without a check reporting on a head, `ship-it check` refuses with PRECONDITION_UNKNOWN: a merge
+# gate that passes when nothing ran confirms nothing. So a repository with no CI cannot complete the
+# pipeline's last step, and every merge is a human overriding a correct refusal.
+#
+# This workflow is deliberately **stack-agnostic and free of guesswork**. It does not sniff for a
+# package manager, a lockfile, or a test runner — a guess that is wrong reports green while
+# verifying the wrong thing, which is worse than reporting nothing. Instead the repository owns its
+# own verification in one script, exactly as it owns `.pipeline/agent-policy.json`.
+#
+# WHAT YOU DO: write `.pipeline/verify.sh`, make it executable, and have it exit non-zero when the
+# repository is not in a shippable state. Anything goes in it — `cargo test`, `go test ./...`,
+# `pnpm -r test`, `make check`, a mix. Example:
+#
+#     #!/usr/bin/env bash
+#     set -euo pipefail
+#     pnpm install --frozen-lockfile
+#     pnpm -r typecheck
+#     pnpm -r test
+#
+# If the script is absent this workflow FAILS rather than passing. That is the point: an unwritten
+# verification and a passing one must never look the same to the merge gate.
+name: pipeline-verify
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A superseded run on the same ref is waste. `github.ref` is a full ref (`refs/heads/x`) and would
+  # never equal a bare default-branch name, so a comparison against one is dead code dressed as a
+  # guard — and a merge_group gets its own unique ref, so a queued merge is never cancelled anyway.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify this repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        # No `submodules:` by default. The toolkit at `.pipeline/toolkit` is not under test here —
+        # this job verifies YOUR code. Add it only if your own verification needs it.
+
+      - name: Require a repository-owned verification
+        # Fail closed, and say exactly what to write. A missing script is an unanswered question,
+        # never a passing answer.
+        run: |
+          if [ ! -f .pipeline/verify.sh ]; then
+            echo "::error title=No verification defined::.pipeline/verify.sh is missing."
+            echo ""
+            echo "This repository has no build signal, so 'pipeline cli ship-it check' will refuse"
+            echo "every merge with PRECONDITION_UNKNOWN — correctly, because nothing has confirmed"
+            echo "the head is sound."
+            echo ""
+            echo "Create .pipeline/verify.sh, make it executable, and have it exit non-zero when the"
+            echo "repository is not shippable. For example:"
+            echo ""
+            echo "    #!/usr/bin/env bash"
+            echo "    set -euo pipefail"
+            echo "    pnpm install --frozen-lockfile"
+            echo "    pnpm -r test"
+            exit 1
+          fi
+          if [ ! -x .pipeline/verify.sh ]; then
+            echo "::error title=Verification is not executable::chmod +x .pipeline/verify.sh"
+            exit 1
+          fi
+
+      - name: Run it
+        run: ./.pipeline/verify.sh
