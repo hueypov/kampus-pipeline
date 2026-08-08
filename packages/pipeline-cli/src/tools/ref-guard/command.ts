@@ -333,6 +333,10 @@ const referenceTransaction = Command.make(
 		const verdict = decideTransaction([headDecision, ...refDecisions]);
 		if (verdict.kind === "refuse") {
 			yield* Console.error(`ref-guard: ${verdict.reason}`);
+			// The HEAD rung's evidence is the value staged in the shared HEAD lock, which a Git that
+			// was killed mid-write leaves behind. That is the one refusal an operator can hit without
+			// doing anything wrong, and the file naming it is the whole recovery, so say it.
+			if (verdict === headDecision && dir !== null) yield* Console.error(`ref-guard: evidence is the value staged in ${join(dir, "HEAD.lock")}; if no checkout is running, that lock is stale and can be removed`);
 			return yield* Effect.sync(() => process.exit(REFUSE_EXIT_CODE));
 		}
 	}),
