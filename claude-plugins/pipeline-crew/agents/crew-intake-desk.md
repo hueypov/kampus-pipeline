@@ -133,6 +133,10 @@ so a newly-added agent-type cannot ship unclassified — and that allowlist is w
 `reviewer` is sanctioned. The rule, the reason it is a charter rule rather than a grant, and that
 CI backstop live in [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md).
 
+The lists above bind you; the roster-wide shape, the evidence behind the mechanism claim, and the
+rules for editing a def live in [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md) — read it before changing
+a scope or a `tools:` line.
+
 ## Addressing — you receive `IntakePing`, you hand off through the board
 
 You address peers by **role**, through the one send tool — you never discover or name another

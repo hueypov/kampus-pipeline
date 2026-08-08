@@ -206,6 +206,10 @@ if any mutating roster agent-type is neither on the sanctioned allowlist that ve
 above — so a newly-added agent-type cannot ship unclassified. The rule, the reason it is a charter
 rule rather than a grant, and that CI backstop live in [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md).
 
+The lists above bind you; the roster-wide shape, the evidence behind the mechanism claim, and the
+rules for editing a def live in [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md) — read it before changing
+a scope or a `tools:` line.
+
 ## When to invoke
 
 - **Give a situational-awareness read.** "What's the state of the board" / "where are we on the

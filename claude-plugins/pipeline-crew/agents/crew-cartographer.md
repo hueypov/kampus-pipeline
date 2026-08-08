@@ -99,6 +99,10 @@ mutating roster agent-type is neither on the sanctioned allowlist that verb owns
 so a newly-added agent-type cannot ship unclassified. The rule, the reason it is a charter rule
 rather than a grant, and that CI backstop live in [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md).
 
+The lists above bind you; the roster-wide shape, the evidence behind the mechanism claim, and the
+rules for editing a def live in [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md) — read it before changing
+a scope or a `tools:` line.
+
 ## Addressing — your one live edge is cartographer → intake-desk
 
 You address peers by **role**, through the one send tool — you never discover or name another

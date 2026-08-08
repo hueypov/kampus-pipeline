@@ -220,6 +220,7 @@ claude-plugins/pipeline-crew/     # managed symlink into .pipeline/toolkit
 ├── HOW-TO.md                     # task recipes: add a role · configure personalization · reboot · carry a §CP PR · retire a crew
 ├── PERSONALIZATION.md            # the personalization seam — the config contract + dimensions
 ├── PROBES.md                     # probe discipline — fail-open liveness/health probes (the false-outage failure mode)
+├── SPAWN-SCOPE.md                # which agents a seat may spawn, and why it is charter prose rather than a tool grant
 ├── crew.config.template.jsonc    # placeholder-only per-install config template
 └── README.md                     # this file
 ```
@@ -238,6 +239,9 @@ claude-plugins/pipeline-crew/     # managed symlink into .pipeline/toolkit
   stand-up contract the four defs write against.
 - [`PROBES.md`](PROBES.md) — probe discipline: liveness/health probes fail OPEN (an unrunnable
   probe is "unknown", never "down") + the no-bare-`timeout` convention. The conductor defs cite it.
+- [`SPAWN-SCOPE.md`](SPAWN-SCOPE.md) — which agents a seat may spawn: the roster-wide shape, why
+  the restriction is charter prose rather than a tool grant, and the rules for editing a def's
+  `tools:`. The three bridge defs cite it.
 - the companion pipeline skill suite — the pipeline this crew conducts (the skills +
   ephemeral agents).
 - `.pipeline/toolkit/packages/pipeline-crew-mcp/` — the local channel substrate (the
