@@ -203,7 +203,10 @@ describe("ref-guard installed hook", () => {
 		expect(() => execFileSync("git", ["checkout", "--detach", base], {cwd: clone, stdio: "pipe"})).toThrow();
 		expect(git(clone, "symbolic-ref", "HEAD")).toBe("refs/heads/trunk");
 		// The worktree lives under the suite's temp root, so afterAll's rmSync is the only cleanup.
-	}, 30_000);
+		// The budget is double its neighbours': `worktree add` and the paired `checkout --detach`
+		// each fire several transactions, and every one is a cold node start that loads the whole
+		// CLI. Measured at 35s on a machine running the other suites beside it, against 30s here.
+	}, 60_000);
 
 	it("allows a raw primary fast-forward without a pipeline caller", () => {
 		expect(() => execFileSync("git", ["update-ref", "refs/heads/trunk", remoteTip], {cwd: clone, stdio: "pipe"})).not.toThrow();

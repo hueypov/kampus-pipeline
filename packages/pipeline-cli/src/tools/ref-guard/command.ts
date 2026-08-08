@@ -6,7 +6,7 @@ import {fileURLToPath} from "node:url";
 import {Console, Effect, Option} from "effect";
 import {Argument, Command, Flag} from "effect/unstable/cli";
 import {readLifecyclePolicy, repositoryRoot, resolvePrimaryTarget} from "../lifecycle-policy.ts";
-import {decideHeadDetach, decideRefUpdate, decideTransaction, HEAD_REF, type RefUpdate, ZERO_OID} from "./ref-guard.ts";
+import {type ComparisonFacts, decideHeadDetach, decideRefUpdate, decideTransaction, HEAD_REF, type RefUpdate, ZERO_OID} from "./ref-guard.ts";
 
 export const REFUSE_EXIT_CODE = 3;
 const MARKER_PREFIX = "# kampus-pipeline ref-guard managed hook";
@@ -123,14 +123,35 @@ const IN_PROGRESS_MARKERS = ["rebase-merge", "rebase-apply", "BISECT_START"] as 
 
 const operationInProgress = (dir: string): boolean => IN_PROGRESS_MARKERS.some((marker) => existsSync(join(dir, marker)));
 
+/**
+ * The guarded ref's value in `packed-refs`, which outlives a deletion of its loose copy.
+ *
+ * This is the fact that tells `git pack-refs` pruning a loose ref it just packed apart from a real
+ * deletion; both arrive as `<oid> 0000…0 <ref>`, byte for byte, with the same environment. Read
+ * rather than locked: Git replaces `packed-refs` by rename, so a read is atomic and — unlike a
+ * `packed-refs.lock` probe, which every concurrent packer holds — says nothing about who is running.
+ * A `reftable` repository has no packed-refs and no loose refs to prune, so the answer is `null` and
+ * the delete rung stays strict there.
+ */
+const packedOid = (dir: string, ref: string): string | null => {
+	const packed = readTrimmed(join(dir, "packed-refs"));
+	if (packed === null) return null;
+	for (const line of packed.split("\n")) {
+		const [oid, name] = line.split(" ");
+		if (name === ref && oid !== undefined && /^[0-9a-f]{40,64}$/.test(oid)) return oid;
+	}
+	return null;
+};
+
 const comparisonFacts = (root: string, guardedRef: string, comparisonRef: string | null, newOid: string) => {
 	const current = runGit(root, ["rev-parse", "--verify", "--quiet", guardedRef]);
 	const currentOid = current.ok && current.stdout.trim() !== "" ? current.stdout.trim() : null;
-	if (comparisonRef === null) return {comparisonOid: null, comparisonIsAncestorOfNew: false, currentOid};
+	const base = {comparisonOid: null, comparisonIsAncestorOfNew: false, currentOid, packedOid: null};
+	if (comparisonRef === null) return base;
 	const resolved = runGit(root, ["rev-parse", "--verify", "--quiet", comparisonRef]);
-	if (!resolved.ok || resolved.stdout.trim() === "") return {comparisonOid: null, comparisonIsAncestorOfNew: false, currentOid};
+	if (!resolved.ok || resolved.stdout.trim() === "") return base;
 	const ancestry = runGit(root, ["merge-base", "--is-ancestor", comparisonRef, newOid]);
-	return {comparisonOid: resolved.stdout.trim(), comparisonIsAncestorOfNew: ancestry.ok, currentOid};
+	return {...base, comparisonOid: resolved.stdout.trim(), comparisonIsAncestorOfNew: ancestry.ok};
 };
 
 export const hookPathFor = (root: string): string | null => {
@@ -465,11 +486,19 @@ const referenceTransaction = Command.make(
 		if (target.branch === null) return;
 		const guardedRef = `refs/heads/${target.branch}`;
 		const comparisonRef = target.remote === null ? null : `refs/remotes/${target.remote}/${target.branch}`;
+		const dir = commonDir(root);
 		// Facts are gathered only for updates the pure ladder will actually test against them: a
 		// same-value write is decided before the ancestry rung, so probing it would spawn two git
-		// processes per stash/reset whose answers are discarded.
-		const refDecisions = updates.map((update) => decideRefUpdate(update, guardedRef, update.refName === guardedRef && update.newOid !== ZERO_OID && update.newOid !== update.oldOid ? comparisonFacts(root, guardedRef, comparisonRef, update.newOid) : {comparisonOid: null, comparisonIsAncestorOfNew: false, currentOid: null}));
-		const dir = commonDir(root);
+		// processes per stash/reset whose answers are discarded. A delete needs only the packed value,
+		// which is a file read.
+		const factsFor = (update: RefUpdate): ComparisonFacts => {
+			const none = {comparisonOid: null, comparisonIsAncestorOfNew: false, currentOid: null, packedOid: null};
+			if (update.refName !== guardedRef) return none;
+			if (update.newOid === ZERO_OID) return {...none, packedOid: dir === null ? null : packedOid(dir, guardedRef)};
+			if (update.newOid === update.oldOid) return none;
+			return comparisonFacts(root, guardedRef, comparisonRef, update.newOid);
+		};
+		const refDecisions = updates.map((update) => decideRefUpdate(update, guardedRef, factsFor(update)));
 		const headNewOid = updates.find((update) => update.refName === HEAD_REF)?.newOid ?? null;
 		const headDecision = dir === null
 			? {kind: "allow" as const, reason: "Git did not report a common directory"}

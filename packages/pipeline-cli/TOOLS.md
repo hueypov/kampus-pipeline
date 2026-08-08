@@ -508,6 +508,12 @@ Safe by construction (the pure `ref-guard.ts` decides; `command.ts` only gathers
   same-value write is allowed (a standstill moves nothing — git validates an asserted old value
   before the hook fires); an equal-tip or provable fast-forward is allowed; an identified primary
   divergence, including an unprovable ancestry probe, is refused.
+- One deletion-shaped transaction is allowed: `git pack-refs` reports dropping the **loose** copy of
+  a ref it has just written into `packed-refs` as `<current> 0000…0 refs/heads/<primary>`, and the
+  ref survives at that value in the packed store. A delete whose old value equals the ref's packed
+  value is that prune. A **genuine** delete cannot reach the exception — Git reports one with a
+  zero-filled old value, which never matches a packed oid. The old value is the discriminator
+  precisely because the prune is the only deletion-shaped transaction that carries one.
 - A standstill is measured against the **ref store** as well as against the caller's assertion,
   because the two disagree. `git pack-refs` — so `git gc`, so the `gc --auto` inside
   `commit`/`fetch`/`merge`/`pull` — migrates a loose ref into `packed-refs` by writing it at its own
