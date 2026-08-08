@@ -242,26 +242,39 @@ $ echo $?
 
 | Flag | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `--as` | string | no | `$CLAUDE_CODE_SESSION_ID` | the reviewing identity, compared against the PR's authoring identity |
+| `--as` | string | no | *(none — the authenticated account is used)* | an **assertion** about who is posting, checked against the authenticated account; never a value used in its place |
 
 **Added exit status**
 
 | Code | Trigger |
 |---|---|
-| 10 | the posting identity authored this PR — a self-verdict, refused |
+| 10 | the authenticated account authored this PR — a self-verdict, refused |
+| 10 | `--as` disagrees with the authenticated account — the claim is refused, not believed |
+| 11 | the authenticated account or the PR's author could not be read — refused, not assumed |
 
 **Added error**
 
 | Message | Stream | Code | Kind |
 |---|---|---|---|
-| `verdict post: #<pr> was authored by this identity — an author may not post a verdict on their own work` | stderr | 10 | refusal |
+| `verdict post: #<pr> was authored by <login> and \`gh\` is authenticated as <login> — an author may not post a verdict on their own work` | stderr | 10 | refusal |
+| `verdict post: --as <claim> disagrees with the authenticated account <login> — …` | stderr | 10 | refusal |
+| `verdict post: cannot read the authenticated account (\`gh api user\`) — …` | stderr | 11 | refusal |
 
 **Scope**
 
-Identity is the authoring session recorded by `write-code open-pr`, falling back to the PR's author
-account when no session was recorded. When neither can be resolved, the verb **refuses** rather than
+Identity is the **authenticated account** — what `gh api user` reports, the account the comment will
+actually belong to. When it or the PR's author cannot be read, the verb **refuses** rather than
 allowing: an unresolvable identity is exactly the state a caller trying to grade its own work would
 produce.
+
+This originally read "the authoring session recorded by `write-code open-pr`, falling back to the
+PR's author account". No such recording exists — `open-pr` reads a session only to check the issue
+claim and writes none onto the PR — so the fallback was the whole mechanism, and it compared a
+session UUID from `$CLAUDE_CODE_SESSION_ID` against a GitHub login. Those can never be equal, no
+skill passes `--as`, and so the refusal was unreachable through every documented invocation until
+#53. The session dimension (one account, two sessions, one of which built the PR) is a **residual
+hole**, tracked separately: this closes the account dimension, which is the one that is always
+readable.
 
 This does not block repair. An author may fix a FAIL; what they may not do is write the verdict that
 ends the loop.

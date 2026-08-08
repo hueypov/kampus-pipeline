@@ -34,6 +34,7 @@ import {guardPolicy, namespaceCheck} from "../ship-it/preconditions.ts";
 import {GithubTrackerLive, Tracker} from "../tracker/tracker.ts";
 import * as Exit from "../../exit-codes.ts";
 import {Github, GithubLive} from "./github.ts";
+import {identityCheck, type IdentityRefusal} from "./identity.ts";
 import {
 	emissionDefect,
 	GATES,
@@ -125,19 +126,28 @@ const readBody = (bodyFile: Option.Option<string>): Effect.Effect<string, never>
 	);
 
 /**
- * The reviewing identity, compared against the PR's author. Defaults to the session id, falling
- * back to the authenticated login when no session is set.
+ * An ASSERTION about who is posting, checked against the authenticated account — never a value used
+ * in its place (#53). Omitting it accepts whoever `gh` is logged in as, which is who the comment
+ * will belong to either way.
  */
 const asFlag = Flag.string("as").pipe(
 	Flag.optional,
 	Flag.withDescription(
-		"the reviewing identity, compared against the PR's author (default: $CLAUDE_CODE_SESSION_ID)",
+		"assert the account you believe you are posting as; refuses if it disagrees with the authenticated account",
 	),
 );
 
+/**
+ * Refuse the post on an identity finding. A policy refusal and an unreadable identity get DIFFERENT
+ * codes: "this caller may not review this PR" and "I could not tell who this caller is" are separate
+ * facts, and a caller that fuses them cannot report which one it hit.
+ */
+const refuseIdentity = (refusal: IdentityRefusal): Effect.Effect<never> =>
+	Effect.sync(() => {
+		process.stderr.write(`verdict post: ${refusal.message}\n`);
+		process.exit(refusal._tag === "unresolved" ? Exit.PRECONDITION_UNKNOWN : Exit.REFUSED_POLICY);
+	});
 
-
-/** Refuse a self-verdict with its own exit code, so it is never confused with a malformed body. */
 /**
  * Refuse a verdict in a namespace this diff does not classify to.
  *
@@ -162,14 +172,6 @@ const refuseWrongNamespace = (
 		process.exit(Exit.ZERO_SCOPE);
 	});
 
-const refuseSelfVerdict = (pr: number): Effect.Effect<never> =>
-	Effect.sync(() => {
-		process.stderr.write(
-			`verdict post: #${pr} was authored by this identity — an author may not post a verdict on their own work\n`,
-		);
-		process.exit(Exit.REFUSED_POLICY);
-	});
-
 const post = Command.make(
 	"post",
 	{pr: prFlag, gate: gateFlag, bodyFile: bodyFileFlag, as: asFlag},
@@ -185,12 +187,19 @@ const post = Command.make(
 		// prose in the reviewer skills, and two documents agreeing not to cross a line is a
 		// convention. Comparing the posting identity against the PR's author is a boundary.
 		//
+		// The identity is READ, not declared. It used to come from `--as`, defaulting to the session
+		// id — a UUID compared against a GitHub login, which can never match, so the refusal was
+		// unreachable through every documented invocation (#53). `--as` is now an assertion checked
+		// against this read, and disagreeing with it is itself a refusal.
+		//
 		// An UNRESOLVABLE identity refuses rather than allows: that is exactly the state a caller
 		// trying to grade its own work would produce, so the failure has to fall closed.
-		const reviewer = Option.getOrElse(as, () => process.env.CLAUDE_CODE_SESSION_ID ?? "").trim();
+		const unresolved = Effect.succeed("");
+		const authenticated = yield* (yield* Github)
+			.whoAmI()
+			.pipe(Effect.catchTag("@kampus/gh-io/GhCommandError", () => unresolved));
 		// A read that fails resolves to the empty string, which routes into the fail-closed branch
 		// below rather than silently permitting the post.
-		const unresolved = Effect.succeed("");
 		const author = yield* (yield* Tracker).readPullRequest(pr).pipe(
 			Effect.map((r) => r.author),
 			Effect.catchTags({
@@ -199,12 +208,13 @@ const post = Command.make(
 				"@kampus/gh-io/RepoResolutionError": () => unresolved,
 			}),
 		);
-		if (reviewer === "" || author === "" || reviewer.toLowerCase() === author.toLowerCase()) {
-			if (reviewer !== "" && author !== "") return yield* refuseSelfVerdict(pr);
-			return yield* fail(
-				`cannot resolve the reviewing identity or #${pr}'s author — refusing rather than posting an ungated verdict`,
-			);
-		}
+		const refusal = identityCheck({
+			pr,
+			authenticated,
+			author,
+			asserted: Option.getOrUndefined(as) ?? null,
+		});
+		if (refusal !== null) return yield* refuseIdentity(refusal);
 		// The namespace must be one the diff actually requires. Deliberately AFTER the split-role
 		// check, because who is posting matters more than where.
 		//
