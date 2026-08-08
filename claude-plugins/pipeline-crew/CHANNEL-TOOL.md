@@ -1,11 +1,12 @@
-# The crew channel tool — its allowlist token, and the boot-window wait
+# The crew channel tools — their allowlist tokens, and the boot-window wait
 
-Every crew role coordinates over one MCP tool, `channel_send`, served by the crew channel
-MCP server (`pipeline-crew-mcp`, wired per session via `--channels
-server:pipeline-crew-mcp`). **This doc is the single source for two things a role
-needs to actually call it**: the exact allowlist token its `tools:` frontmatter must carry,
-and how to behave in the brief window right after boot before the channel has connected. The
-four crew defs cite this; they never re-derive it inline.
+Every crew role coordinates over the tools the crew channel MCP server serves
+(`pipeline-crew-mcp`, wired per session via `--channels server:pipeline-crew-mcp`): the send
+tool `channel_send`, the discovery tool `channel_kinds`, and — for the engine alone — the
+claim tool `channel_claim`. **This doc is the single source for two things a role needs to
+actually call them**: the exact allowlist tokens its `tools:` frontmatter must carry, and how
+to behave in the brief window right after boot before the channel has connected. The four
+crew defs cite this; they never re-derive it inline.
 
 When adopting this plugin against a differently-named channel server, derive the allowlist
 token from that exact server name using the rule below and update the agent frontmatter to
@@ -37,6 +38,30 @@ resurfaces.) Grounded against the claude-code 2.1.214 tool-name builder and conf
 the live `/mcp` tool name — a wrong string silently fails closed and re-blocks cutover, so it
 is copied exactly, never approximated.
 
+## The discovery tool — `channel_kinds` (resolve a payload shape before sending)
+
+Every role that sends **also** carries the discovery tool, `channel_kinds` — the token derived
+the same way:
+
+```
+mcp__pipeline-crew-mcp__channel_kinds
+```
+
+It takes no required argument and returns the whole channel contract: every message kind's
+payload as a JSON Schema, plus each role's sanctioned send/receive seams. A sender reads a
+kind's shape from it **before its first `channel_send` of that kind**, so it builds a valid
+`body` up front instead of learning the shape from a send-time reject.
+
+That matters because `channel_send` cannot teach the shape by itself. Its parameters are
+`kind: NonEmptyString` and `body: Unknown` — no enum of the valid kinds, no payload shape — so
+a role that cannot call `channel_kinds` has nothing to read and guesses. The reject path is
+real and lossy: `channel_send` decode-checks `body` against the kind's schema and returns
+`InvalidMessageError` instead of an ack, so a seat with no inbound example to copy burns
+retries one missing key at a time. Because `channel_kinds` is served on the same `McpServer`
+as `channel_send` (`crew/session.ts`), its token is required for the same reason: absent from
+a def's `tools:`, the tool is present-but-uncallable and the discovery step is impossible.
+Every sending seat lists it — the three bridges and the engine alike.
+
 ## The engine's second tool — `channel_claim` (resource deconfliction)
 
 The **engineering-manager** (the one engine role) additionally carries a second channel tool,
@@ -53,8 +78,8 @@ cross-engine lock. An engine calls `channel_claim {resource: "<issue>"}` **befor
 lane**: `granted` ⇒ it holds the lane, `collision` ⇒ another engine holds it (back off). Sending
 a `Claim`-shaped message via `channel_send` does **not** lock anything — it just delivers a
 message to an inbox — which is why the claim needs its own tool (the duplicate-claim failure). Only the engine carries
-it; the bridges (chief-of-staff, cartographer, intake-desk) claim nothing and list `channel_send`
-alone.
+it; the bridges (chief-of-staff, cartographer, intake-desk) claim nothing, so they carry
+`channel_send` + `channel_kinds` but not `channel_claim`.
 
 ## The boot window — wait and re-check, never diagnose infra
 
