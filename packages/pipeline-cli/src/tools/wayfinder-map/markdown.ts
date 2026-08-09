@@ -30,8 +30,31 @@ const DECISIONS_HEADING = /^#{1,6}\s+decisions?[-\s]+so[-\s]+far\b/i;
 const FRONTIER_HEADING = /^#{1,6}\s+open[-\s]+frontier\b/i;
 const FOG_HEADING = /^#{1,6}\s+graduated[-\s]+fog\b/i;
 
-/** A `founder-decision-fork` flag anywhere on a frontier line (formats §Open frontier). */
-const FOUNDER_FORK = /founder[-\s]decision[-\s]fork/i;
+/**
+ * The fork marker as the prose contract prescribes it on a frontier line (formats §Open
+ * frontier). Exported as the one place code names the contract string, so
+ * `fork-marker.live.test.ts` can hold the shipped prose against it: a rename that lands
+ * on one side only fails a test instead of silently disabling the seam (#165).
+ */
+export const FORK_MARKER = "decision-owner-fork";
+
+/**
+ * The fork marker anywhere on a frontier line, in either spelling. `decision-owner-fork`
+ * is the prescribed one; `founder-decision-fork` is the pre-rename spelling maps charted
+ * before #165 still carry, kept so those maps keep parsing. Both hold the `[-\s]`
+ * punctuation tolerance the rest of this parser reads with.
+ */
+export const FORK_MARKER_PATTERN = /(?:decision[-\s]owner|founder[-\s]decision)[-\s]fork/i;
+
+/**
+ * A parenthetical annotation that is a hyphenated `…-fork` compound `FORK_MARKER_PATTERN`
+ * does not know — a misspelled or since-renamed marker. It counts as a fork because the
+ * two mistakes are not symmetric: reading a fork as answerable hands a decision owner's
+ * call to an agent, which is the exact failure this flag exists to prevent, while reading
+ * a non-fork as a fork only parks a ticket in front of a human (#165). Hyphenation and the
+ * parenthesis are what keep it off ordinary prose that merely says "fork".
+ */
+const UNRECOGNIZED_FORK_ANNOTATION = /\(\s*\p{L}+(?:-\p{L}+)*-fork\b/iu;
 
 /** A decision line's `— from #N` attribution; captures the origin issue (group 1). */
 const FROM_REF = /\bfrom\s+#(\d+)/i;
@@ -131,7 +154,8 @@ const parseFrontier = (
 		(question): FrontierTicket => ({
 			issue: firstIssueRef(question),
 			question,
-			founderDecisionFork: FOUNDER_FORK.test(question),
+			founderDecisionFork:
+				FORK_MARKER_PATTERN.test(question) || UNRECOGNIZED_FORK_ANNOTATION.test(question),
 		}),
 	);
 	return {present: section.present, entries};

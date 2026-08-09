@@ -15,7 +15,7 @@ kamp.us has a working invite (kefil) flow: an existing yazar can vouch a new per
 
 ## Open frontier
 - #103 — Investigation: does better-auth's session model let us mint a single-use invite token?
-- #104 — Decision (founder-decision-fork): should an invited çaylak start at 0 karma?
+- #104 — Decision (decision-owner-fork): should an invited çaylak start at 0 karma?
 
 ## Graduated fog
 - #101 — Decided invites are karma-gated. → spawned #104
@@ -24,7 +24,7 @@ kamp.us has a working invite (kefil) flow: an existing yazar can vouch a new per
 
 /**
  * A well-formed parsed map: two decisions (each attributed), an answerable
- * frontier ticket (the originating work item) and a founder-decision-fork (the originating work item), and two graduated
+ * frontier ticket (the originating work item) and a decision-owner-fork (the originating work item), and two graduated
  * fog entries. Overrides let a test vary one section.
  */
 export const map = (overrides: Partial<WayfinderMap> = {}): WayfinderMap => ({
@@ -42,7 +42,7 @@ export const map = (overrides: Partial<WayfinderMap> = {}): WayfinderMap => ({
 			{issue: 103, question: "#103 — Investigation: token storage?", founderDecisionFork: false},
 			{
 				issue: 104,
-				question: "#104 — Decision (founder-decision-fork): starting karma?",
+				question: "#104 — Decision (decision-owner-fork): starting karma?",
 				founderDecisionFork: true,
 			},
 		],
