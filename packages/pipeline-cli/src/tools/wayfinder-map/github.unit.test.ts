@@ -12,12 +12,57 @@ describe("decodeMapLedger — the GitHub boundary", () => {
 		const ledger = await run(
 			decodeMapLedger({
 				map: {number: 100, body: cleanMapBody},
-				subIssues: [{number: 101}, {number: 102}, {number: 103}, {number: 104}],
+				subIssues: [
+					{number: 101, state: "open"},
+					{number: 102, state: "open"},
+					{number: 103, state: "open"},
+					{number: 104, state: "open"},
+				],
 			}),
 		);
 		assert.strictEqual(ledger.number, 100);
-		assert.deepStrictEqual(ledger.subIssues, [101, 102, 103, 104]);
+		assert.deepStrictEqual(
+			ledger.subIssues.map((s) => s.number),
+			[101, 102, 103, 104],
+		);
 		assert.strictEqual(ledger.map.openFrontier.entries.length, 2);
+		assert.strictEqual(isValidMap(ledger), true);
+	});
+
+	it("sub-issue state survives the boundary and reaches the floor", async () => {
+		const ledger = await run(
+			decodeMapLedger({
+				map: {number: 100, body: cleanMapBody},
+				subIssues: [
+					{number: 101, state: "closed", state_reason: "completed"},
+					{number: 102, state: "closed", state_reason: "completed"},
+					{number: 103, state: "closed", state_reason: "completed"},
+					{number: 104, state: "open"},
+				],
+			}),
+		);
+		assert.strictEqual(ledger.subIssues.find((s) => s.number === 103)?.state, "closed");
+		// #103 is on the open frontier, so the floor reconciles it as drift.
+		const defect = validateMap(ledger).find((d) => d.type === "CLOSED_FRONTIER_TICKET");
+		assert.deepStrictEqual(defect?.refs, [103]);
+	});
+
+	it("a missing or unrecognized state decodes as unresolved, not as a failure", async () => {
+		const ledger = await run(
+			decodeMapLedger({
+				map: {number: 100, body: cleanMapBody},
+				subIssues: [
+					{number: 101},
+					{number: 102, state: null},
+					{number: 103, state: "archived"},
+					{number: 104, state: "open"},
+				],
+			}),
+		);
+		assert.deepStrictEqual(
+			ledger.subIssues.map((s) => s.state),
+			[undefined, undefined, undefined, "open"],
+		);
 		assert.strictEqual(isValidMap(ledger), true);
 	});
 
@@ -32,7 +77,11 @@ describe("decodeMapLedger — the GitHub boundary", () => {
 			decodeMapLedger({
 				map: {number: 100, body: cleanMapBody},
 				// the originating work item is dropped from the real sub-issues — its frontier ref must dangle.
-				subIssues: [{number: 101}, {number: 102}, {number: 103}],
+				subIssues: [
+					{number: 101, state: "open"},
+					{number: 102, state: "open"},
+					{number: 103, state: "open"},
+				],
 			}),
 		);
 		assert.include(

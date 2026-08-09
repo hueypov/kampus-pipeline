@@ -1,6 +1,6 @@
 import {assert, describe, it} from "@effect/vitest";
 import {DEFECT_TYPES, type DefectType} from "./Defect.ts";
-import {ledger, map} from "./fixtures.ts";
+import {ledger, map, openSubIssues} from "./fixtures.ts";
 import type {WayfinderMapLedger} from "./Map.ts";
 import {
 	answerableFrontier,
@@ -93,7 +93,7 @@ describe("validateMap — dangling frontier ref", () => {
 					entries: [{issue: 999, question: "#999 — Q?", founderDecisionFork: false}],
 				},
 			}),
-			subIssues: [101, 102, 103, 104],
+			subIssues: openSubIssues([101, 102, 103, 104]),
 		});
 		const defect = validateMap(l).find((d) => d.type === "DANGLING_FRONTIER_REF");
 		assert.isDefined(defect);
@@ -111,6 +111,56 @@ describe("validateMap — dangling frontier ref", () => {
 			subIssues: [],
 		});
 		assert.notInclude(typesOf(l), "DANGLING_FRONTIER_REF");
+	});
+});
+
+describe("validateMap — closed frontier ticket", () => {
+	/** The map's own frontier ticket #103, closed out from under the body. */
+	const closedTicketLedger = () =>
+		ledger({subIssues: [...openSubIssues([101, 102, 104]), {number: 103, state: "closed"}]});
+
+	it("CLOSED_FRONTIER_TICKET, and the closed ticket stops counting as answerable", () => {
+		const l = closedTicketLedger();
+
+		const defect = validateMap(l).find((d) => d.type === "CLOSED_FRONTIER_TICKET");
+		assert.isDefined(defect);
+		assert.deepStrictEqual(defect?.refs, [103]);
+
+		// The second output: #103 is finished work, so it no longer blocks graduation.
+		// #104 is a fork, which never did — leaving the frontier answerably empty.
+		assert.deepStrictEqual(answerableFrontier(l), []);
+		assert.strictEqual(isGraduationReady(l), true);
+	});
+
+	it("an empty sub-issue set emits nothing (graceful absence)", () => {
+		const l = ledger({subIssues: []});
+		assert.notInclude(typesOf(l), "CLOSED_FRONTIER_TICKET");
+		assert.deepStrictEqual(
+			answerableFrontier(l).map((t) => t.issue),
+			[103],
+		);
+	});
+
+	it("a sub-issue whose state is unresolved is not treated as closed", () => {
+		const l = ledger({subIssues: [...openSubIssues([101, 102, 104]), {number: 103}]});
+		assert.notInclude(typesOf(l), "CLOSED_FRONTIER_TICKET");
+		assert.strictEqual(isGraduationReady(l), false);
+	});
+
+	it("sorts after DANGLING_FRONTIER_REF, so an existing pair's order is unchanged", () => {
+		const l = ledger({
+			map: map({
+				openFrontier: {
+					present: true,
+					entries: [
+						{issue: 103, question: "#103 — Q?", founderDecisionFork: false},
+						{issue: 999, question: "#999 — Q?", founderDecisionFork: false},
+					],
+				},
+			}),
+			subIssues: [...openSubIssues([101, 102, 104]), {number: 103, state: "closed"}],
+		});
+		assert.strictEqual(mapSignature(l), "DANGLING_FRONTIER_REF:999|CLOSED_FRONTIER_TICKET:103");
 	});
 });
 
@@ -137,38 +187,42 @@ describe("validateMap — determinism", () => {
 });
 
 describe("isGraduationReady + answerableFrontier", () => {
-	it("not ready while an answerable (non-fork) frontier ticket remains", () => {
+	it("not ready while an answerable (non-fork, open) frontier ticket remains", () => {
 		const l = ledger();
-		assert.strictEqual(isGraduationReady(l.map), false);
+		assert.strictEqual(isGraduationReady(l), false);
 		assert.deepStrictEqual(
-			answerableFrontier(l.map).map((t) => t.issue),
+			answerableFrontier(l).map((t) => t.issue),
 			[103],
 		);
 	});
 
 	it("ready when the frontier holds only founder-decision-forks", () => {
-		const m = map({
-			openFrontier: {
-				present: true,
-				entries: [{issue: 104, question: "#104 — fork", founderDecisionFork: true}],
-			},
+		const l = ledger({
+			map: map({
+				openFrontier: {
+					present: true,
+					entries: [{issue: 104, question: "#104 — fork", founderDecisionFork: true}],
+				},
+			}),
 		});
-		assert.strictEqual(isGraduationReady(m), true);
-		assert.deepStrictEqual(answerableFrontier(m), []);
+		assert.strictEqual(isGraduationReady(l), true);
+		assert.deepStrictEqual(answerableFrontier(l), []);
 	});
 
 	it("ready when the frontier is empty", () => {
-		const m = map({openFrontier: {present: true, entries: []}});
-		assert.strictEqual(isGraduationReady(m), true);
+		const l = ledger({map: map({openFrontier: {present: true, entries: []}})});
+		assert.strictEqual(isGraduationReady(l), true);
 	});
 
 	it("a malformed (no-issue) frontier entry does not count as answerable", () => {
-		const m = map({
-			openFrontier: {
-				present: true,
-				entries: [{issue: undefined, question: "no ref", founderDecisionFork: false}],
-			},
+		const l = ledger({
+			map: map({
+				openFrontier: {
+					present: true,
+					entries: [{issue: undefined, question: "no ref", founderDecisionFork: false}],
+				},
+			}),
 		});
-		assert.strictEqual(isGraduationReady(m), true);
+		assert.strictEqual(isGraduationReady(l), true);
 	});
 });

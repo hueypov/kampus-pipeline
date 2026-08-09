@@ -94,18 +94,39 @@ export const WayfinderMap = Schema.Struct({
 export type WayfinderMap = (typeof WayfinderMap)["Type"];
 
 /**
+ * Whether a resolved sub-issue is open or closed. The `state` field is optional on
+ * `SubIssue` and this union is closed, so "state we could not resolve" — an offline
+ * decode, a wire value outside this union — is representable as `undefined` and is
+ * distinct from "open". The floor treats only a *positively* closed ticket as
+ * evidence, so an unresolved state can never manufacture a defect.
+ */
+export const SubIssueState = Schema.Literals(["open", "closed"]);
+export type SubIssueState = (typeof SubIssueState)["Type"];
+
+/**
+ * One real GitHub sub-issue of the map, resolved at the boundary: its number, and
+ * its state where the boundary could resolve one.
+ */
+export const SubIssue = Schema.Struct({
+	number: Schema.Number,
+	state: Schema.optional(SubIssueState),
+});
+export type SubIssue = (typeof SubIssue)["Type"];
+
+/**
  * A `wayfinder:map` issue's full parsed state: its number, its parsed four-section
- * `map`, and `subIssues` — the map's real GitHub sub-issue numbers. `subIssues`
- * is resolved at the GitHub boundary (`github.ts`), never by parsing the body; it
- * is empty on a pure decode and overridden by the loader. The pure floor flags a
- * frontier ref that names an issue absent from this set as `DANGLING_FRONTIER_REF`
- * — so a frontier ticket that really is a sub-issue is allowed through, while a
- * typo'd or stale ref is caught. An empty `subIssues` disables the check (nothing
- * resolved to compare against — the foreign/offline graceful-absence case).
+ * `map`, and `subIssues` — the map's real GitHub sub-issues. `subIssues` is
+ * resolved at the GitHub boundary (`github.ts`), never by parsing the body; it is
+ * empty on a pure decode and overridden by the loader. It answers both questions
+ * the floor asks of the world outside the body: *does this frontier ref name a real
+ * sub-issue* (`DANGLING_FRONTIER_REF` when it does not), and *is that sub-issue
+ * still open* (`CLOSED_FRONTIER_TICKET` when it is not). An empty `subIssues`
+ * disables both — nothing resolved to compare against, the foreign/offline
+ * graceful-absence case.
  */
 export const WayfinderMapLedger = Schema.Struct({
 	number: Schema.Number,
 	map: WayfinderMap,
-	subIssues: Schema.Array(Schema.Number),
+	subIssues: Schema.Array(SubIssue),
 });
 export type WayfinderMapLedger = (typeof WayfinderMapLedger)["Type"];

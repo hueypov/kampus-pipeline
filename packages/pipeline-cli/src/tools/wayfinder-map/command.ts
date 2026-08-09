@@ -63,7 +63,7 @@ const read = Command.make(
 	Effect.fn(function* ({map, json}) {
 		const ledger = yield* (yield* Github).mapLedger(map);
 		const defects = validateMap(ledger);
-		const ready = isGraduationReady(ledger.map);
+		const ready = isGraduationReady(ledger);
 
 		if (json) {
 			yield* Console.log(
@@ -73,7 +73,7 @@ const read = Command.make(
 						map: ledger.map,
 						subIssues: ledger.subIssues,
 						graduationReady: ready,
-						answerableFrontier: answerableFrontier(ledger.map).map((t) => t.issue),
+						answerableFrontier: answerableFrontier(ledger).map((t) => t.issue),
 						valid: defects.length === 0,
 						signature: mapSignature(ledger),
 						defects,
@@ -87,7 +87,7 @@ const read = Command.make(
 
 		const readyLine = ready
 			? "  graduation-ready: open frontier holds no answerable unknown"
-			: `  not graduation-ready: ${answerableFrontier(ledger.map).length} answerable frontier ticket(s) remain`;
+			: `  not graduation-ready: ${answerableFrontier(ledger).length} answerable frontier ticket(s) remain`;
 
 		if (defects.length === 0) {
 			yield* Console.log(`✓ map #${map} — valid (0 defects)`);

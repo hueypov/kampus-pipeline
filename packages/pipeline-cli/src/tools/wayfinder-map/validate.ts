@@ -12,35 +12,59 @@
  * yields a byte-identical defect list and an identical `mapSignature`.
  *
  * Graduation-readiness is orthogonal to validity: `isGraduationReady` asks whether
- * the open frontier holds any *answerable* unknown (a well-formed, non-fork
- * ticket), not whether the map is well-formed. Emission (#S5) gates on both — a
- * valid AND ready map — but the predicate itself is purely about the frontier, so
+ * the open frontier holds any *answerable* unknown (a well-formed, non-fork, still
+ * open ticket), not whether the map is well-formed. Emission (#S5) gates on both —
+ * a valid AND ready map — but the predicate itself is purely about the frontier, so
  * a map can be ready before it is clean and vice versa.
  */
 import type {Defect, DefectType} from "./Defect.ts";
 import {defectTypeRank} from "./Defect.ts";
-import type {FrontierTicket, WayfinderMap, WayfinderMapLedger} from "./Map.ts";
+import type {FrontierTicket, SubIssue, WayfinderMapLedger} from "./Map.ts";
+
+/**
+ * The map's sub-issues that are *positively known* to be closed.
+ *
+ * Closure has to be proven, never inferred from absence: a sub-issue with no
+ * resolved state (an offline decode, a wire value outside the domain union) is not
+ * in this set, so both the reconciliation defect and the answerable-frontier filter
+ * degrade to their pre-reconciliation behaviour rather than flagging everything.
+ * That makes the graceful-absence rule structural — with no state resolved the set
+ * is empty and every check below is a no-op — rather than a guard someone must
+ * remember to write, which is how `DANGLING_FRONTIER_REF` states the same rule with
+ * its explicit `subIssues.length > 0` gate.
+ */
+const closedSubIssues = (subIssues: ReadonlyArray<SubIssue>): ReadonlySet<number> =>
+	new Set(subIssues.filter((s) => s.state === "closed").map((s) => s.number));
 
 /**
  * The open frontier tickets that still block graduation: well-formed (they name a
- * real sub-issue) and NOT a founder-decision-fork. A fork is the preserved human
- * seam `wayfinder` stops on — nothing the automated work loop can clear — so it
- * never blocks readiness; a malformed entry (no issue) is a validity problem, not
- * an answerable unknown, so it is excluded here too and caught by `validateMap`.
+ * sub-issue), NOT a founder-decision-fork, and NOT already closed. A fork is the
+ * preserved human seam `wayfinder` stops on — nothing the automated work loop can
+ * clear — so it never blocks readiness; a malformed entry (no issue) is a validity
+ * problem, not an answerable unknown, so it is excluded here too and caught by
+ * `validateMap`. A closed ticket is finished work, and counting it as outstanding is
+ * what strands a map short of graduation forever.
+ *
+ * Takes the whole ledger, not the parsed body, because closed-ness lives outside
+ * the body — the body cannot say whether the ticket it lists is still open.
  */
-export const answerableFrontier = (map: WayfinderMap): ReadonlyArray<FrontierTicket> =>
-	map.openFrontier.entries.filter((t) => t.issue !== undefined && !t.founderDecisionFork);
+export const answerableFrontier = (ledger: WayfinderMapLedger): ReadonlyArray<FrontierTicket> => {
+	const closed = closedSubIssues(ledger.subIssues);
+	return ledger.map.openFrontier.entries.filter(
+		(t) => t.issue !== undefined && !t.founderDecisionFork && !closed.has(t.issue),
+	);
+};
 
 /**
  * Is the map ready to emit — i.e. is the open frontier cleared of every
  * *answerable* unknown? Ready iff `answerableFrontier` is empty: the frontier
  * holds nothing but (optionally) founder-decision-forks, which `wayfinder`
- * surfaces to a human rather than resolving. This is the machine-readable
- * substrate the fog-graduation (#S3) and emission (#S5) modes act on instead of
- * prose-guessing whether a map is "done enough" for handoff.
+ * surfaces to a human rather than resolving, and tickets already closed. This is
+ * the machine-readable substrate the fog-graduation (#S3) and emission (#S5) modes
+ * act on instead of prose-guessing whether a map is "done enough" for handoff.
  */
-export const isGraduationReady = (map: WayfinderMap): boolean =>
-	answerableFrontier(map).length === 0;
+export const isGraduationReady = (ledger: WayfinderMapLedger): boolean =>
+	answerableFrontier(ledger).length === 0;
 
 /**
  * Validate a decoded map ledger against the structural floor. Returns the
@@ -127,7 +151,7 @@ export const validateMap = (ledger: WayfinderMapLedger): ReadonlyArray<Defect> =
 	// resolved to compare against — the offline/foreign graceful-absence case),
 	// exactly as epic-ledger's `externalRefs`-gated DANGLING_DEP does.
 	if (subIssues.length > 0) {
-		const known = new Set(subIssues);
+		const known = new Set(subIssues.map((s) => s.number));
 		const dangling = map.openFrontier.entries
 			.map((t) => t.issue)
 			.filter((n): n is number => n !== undefined && !known.has(n))
@@ -139,6 +163,27 @@ export const validateMap = (ledger: WayfinderMapLedger): ReadonlyArray<Defect> =
 				refs: [n],
 			});
 		}
+	}
+
+	// The lockstep rule reconciled against the world: a ticket leaves `## Open
+	// frontier` only by its answer landing in `## Decisions-so-far` and the ticket
+	// moving to `## Graduated fog`, so a closed ticket still listed as open frontier
+	// means those three moved out of step. This is the one drift the body alone
+	// cannot show — every other check reads the body against itself.
+	const closed = closedSubIssues(subIssues);
+	const stale = [
+		...new Set(
+			map.openFrontier.entries
+				.map((t) => t.issue)
+				.filter((n): n is number => n !== undefined && closed.has(n)),
+		),
+	].sort((a, b) => a - b);
+	for (const n of stale) {
+		defects.push({
+			type: "CLOSED_FRONTIER_TICKET",
+			message: `Map #${number} \`## Open frontier\` lists #${n}, which is closed; a ticket leaves the frontier only by its answer landing in \`## Decisions-so-far\` and the ticket moving to \`## Graduated fog\`.`,
+			refs: [n],
+		});
 	}
 
 	return defects.sort(

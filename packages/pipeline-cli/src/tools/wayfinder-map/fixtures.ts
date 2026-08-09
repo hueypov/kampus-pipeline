@@ -3,7 +3,7 @@
  * well-formed map body, so each test states only what it varies. Plain TypeScript data,
  * with no Effect runtime.
  */
-import type {WayfinderMap, WayfinderMapLedger} from "./Map.ts";
+import type {SubIssue, WayfinderMap, WayfinderMapLedger} from "./Map.ts";
 
 /** A canonical, well-formed `wayfinder:map` body — the formats §worked-example shape. */
 export const cleanMapBody = `## Destination
@@ -92,10 +92,18 @@ export const map = (overrides: Partial<WayfinderMap> = {}): WayfinderMap => ({
 	...overrides,
 });
 
-/** A decoded ledger over a well-formed map whose frontier refs are real sub-issues. */
+/**
+ * Resolved sub-issues that are all open — the boundary's output for a map whose
+ * frontier is genuinely outstanding. A test needing a closed or state-unresolved
+ * ticket overrides that one entry rather than rebuilding the set.
+ */
+export const openSubIssues = (numbers: ReadonlyArray<number>): ReadonlyArray<SubIssue> =>
+	numbers.map((number) => ({number, state: "open"}));
+
+/** A decoded ledger over a well-formed map whose frontier refs are real, open sub-issues. */
 export const ledger = (overrides: Partial<WayfinderMapLedger> = {}): WayfinderMapLedger => ({
 	number: 100,
 	map: map(),
-	subIssues: [101, 102, 103, 104],
+	subIssues: openSubIssues([101, 102, 103, 104]),
 	...overrides,
 });
