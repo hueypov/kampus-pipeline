@@ -492,20 +492,22 @@ const retireLegacyPluginLink = (projectRoot: string, prior: Map<string, string>)
 };
 
 const pipelineHooks = (): Record<string, unknown[]> => {
-	const hook = (suffix: string, timeout?: number) => ({
+	// The script path is quoted on its own: arguments belong outside the quotes, or the
+	// shell looks for a single file literally named "guard.sh worktree-guard pre-bash".
+	const hook = (script: string, {args, timeout}: {args?: string; timeout?: number} = {}) => ({
 		type: "command",
-		command: `"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/${suffix}"`,
+		command: `"$CLAUDE_PROJECT_DIR/.pipeline/toolkit/claude-plugins/kampus-pipeline/hooks/${script}"${args ? ` ${args}` : ""}`,
 		...(timeout ? {timeout} : {}),
 	});
 	return {
-		SessionStart: [{matcher: "startup|resume", hooks: [hook("install.sh", 120)]}],
+		SessionStart: [{matcher: "startup|resume", hooks: [hook("install.sh", {timeout: 120})]}],
 		PreToolUse: [
-			{matcher: "Read|Edit|Write", hooks: [hook("guard.sh worktree-guard pre-file")]},
-			{matcher: "Bash", hooks: [hook("guard.sh worktree-guard pre-bash")]},
-			{matcher: "EnterWorktree", hooks: [hook("guard.sh worktree-guard pre-enter")]},
+			{matcher: "Read|Edit|Write", hooks: [hook("guard.sh", {args: "worktree-guard pre-file"})]},
+			{matcher: "Bash", hooks: [hook("guard.sh", {args: "worktree-guard pre-bash"})]},
+			{matcher: "EnterWorktree", hooks: [hook("guard.sh", {args: "worktree-guard pre-enter"})]},
 		],
-		SubagentStop: [{matcher: "*", hooks: [hook("guard.sh worktree-guard reap")]}],
-		WorktreeCreate: [{hooks: [hook("create-worktree.sh", 600)]}],
+		SubagentStop: [{matcher: "*", hooks: [hook("guard.sh", {args: "worktree-guard reap"})]}],
+		WorktreeCreate: [{hooks: [hook("create-worktree.sh", {timeout: 600})]}],
 	};
 };
 

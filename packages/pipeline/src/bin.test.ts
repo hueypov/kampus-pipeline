@@ -56,7 +56,7 @@ const toolkitFixture = (): {root: string; toolkit: string; mockBin: string} => {
 	for (const name of ["adr", "canon", "coder", "planner", "reporter", "reviewer", "shipper", "triager"]) {
 		write(join(toolkit, `claude-plugins/kampus-pipeline/agents/${name}.md`), `# ${name}\n`);
 	}
-	for (const name of ["install.sh", "guard.sh", "resolve-toolkit-root.sh"]) {
+	for (const name of ["install.sh", "guard.sh", "resolve-toolkit-root.sh", "create-worktree.sh"]) {
 		const destination = join(toolkit, "claude-plugins/kampus-pipeline/hooks", name);
 		mkdirSync(join(destination, ".."), {recursive: true});
 		copyFileSync(join(process.cwd(), "../../claude-plugins/kampus-pipeline/hooks", name), destination);
@@ -572,5 +572,24 @@ describe("pipeline init", () => {
 		});
 		expect(result.status).toBe(0);
 		expect(readFileSync(join(consumer, ".pipeline/toolkit/bin/pipeline.calls"), "utf8")).toContain("worktree-guard pre-file");
+	});
+
+	it("writes hook commands whose script path is executable once the shell parses it", () => {
+		const {consumer, mockBin} = fixture();
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		const settings = JSON.parse(readFileSync(join(consumer, ".claude/settings.json"), "utf8")) as {
+			hooks: Record<string, Array<{hooks: Array<{command: string}>}>>;
+		};
+		const commands = Object.values(settings.hooks).flatMap((entries) => entries.flatMap((entry) => entry.hooks.map((h) => h.command)));
+		expect(commands.length).toBeGreaterThan(0);
+		for (const line of commands) {
+			// Arguments must sit outside the quoted path, or the shell resolves the whole
+			// string as one filename and every tool call fails with "No such file".
+			const script = /^"([^"]+)"/.exec(line)?.[1];
+			expect(script, `hook command does not start with a quoted script path: ${line}`).toBeDefined();
+			const resolved = script!.replace("$CLAUDE_PROJECT_DIR", consumer);
+			expect(existsSync(resolved), `hook script is missing: ${resolved}`).toBe(true);
+			expect(spawnSync("/bin/sh", ["-c", `test -x "${resolved}"`]).status).toBe(0);
+		}
 	});
 });
