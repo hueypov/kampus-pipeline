@@ -1,7 +1,7 @@
 /**
  * The GitHub boundary: decode untrusted `gh api` JSON into a domain
- * `WayfinderMapLedger` (`decodeMapLedger`), plus the live `Github` capability
- * that *reads* one by shelling `gh api` REST.
+ * `WayfinderMapLedger` (`decodeMapLedger`), plus the live `Github` capabilities
+ * that read one and replace a map body by shelling `gh api` REST.
  *
  * Decode it here, where genuinely untyped REST responses enter — and not past it:
  * everything downstream (`validateMap`, `isGraduationReady`, `mapSignature`) is
@@ -174,24 +174,57 @@ const subIssuesArgs = (repo: string, number: number): ReadonlyArray<string> => [
 	`repos/${repo}/issues/${number}/sub_issues?per_page=100`,
 ];
 
+/**
+ * The body PATCH. The body travels as one `-f body=<value>` argv element, by value
+ * — never `-f body=@<path>`, which `gh` takes verbatim and would publish a
+ * machine-local path as the map's body (formats §Posting a comment body).
+ */
+const patchBodyArgs = (repo: string, number: number, body: string): ReadonlyArray<string> => [
+	"api",
+	"--method",
+	"PATCH",
+	`repos/${repo}/issues/${number}`,
+	"-f",
+	`body=${body}`,
+];
+
 const decodeSubIssueRefs = Schema.decodeUnknownEffect(Schema.Array(SubIssueRef));
 
+/** The one field a body PATCH reads back — the body that actually landed. */
+const PatchedIssue = Schema.Struct({body: GithubBody});
+const decodePatchedIssue = Schema.decodeUnknownEffect(PatchedIssue);
+
+/** A map issue as a read-modify-write sees it: the raw body plus its parsed ledger. */
+export interface MapSource {
+	readonly ledger: WayfinderMapLedger;
+	/** The exact body the ledger was parsed from — what the write path edits and the precondition compares. */
+	readonly body: string;
+}
+
+type GithubError = RepoResolutionError | GhCommandError | GhParseError | Schema.SchemaError;
+
 /**
- * `Github` — the IO shell over `gh api` REST. `mapLedger` is the tool's one
- * capability: a `wayfinder:map` issue number → a decoded `WayfinderMapLedger`
- * ready for the pure floor. Read-only by construction — this tool parses and
- * validates, it never mutates the map (the `wayfinder` skill's work/emit modes
- * own writes). Built by `GithubLive`, whose `R` is `ChildProcessSpawner`.
+ * `Github` — the IO shell over `gh api` REST, and the map's sanctioned write path.
+ * `wayfinder` WORK mode mutates the map only through this tool, so the mutation
+ * lives here rather than in hand-rolled markdown slicing by a skill
+ * (`wayfinder/SKILL.md` §Map state is read and written through the `wayfinder-map`
+ * CLI). Built by `GithubLive`, whose `R` is `ChildProcessSpawner`.
+ *
+ * `mapSource` returns the raw body alongside the ledger because the write is a
+ * read-modify-write: the body the edit is computed against is the same body the
+ * pre-write precondition compares. `mapBody` is that precondition's cheap re-read,
+ * and `replaceMapBody` returns what landed so the caller can prove it.
  */
 export class Github extends Context.Service<
 	Github,
 	{
-		readonly mapLedger: (
+		readonly mapLedger: (mapNumber: number) => Effect.Effect<WayfinderMapLedger, GithubError>;
+		readonly mapSource: (mapNumber: number) => Effect.Effect<MapSource, GithubError>;
+		readonly mapBody: (mapNumber: number) => Effect.Effect<string, GithubError>;
+		readonly replaceMapBody: (
 			mapNumber: number,
-		) => Effect.Effect<
-			WayfinderMapLedger,
-			RepoResolutionError | GhCommandError | GhParseError | Schema.SchemaError
-		>;
+			body: string,
+		) => Effect.Effect<string, GithubError>;
 	}
 >()("wayfinder-map/Github") {}
 
@@ -199,10 +232,25 @@ const json = Effect.fn("Github.json")(function* (args: ReadonlyArray<string>) {
 	return yield* parseJson(args, yield* runGh(args));
 });
 
-const loadMapLedger = Effect.fn("Github.mapLedger")(function* (repo: string, mapNumber: number) {
-	const map = yield* json(issueArgs(repo, mapNumber));
+const decodeIssue = Schema.decodeUnknownEffect(GithubIssue);
+
+const loadMapSource = Effect.fn("Github.mapSource")(function* (repo: string, mapNumber: number) {
+	const issue = yield* decodeIssue(yield* json(issueArgs(repo, mapNumber)));
 	const subIssues = yield* decodeSubIssueRefs(yield* json(subIssuesArgs(repo, mapNumber)));
-	return yield* decodeMapLedger({map, subIssues});
+	return {ledger: toLedger({map: issue, subIssues}), body: bodyOf(issue.body)};
+});
+
+const loadMapBody = Effect.fn("Github.mapBody")(function* (repo: string, mapNumber: number) {
+	return bodyOf((yield* decodeIssue(yield* json(issueArgs(repo, mapNumber)))).body);
+});
+
+const patchMapBody = Effect.fn("Github.replaceMapBody")(function* (
+	repo: string,
+	mapNumber: number,
+	body: string,
+) {
+	const landed = yield* decodePatchedIssue(yield* json(patchBodyArgs(repo, mapNumber, body)));
+	return bodyOf(landed.body);
 });
 
 /**
@@ -220,9 +268,16 @@ export const GithubLive: Layer.Layer<Github, never, ChildProcessSpawner.ChildPro
 				effect: Effect.Effect<A, E, ChildProcessSpawner.ChildProcessSpawner>,
 			) => effect.pipe(Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner));
 			const repo = yield* Effect.cached(withSpawner(resolveRepo()));
+			const onRepo = <A, E>(
+				use: (r: string) => Effect.Effect<A, E, ChildProcessSpawner.ChildProcessSpawner>,
+			) => repo.pipe(Effect.flatMap((r) => withSpawner(use(r))));
 			return {
 				mapLedger: (mapNumber: number) =>
-					repo.pipe(Effect.flatMap((r) => withSpawner(loadMapLedger(r, mapNumber)))),
+					onRepo((r) => loadMapSource(r, mapNumber)).pipe(Effect.map((s) => s.ledger)),
+				mapSource: (mapNumber: number) => onRepo((r) => loadMapSource(r, mapNumber)),
+				mapBody: (mapNumber: number) => onRepo((r) => loadMapBody(r, mapNumber)),
+				replaceMapBody: (mapNumber: number, body: string) =>
+					onRepo((r) => patchMapBody(r, mapNumber, body)),
 			};
 		}),
 	);

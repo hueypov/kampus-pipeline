@@ -23,6 +23,41 @@ kamp.us has a working invite (kefil) flow: an existing yazar can vouch a new per
 `;
 
 /**
+ * A well-formed map body carrying exactly the content the parser does **not**
+ * model: a lead-in comment and paragraph above the first section, an indented note
+ * under `## Decisions-so-far`, a trailing note under `## Open frontier`, a
+ * destination that wraps across lines, and a fifth section outside the four. §Field
+ * notes sanctions all of it ("carries an extra note under a section, still means
+ * what it means"), so it is the fixture a mutation must return byte-for-byte —
+ * `cleanMapBody` cannot prove that, since it holds nothing the parser would drop.
+ */
+export const annotatedMapBody = `<!-- charted by wayfinder -->
+This map tracks the kefil invite flow. Do not renumber its tickets.
+
+## Destination
+kamp.us has a working invite (kefil) flow: an existing yazar can vouch a new
+person in, and that person lands as a çaylak with a clear first-run path.
+
+## Decisions-so-far
+- Invites are karma-gated, not seat-gated. — from #101
+
+  Note: nothing is deleted here; a revision lands as a new superseding line.
+
+## Open frontier
+- #103 — Investigation: does better-auth's session model let us mint a single-use
+  invite token without a new table?
+- #104 — Decision (founder-decision-fork): should an invited çaylak start at 0 karma?
+
+Frontier tickets are listed oldest sub-issue first.
+
+## Graduated fog
+- #101 — Decided invites are karma-gated. → spawned #103
+
+## Notes
+Freeform prose the four-section parser never models.
+`;
+
+/**
  * A well-formed parsed map: two decisions (each attributed), an answerable
  * frontier ticket (the originating work item) and a founder-decision-fork (the originating work item), and two graduated
  * fog entries. Overrides let a test vary one section.
