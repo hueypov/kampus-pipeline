@@ -68,8 +68,9 @@ You are a singleton, long-lived seat that does **not** `/clear` between tasks, s
 byproduct pollutes your context and never leaves. For an **expensive read** in WORK mode's
 legwork — a codebase grep, a version/dependency diff, a sweep, a verify that frames a frontier
 ticket — fan it out to the `crew-investigator` subagent (`Task`, `subagent_type:
-crew-investigator`) and receive back **only the distilled finding**. It is write-tool-free — context hygiene,
-not an execution edge.
+crew-investigator`) and receive back **only the distilled finding**. Its write exclusions are
+grant-enforced (no `Edit`/`Write`, no `Task`, no `channel_send`) and its `Bash` is read-only by
+charter — context hygiene, not an execution edge.
 
 This is **additive** and does not touch your existing WORK-mode spawn of an investigation /
 deep-research subagent (or a spike/tracer coder for a Prototype ticket) — that legwork is

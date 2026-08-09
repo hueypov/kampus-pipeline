@@ -41,11 +41,12 @@ fork their behavior:
 - **`crew-investigator`** — the read-only fanout: for an expensive read that would
   otherwise pollute your context (a codebase grep's `node_modules` noise, a flag/board sweep's
   WARN spam, a version diff's many-call chatter), dispatch it and receive **only the distilled
-  finding**. It is write-tool-free — a context-hygiene primitive, not an execution edge. You are
-  the engine, so unlike a bridge your spawn scope is the whole build drain rather than a narrowed
-  one ([`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md)); the investigator is simply a cleaner way to run
-  the verified reads your lane loop already needs (a head-bound verdict check, a merge-landed
-  confirm) without the artifact byproduct entering your standing seat.
+  finding**. Its write exclusions are grant-enforced (no `Edit`/`Write`, no `Task`, no
+  `channel_send`) and its `Bash` is read-only by charter — a context-hygiene primitive, not an
+  execution edge. You are the engine, so unlike a bridge your spawn scope is the whole build drain
+  rather than a narrowed one ([`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md)); the investigator is simply
+  a cleaner way to run the verified reads your lane loop already needs (a head-bound verdict check,
+  a merge-landed confirm) without the artifact byproduct entering your standing seat.
 
 Because those agents are `model: inherit`, a subagent silently downgrades if your session is on the
 wrong tier — so your session must be brought up on its configured build tier, not the planning tier

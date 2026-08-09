@@ -7,13 +7,22 @@
  * filesystem seam at the actual repo root and additionally pins the three facts that defect
  * turned on, per bridge: `Task` is granted, no `disallowedTools` subtracts it, and no
  * ungrantable name is declared as if it were served.
+ *
+ * #170 is the same kind of defect one layer up — five shipped defs asserted an enforcement the
+ * grant does not deliver, and only a human re-reading them would have noticed — so it is pinned
+ * here against the real bytes as well.
  */
 import {readFileSync} from "node:fs";
 import {join} from "node:path";
 import {fileURLToPath} from "node:url";
 import {describe, expect, it} from "@effect/vitest";
 import {Effect} from "effect";
-import {BRIDGE_NAMES, parseAgentDef, UNGRANTABLE_TOOLS} from "./crew-fanout-guard.ts";
+import {
+	BRIDGE_NAMES,
+	GENERAL_CAPABILITY_TOOLS,
+	parseAgentDef,
+	UNGRANTABLE_TOOLS,
+} from "./crew-fanout-guard.ts";
 import {checkCrewFanout} from "./gate.ts";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
@@ -50,5 +59,17 @@ describe("crew-fanout-guard over the shipped defs", () => {
 
 	it("leaves the engine — the control case that never lost Task — free of self-denial", () => {
 		expect(defAt("crew-engineering-manager").declaresDisallowedTools).toBe(false);
+	});
+
+	it.each([...BRIDGE_NAMES, "crew-engineering-manager", "crew-investigator"])(
+		"%s justifies the read-only fanout within what the grant delivers (#170)",
+		(name) => {
+			expect({name, claims: defAt(name).enforcementClaims}).toEqual({name, claims: []});
+		},
+	);
+
+	it("the shipped investigator still holds `Bash` — which is what keeps that check live (#170)", () => {
+		const grant = defAt("crew-investigator").tools;
+		expect(grant.filter((t) => GENERAL_CAPABILITY_TOOLS.has(t))).toEqual(["Bash"]);
 	});
 });

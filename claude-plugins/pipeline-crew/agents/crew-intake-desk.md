@@ -96,8 +96,9 @@ byproduct — a codebase grep's `node_modules` noise, a sweep's WARN spam, the m
 intermediate output — pollutes your context and never leaves. For an **expensive read** (a
 duplicate-issue grep, a diff, a board sweep, a label/verdict verify) fan it out to the
 `crew-investigator` subagent (`Task`, `subagent_type: crew-investigator`) and receive back **only
-the distilled finding**. It is write-tool-free — a context-hygiene
-primitive, not an execution edge.
+the distilled finding**. Its write exclusions are grant-enforced (no `Edit`/`Write`, no `Task`, no
+`channel_send`) and its `Bash` is read-only by charter — a context-hygiene primitive, not an
+execution edge.
 
 This is **additive** to your existing spawns
 (`planner`/`reviewer`/`canon`/`adr`/`triager`/`reporter`) — it does not change them, and your

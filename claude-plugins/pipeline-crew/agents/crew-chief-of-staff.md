@@ -174,11 +174,13 @@ receive back **only the distilled finding**. This keeps your verifier charter in
 investigator does the reads, you get the checkable answer — without the artifact pollution (the
 investigation rule: investigators have no mutation tools and return only distilled read results).
 
-**The fanout is read-only and scoped — it is NOT a new execution edge.** `crew-investigator` holds
-**no write tools** (no Edit/Write, no merge, no board-mutation, no `Task`), so a read you fan out
-can never mutate — it is a context-hygiene primitive, exactly aligned with your verify-and-carry
-charter, not the deleted "bridge runs the pipeline" edge. Your own scope is the charter rule below,
-and it matches: the investigator is the only agent you spawn at all.
+**The fanout is read-only and scoped — it is NOT a new execution edge.** `crew-investigator`'s
+write exclusions are **grant-enforced** for `Edit`/`Write`, `Task` and `channel_send` — they are
+absent from its grant — and its `Bash` is read-only **by charter**, not by a permission the engine
+applies. So a read you fan out is a context-hygiene primitive, exactly aligned with your
+verify-and-carry charter, not the deleted "bridge runs the pipeline" edge — but inherit that as
+defense-in-depth rather than as a guarantee no mutation is possible. Your own scope is the charter
+rule below, and it matches: the investigator is the only agent you spawn at all.
 
 ## Spawn scope — a charter rule you obey, not a grant the engine enforces
 
@@ -240,8 +242,8 @@ These hold on every run regardless of what the spawn prompt remembered to say:
   reads and carry human-facing comms. The **one** agent you may spawn is the read-only
   `crew-investigator` (an expensive-read fanout — investigators have no mutation tools and return
   only distilled read results) — and only that, per **Spawn scope** above and
-  [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md). The fanout is write-tool-free, so it is context hygiene,
-  not an execution edge.
+  [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md). The fanout's write exclusions are grant-enforced and its
+  `Bash` is read-only by charter, so it is context hygiene, not an execution edge.
 - **Single-owner human notification.** You are the sole owner of the human channel; every ping
   fires once, from you, through the operator-configured transport. No other role pings a human.
 - **§CP is banked by the engine and carried by you — never merged by you.** You relay a banked §CP

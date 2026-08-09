@@ -5,24 +5,18 @@
  * bin (the core-in-its-own-file idiom).
  *
  * `checkCrewFanout` enumerates the two agent-def dirs (the kampus-pipeline roster + the
- * pipeline-crew roster), parses each def's `name`/`tools`/charter exclusions, resolves the
- * three bridge defs, and delegates the verdict to the pure core (`crew-fanout-guard.ts`). It
- * fails `CheckFailed` (exit non-zero) on any non-passing verdict — an uncovered agent-type,
- * a mis-shaped bridge def, a missing bridge, a stale allowlist, or zero scope (fail-closed,
- * the zero-scope fail-closed invariant). A directory/file IO failure is an `IoError` (also
- * non-zero — both failures, undistinguished).
+ * pipeline-crew roster), parses each def's `name`/`tools`/charter exclusions/enforcement claims,
+ * and delegates the verdict to the pure core (`crew-fanout-guard.ts`), which resolves the bridges
+ * out of that roster. It fails `CheckFailed` (exit non-zero) on any non-passing verdict — an
+ * uncovered agent-type, a mis-shaped def, a missing bridge, a stale allowlist, or zero scope
+ * (fail-closed, the zero-scope fail-closed invariant). A directory/file IO failure is an
+ * `IoError` (also non-zero — both failures, undistinguished).
  */
 import {existsSync, readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import {Console, Effect} from "effect";
 import * as Schema from "effect/Schema";
-import {
-	type AgentDef,
-	BRIDGE_NAMES,
-	judge,
-	parseAgentDef,
-	renderReport,
-} from "./crew-fanout-guard.ts";
+import {type AgentDef, judge, parseAgentDef, renderReport} from "./crew-fanout-guard.ts";
 
 /** A directory/file IO failure: the run couldn't complete. */
 export class IoError extends Schema.TaggedErrorClass<IoError>()("IoError", {
@@ -72,14 +66,7 @@ export const checkCrewFanout = (root: string): Effect.Effect<void, IoError | Che
 		const perDir = yield* Effect.forEach(AGENT_DIRS, (dir) => parseAgentDefsIn(root, dir), {
 			concurrency: "unbounded",
 		});
-		const allDefs = perDir.flat();
-		const rosterAgents = allDefs.map((d) => d.name);
-		const byName = new Map(allDefs.map((d) => [d.name, d]));
-		const bridges = BRIDGE_NAMES.map((n) => byName.get(n)).filter(
-			(d): d is AgentDef => d !== undefined,
-		);
-
-		const verdict = judge({rosterAgents, bridges});
+		const verdict = judge({defs: perDir.flat()});
 		if (verdict.pass) {
 			yield* Console.log(renderReport(verdict));
 			return;
