@@ -60,6 +60,15 @@ jobs:
         # fewer cores than a laptop, so this would have failed there first.
         run: pnpm -r --workspace-concurrency=1 test
 
+      - name: skill payload is valid and its references resolve
+        # The script's header claimed this step existed long before it did, and three documents
+        # repeated the claim. Nothing ran it, so the frontmatter guard it advertised had never
+        # failed a build and the reference checks added in #167 would have changed no signal at
+        # all. Its reference findings are gated against `.pipeline/validate-skills-baseline.tsv`:
+        # damage that predates the checks stays listed and does not red the build, anything new
+        # fails here from its first commit.
+        run: ./claude-plugins/kampus-pipeline/skills/validate-skills.sh
+
       - name: workflow catalogue is current
         # Generated from the templates; regenerating it here would hide drift rather than report it,
         # so this asserts it was regenerated in the commit that changed them.

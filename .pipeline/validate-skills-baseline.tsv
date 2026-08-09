@@ -1,0 +1,61 @@
+# validate-skills reference-check baseline.
+#
+# Every line is one suppressed finding, TAB-separated: check id, repository-relative
+# file, matched text. Deliberately no counts and no line numbers. A count lets a new
+# violation in one file hide behind a repaired one in another, which is the false green
+# this baseline exists to prevent; a line number would churn every entry whenever an
+# unrelated edit shifts the lines above it, and a baseline that reds unrelated pull
+# requests is a baseline somebody deletes.
+#
+# The residual cost of that key: a second occurrence of an already-listed phrase in an
+# already-listed file is suppressed. The run reports occurrence counts per check so the
+# drawdown stays measurable even though it is not what the build gates on.
+#
+# Entries are only ever removed. Regenerate wholesale with
+# `claude-plugins/kampus-pipeline/skills/validate-skills.sh --write-baseline` -- but a
+# regeneration re-suppresses whatever was failing, so it is a deliberate act, not a fix.
+anchor	claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md	#the-wayfindermap--wayfinderbacklog-ideation-layer-markers--not-pipeline-states-not-type
+phrase	claude-plugins/kampus-pipeline/skills/architecture-audit/SKILL.md	the applicable safety invariant
+phrase	claude-plugins/kampus-pipeline/skills/architecture-audit/SMELLS.md	the applicable safety invariant
+phrase	claude-plugins/kampus-pipeline/skills/deslop-comments/SKILL.md	the applicable safety invariant
+phrase	claude-plugins/kampus-pipeline/skills/diataxis/SKILL.md	repository precedent
+phrase	claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md	repository decision record
+phrase	claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md	repository precedent
+phrase	claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md	repository-owned record URL
+phrase	claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md	the applicable safety invariant
+phrase	claude-plugins/kampus-pipeline/skills/heal-ci/SKILL.md	repository precedent
+phrase	claude-plugins/kampus-pipeline/skills/review-design/SKILL.md	repository precedent
+phrase	claude-plugins/kampus-pipeline/skills/review-design/SKILL.md	repository-owned record URL
+phrase	claude-plugins/kampus-pipeline/skills/review-design/SKILL.md	the applicable safety invariant
+phrase	claude-plugins/kampus-pipeline/skills/review-doc/SKILL.md	repository precedent
+phrase	claude-plugins/kampus-pipeline/skills/review-doc/SKILL.md	repository-owned record URL
+phrase	claude-plugins/kampus-pipeline/skills/review-doc/SKILL.md	the applicable safety invariant
+phrase	claude-plugins/kampus-pipeline/skills/review-plan/SKILL.md	repository precedent
+phrase	claude-plugins/kampus-pipeline/skills/review-plan/SKILL.md	the applicable safety invariant
+phrase	claude-plugins/kampus-pipeline/skills/review-skill/SKILL.md	repository precedent
+phrase	claude-plugins/kampus-pipeline/skills/review-skill/SKILL.md	repository-owned record URL
+phrase	claude-plugins/kampus-pipeline/skills/review-skill/SKILL.md	the applicable safety invariant
+phrase	claude-plugins/kampus-pipeline/skills/review-trivial/SKILL.md	repository precedent
+phrase	claude-plugins/kampus-pipeline/skills/review-trivial/SKILL.md	the applicable safety invariant
+phrase	claude-plugins/kampus-pipeline/skills/triage/close-not-planned.md	repository precedent
+phrase	claude-plugins/kampus-pipeline/skills/triage/close-not-planned.md	repository-owned record URL
+phrase	claude-plugins/kampus-pipeline/skills/wayfinder/SKILL.md	repository decision record
+phrase	claude-plugins/kampus-pipeline/skills/writing-clearly-and-concisely/SKILL.md	the applicable safety invariant
+prose-href	claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md	#the-exempt-boundary-behavior--access--state-delta-the rule that exempts only changes with no behavior, access, or state delta
+prose-href	claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md	repository-owned record URL
+prose-href	claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md	review-code/SKILL.md#performing-the-append--the-four-fences-enforced-at-this-site-the specialist-fan-out rule that routes expert concerns without duplicating the configured base branch review
+prose-href	claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md	the control-plane rule that requires human approval for changes to automation, CI, or merge safeguards
+prose-href	claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md	the rule that makes gate-critical skill changes control-plane changes
+prose-href	claude-plugins/kampus-pipeline/skills/review-design/SKILL.md	repository-owned record URL
+prose-href	claude-plugins/kampus-pipeline/skills/review-doc/SKILL.md	../review-code/SKILL.md#performing-the-append--the-four-fences-enforced-at-this-site-the specialist-fan-out rule that routes expert concerns without duplicating the configured base branch review
+prose-href	claude-plugins/kampus-pipeline/skills/review-doc/SKILL.md	../review-code/SKILL.md#specialist-fan-out--route-dont-grade-the specialist-fan-out rule that routes expert concerns without duplicating the configured base branch review--the-shared-reference
+prose-href	claude-plugins/kampus-pipeline/skills/review-doc/SKILL.md	repository-owned record URL
+prose-href	claude-plugins/kampus-pipeline/skills/review-doc/SKILL.md	the applicable safety invariant
+prose-href	claude-plugins/kampus-pipeline/skills/review-doc/SKILL.md	the rule that keeps advisory control-plane evidence separate from merge-authorizing verdicts
+prose-href	claude-plugins/kampus-pipeline/skills/review-plan/SKILL.md	../review-code/SKILL.md#performing-the-append--the-four-fences-enforced-at-this-site-the specialist-fan-out rule that routes expert concerns without duplicating the configured base branch review
+prose-href	claude-plugins/kampus-pipeline/skills/review-plan/SKILL.md	../review-code/SKILL.md#specialist-fan-out--route-dont-grade-the specialist-fan-out rule that routes expert concerns without duplicating the configured base branch review--the-shared-reference
+prose-href	claude-plugins/kampus-pipeline/skills/review-skill/SKILL.md	../review-code/SKILL.md#performing-the-append--the-four-fences-enforced-at-this-site-the specialist-fan-out rule that routes expert concerns without duplicating the configured base branch review
+prose-href	claude-plugins/kampus-pipeline/skills/review-skill/SKILL.md	../review-code/SKILL.md#specialist-fan-out--route-dont-grade-the specialist-fan-out rule that routes expert concerns without duplicating the configured base branch review--the-shared-reference
+prose-href	claude-plugins/kampus-pipeline/skills/review-skill/SKILL.md	repository-owned record URL
+prose-href	claude-plugins/kampus-pipeline/skills/review-skill/SKILL.md	the rule that keeps advisory control-plane evidence separate from merge-authorizing verdicts
+prose-href	claude-plugins/kampus-pipeline/skills/triage/close-not-planned.md	repository-owned record URL
