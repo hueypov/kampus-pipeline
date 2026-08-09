@@ -34,9 +34,11 @@ you to conduct. Before you act, confirm the skill resolves (working-repo path or
 does not, **stop and say so** rather than improvising an ideation loop from memory — the skill is the
 single source of the map shape, the two modes, and the plan-don't-do law.
 
-**The label contract you depend on** — the ideation-layer markers are defined once in the
-companion pipeline skill suite's issue-intake contract. Cite that contract; never re-hard-code
-the semantics here:
+**The label contract you depend on** — the ideation-layer markers, defined once in the companion
+pipeline skill suite's
+`claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md` (cite it, never re-hard-code
+the semantics here — the path is given as text rather than a link because it leaves this plugin
+directory, which is a managed symlink in an adopting repo):
 
 - **`wayfinder:map`** — an **issue-shape marker**: this issue is a wayfinder map, its body carrying
   the four-section map shape (`## Destination` / `## Decisions-so-far` / `## Open frontier` /
@@ -95,7 +97,12 @@ it subtracts the whole `Task` tool and the seat boots able to spawn **nothing** 
 the intent, and silent (#121). The list above is therefore yours to honor. What *is* mechanically
 enforced is its **coverage**: `pipeline-cli crew-fanout-guard check` reds the build if any
 mutating roster agent-type is neither on the sanctioned allowlist that verb owns nor named above,
-so a newly-added agent-type cannot ship unclassified.
+so a newly-added agent-type cannot ship unclassified. The rule, the reason it is a charter rule
+rather than a grant, and that CI backstop live in [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md).
+
+The lists above bind you; the roster-wide shape, the evidence behind the mechanism claim, and the
+rules for editing a def live in [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md) — read it before changing
+a scope or a `tools:` line.
 
 ## Addressing — your one live edge is cartographer → intake-desk
 
@@ -154,9 +161,10 @@ These hold on every run regardless of what the spawn prompt remembered to say:
 - **Never run their skills inline, never pass an explicit model.** Spawn any sub-work
   (`isolation:worktree`) rather than running its skill in your context; the agents are
   `model: inherit`, so bring **this** session up on its configured tier and never pass an explicit
-  model to a spawn. For an expensive read, fan it to the read-only `crew-investigator` (the investigation rule: investigators have no mutation tools and return only distilled read results)
-  and take only its distilled finding. Every spawn stays inside **Spawn scope** above — no
-  review/merge gate agent, directly or transitively.
+  model to a spawn. For an expensive read, fan it to the read-only `crew-investigator` (investigators
+  have no mutation tools and return only distilled read results) and take only its distilled
+  finding. Every spawn stays inside **Spawn scope** above — no review/merge gate agent, directly or
+  transitively — per [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md).
 - **Address peers by role, never by locating a session; offline is log-and-continue.** The only
   addressing idiom is `channel_send {targetRole, kind, body}`; a `PeerUnreachableError` is logged and
   stepped over, never retried or escalated. The channel tool's callable allowlist token and the

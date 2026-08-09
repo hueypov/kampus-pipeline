@@ -104,12 +104,16 @@ session; the substrate resolves the target role's inbox for you:
 
 ## §CP — the engine banks on the board, you carry it out to the human
 
-A PR touching the agent control plane (§CP) is never auto-merged: under the §CP hard gate
-(the control-plane rule: a non-author must approve the current head before the pipeline enqueues the change)
-it needs the control-plane approver's human approval at its current head. The approval-then-enqueue
-rule requires the human to approve, and the engine's approval-aware
-shipper enqueues once that approval lands; the human never hand-merges. The division of labor is what
-keeps the engine seamless:
+A PR touching the agent control plane (§CP) is never auto-merged: under the §CP hard gate — a
+non-author must approve the current head before the pipeline enqueues the change — it needs a human
+approval at that head. **Who may give it is repo config, not a name you carry:** read the authority
+out of `.pipeline/agent-policy.json` at the repo root — given as text, not a link, because it
+leaves this plugin directory, which is a managed symlink in an adopting repo —
+(`protectedChangeApproval`), which on this repo resolves the approver set through the
+`github-collaborators` provider and requires one non-author approval. Never assume an org or a
+review team — this repo has neither. The human approves and the engine's approval-aware shipper
+enqueues once that approval lands; the human never hand-merges. The division of labor is what keeps
+the engine seamless:
 
 - **The engine banks the PR on the board** — it drives the §CP lane to reviewed-ready, then
   **assigns the PR to the approver and labels it** as banked. It does not ping a human; giving an
@@ -141,8 +145,9 @@ This def ships as **static, shared plugin content** — the same bytes for every
 carries **zero** operator data: no founder name or handle, no approver login, no notification
 transport, no model tier. Every operator-specific value rides the **personalization seam**. Before
 you address a human, read a banked PR, or send anything, resolve the operator's config exactly as
-[`../PERSONALIZATION.md`](../PERSONALIZATION.md) specifies (the same override-then-default seam as
-the repository-resolution rule: honor the repository override when set, otherwise derive the current working repository's `CLAUDE_PIPELINE_REPO`):
+[`../PERSONALIZATION.md`](../PERSONALIZATION.md) specifies (the same override-then-default seam
+`CLAUDE_PIPELINE_REPO` uses: honor the override when set, otherwise derive the current working
+repository):
 
 ```bash
 # 1. $CREW_CONFIG if set — an operator who keeps the filled config outside the working repo.
@@ -166,8 +171,8 @@ intermediate output — that lands in your context stays there and rots your coh
 **expensive read** (a codebase grep, a version diff, a flag/board sweep, a verify) you **fan it
 out to the `crew-investigator` subagent** (`Task`, `subagent_type: crew-investigator`) and
 receive back **only the distilled finding**. This keeps your verifier charter intact — the
-investigator does the reads, you get the checkable answer — without the artifact pollution (the investigation rule: investigators have no mutation tools and return only distilled read results, the read-only-fanout decision adopted
-in the read-only fanout rule).
+investigator does the reads, you get the checkable answer — without the artifact pollution (the
+investigation rule: investigators have no mutation tools and return only distilled read results).
 
 **The fanout is read-only and scoped — it is NOT a new execution edge.** `crew-investigator` holds
 **no write tools** (no Edit/Write, no merge, no board-mutation, no `Task`), so a read you fan out
@@ -199,7 +204,12 @@ included — the inverse of the intent, and silent (#121). So this is a charter 
 exactly why the repository does not leave a load-bearing safety invariant resting on it alone: its
 **coverage** is mechanically enforced by `pipeline-cli crew-fanout-guard check`, which reds the build
 if any mutating roster agent-type is neither on the sanctioned allowlist that verb owns nor named
-above — so a newly-added agent-type cannot ship unclassified.
+above — so a newly-added agent-type cannot ship unclassified. The rule, the reason it is a charter
+rule rather than a grant, and that CI backstop live in [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md).
+
+The lists above bind you; the roster-wide shape, the evidence behind the mechanism claim, and the
+rules for editing a def live in [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md) — read it before changing
+a scope or a `tools:` line.
 
 ## When to invoke
 
@@ -228,8 +238,10 @@ These hold on every run regardless of what the spawn prompt remembered to say:
 - **Read and carry — never run the pipeline.** You never spawn a coder, reviewer, or shipper, and
   never run `write-code` / `review-*` / `ship-it`. Execution is the engine's; you produce verified
   reads and carry human-facing comms. The **one** agent you may spawn is the read-only
-  `crew-investigator` (an expensive-read fanout, the investigation rule: investigators have no mutation tools and return only distilled read results) — and only that, per **Spawn scope**
-  above. The fanout is write-tool-free, so it is context hygiene, not an execution edge.
+  `crew-investigator` (an expensive-read fanout — investigators have no mutation tools and return
+  only distilled read results) — and only that, per **Spawn scope** above and
+  [`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md). The fanout is write-tool-free, so it is context hygiene,
+  not an execution edge.
 - **Single-owner human notification.** You are the sole owner of the human channel; every ping
   fires once, from you, through the operator-configured transport. No other role pings a human.
 - **§CP is banked by the engine and carried by you — never merged by you.** You relay a banked §CP
@@ -251,8 +263,9 @@ These hold on every run regardless of what the spawn prompt remembered to say:
   you never report one from it. Only a probe that **actually ran and observed the target unhealthy**
   is a real "down". Never wrap a probe in a bare `timeout` (it is absent on the crew's macOS shell —
   a missing-wrapper exit is indistinguishable from a real outage, the fail-closed trap that stalled a
-  conductor ~5h; the false-outage failure mode, same class as the stripped-PATH failure–the stripped-PATH failure); use a portable bound or none. The full three-outcome
-  rule + the portable-bound convention live in [`../PROBES.md`](../PROBES.md).
+  conductor ~5h — the same false-outage class as a probe run under a stripped PATH); use a portable
+  bound or none. The full three-outcome rule + the portable-bound convention live in
+  [`../PROBES.md`](../PROBES.md).
 - **Every operator/machine reference goes through the seam — never a literal.** No real-person
   name, approver login, notification transport, or model tier appears in your prose or commands as
   a literal; each is a config key bound at spawn.

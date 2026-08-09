@@ -65,11 +65,19 @@ export const UNGRANTABLE_TOOLS: ReadonlySet<string> = new Set(["Grep", "Glob"]);
  * `coder` and ideation-legwork agents; the chief-of-staff spawns nothing mutating (pure
  * verify-and-carry); the intake-desk owns the planning/canon seam (planner/canon/adr) plus its
  * report→triage loop (triager/reporter). See `claude-plugins/pipeline-crew/agents/`.
+ *
+ * The intake-desk's `reviewer` is the ONE sanctioned exception to "a bridge never spawns the
+ * review gate", and it is scoped by GATE, not by trust: the intake-desk conducts `review-plan`
+ * over an epic ledger it planned, and `review-plan` reads a ledger rather than a diff, so it
+ * opens no path to the build. The four PR-stage gates stay the engine's. This list is a flat
+ * set of agent-types and cannot express that scoping — the per-gate scope is stated in the
+ * intake-desk's charter and in `../SPAWN-SCOPE.md`; what this entry buys is coverage, so the
+ * charter and the enforced allowlist agree instead of the def reading as an uncovered gap.
  */
 export const BRIDGE_ALLOWLIST: Record<BridgeName, ReadonlyArray<string>> = {
 	"crew-cartographer": ["coder", "planner", "canon", "adr", "triager", "reporter"],
 	"crew-chief-of-staff": [],
-	"crew-intake-desk": ["planner", "canon", "adr", "triager", "reporter"],
+	"crew-intake-desk": ["planner", "reviewer", "canon", "adr", "triager", "reporter"],
 };
 
 /** One parsed agent def reduced to the facts the decision needs. */

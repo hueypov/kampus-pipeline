@@ -226,3 +226,5 @@ binary that may not exist on PATH (e.g. bare `timeout`).
 - [`PERSONALIZATION.md`](PERSONALIZATION.md) — the config seam mechanism and dimension rationale.
 - [`CHANNEL-TOOL.md`](CHANNEL-TOOL.md) — the channel tool token and boot-window discipline.
 - [`PROBES.md`](PROBES.md) — probe discipline (fail-open liveness/health probes).
+- [`SPAWN-SCOPE.md`](SPAWN-SCOPE.md) — which agents a seat may spawn, why the restriction is
+  charter prose, and the rules that keep a declared `tools:` line from resolving to less.
