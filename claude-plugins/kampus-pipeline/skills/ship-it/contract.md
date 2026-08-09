@@ -35,7 +35,7 @@ Both verbs allocate from one table, so a code means one thing whichever produced
 | 9 | `NOT_YET` | a required check has not finished — "not yet", never "no" |
 | 10 | `REFUSED_POLICY` | repository policy requires an approval this PR does not carry |
 | 12 | `WRITE_UNKNOWN` | the merge was attempted and the outcome could not be confirmed |
-| 7 | `ZERO_SCOPE` | the provider reports the PR cannot merge (conflicts, closed, draft) |
+| 7 | `ZERO_SCOPE` | the provider reports a state this gate does not permit (conflicts, closed, draft, blocked, behind, or any state it does not recognise) |
 | 11 | `PRECONDITION_UNKNOWN` | a precondition could not be READ — the answer is unknown, not satisfied |
 
 `18` and `9` are separate because their owners differ: red is a defect for the author, pending is
