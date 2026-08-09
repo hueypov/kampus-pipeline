@@ -83,12 +83,15 @@
 	// "herdr" requires the `herdr` binary on PATH (https://herdr.dev).
 	"terminal": "<terminal: tmux | herdr>",
 
-	// OPTIONAL (the optional CLI-version rule). Omit this key to accept whatever `claude --version` reports (an
-	// "unpinned" launch — the boot no longer fail-closes on every frequent Claude Code
-	// auto-update). Set it ONLY to deliberately lock a version: a present pin is a hard
-	// exact-match gate asserted before any session starts. Fill with the exact
-	// `major.minor.patch` (optionally `-suffix`) your `claude --version` reports.
-	"cliVersion": "<pinned-claude-code-cli-version>",
+	// OPTIONAL (the optional CLI-version rule). Shipped commented out, so a stand-up that fills every
+	// placeholder still gets the recommended default: with the key absent the launcher accepts
+	// whatever `claude --version` reports (an "unpinned" launch), and the boot no longer fail-closes
+	// on every frequent Claude Code auto-update. Uncomment ONLY to deliberately lock a version — a
+	// present pin is a hard exact-match gate asserted before any session starts — replacing the
+	// example with the exact `major.minor.patch` (optionally `-suffix`) your `claude --version`
+	// reports. Keep that example a literal version: a quoted `<placeholder>` anywhere in this file,
+	// comments included, makes the toolkit read the whole config as not yet personalized.
+	// "cliVersion": "1.2.3",
 
 	// Channel MCP registration for every launched session.
 	"channels": {
