@@ -1,5 +1,5 @@
-import {existsSync, readFileSync} from "node:fs";
-import {join} from "node:path";
+import {existsSync, readdirSync, readFileSync} from "node:fs";
+import {join, resolve} from "node:path";
 import {describe, expect, it} from "vitest";
 import {CORE_AGENT_NAMES, CORE_AGENT_SKILL_NAMES, CORE_SKILL_DEPENDENCIES, CORE_SKILL_NAMES, CORE_WORKFLOW_SUPPORT_FILES, renderWorkflowCatalog, WORKFLOW_CATALOG} from "./payload.ts";
 import {collectPayloadFiles} from "./portable-files.ts";
@@ -78,6 +78,28 @@ const archivedWorkflowForbidden = new RegExp(
 	].join("|"),
 	"i",
 );
+
+/**
+ * A `${CLAUDE_PLUGIN_ROOT}`-anchored path an agent def tells a booting agent to read, captured one
+ * `/`-segment at a time so the trailing backtick or space ends the path rather than the class
+ * swallowing the rest of the sentence. A `:-default` expansion collapses to the variable: the
+ * default is the working-repo path, which is the *other* branch of the fallback, not this one.
+ */
+const pluginRootReference = /\$\{CLAUDE_PLUGIN_ROOT(?::-[^}]*)?\}((?:\/[^\s`)/]+)+)/g;
+
+/** Every `<plugin dir>/agents/*.md` def in the payload, as `[plugin dir, def path]`. */
+const agentDefs = (): Array<[string, string]> => {
+	const plugins = join(root, "claude-plugins");
+	return readdirSync(plugins, {withFileTypes: true})
+		.filter((entry) => entry.isDirectory())
+		.flatMap((plugin) => {
+			const agents = join(plugins, plugin.name, "agents");
+			if (!existsSync(agents)) return [];
+			return readdirSync(agents)
+				.filter((name) => name.endsWith(".md"))
+				.map((name): [string, string] => [join(plugins, plugin.name), join(agents, name)]);
+		});
+};
 
 /**
  * The payload files under a path. Bounded to the repository — see `portable-files.ts` for why a
@@ -307,6 +329,35 @@ describe("portable toolkit boundary", () => {
 		for (const [agent, skills] of Object.entries(CORE_AGENT_SKILL_NAMES)) {
 			for (const skill of skills) expect(CORE_SKILL_NAMES.has(skill), `${agent} -> ${skill}`).toBe(true);
 		}
+	});
+
+	it("resolves every plugin-root-relative path an agent def sends a booting agent to", () => {
+		// A def in one plugin may need a skill that a *sibling* plugin ships, and `${CLAUDE_PLUGIN_ROOT}`
+		// is always the root of the plugin shipping the def — so a fallback that forgets to cross is
+		// structurally unreachable, and the fail-closed gate it feeds halts on a file present on disk.
+		// #166 shipped that in two of the three crew bridges. The original acceptance was "rename the
+		// working-repo copy and confirm the agent still boots", a manual pass nobody re-runs, which is
+		// how it shipped; this resolves the paths instead.
+		const unresolved: string[] = [];
+		const referenced: string[] = [];
+		for (const [plugin, def] of agentDefs()) {
+			for (const match of readFileSync(def, "utf8").matchAll(pluginRootReference)) {
+				const path = match[1] ?? "";
+				referenced.push(`${def}: \${CLAUDE_PLUGIN_ROOT}${path}`);
+				// A def names a whole family of skills through a `<name>` placeholder. Its longest
+				// concrete prefix still falsifies the defect — `pipeline-crew` ships no `skills/` at
+				// all — and asserting only what the def actually pins beats not asserting it.
+				const segments = path.split("/").filter(Boolean);
+				const placeholder = segments.findIndex((segment) => segment.includes("<"));
+				const concrete = placeholder === -1 ? segments : segments.slice(0, placeholder);
+				if (concrete.length === 0) continue;
+				const target = resolve(plugin, ...concrete);
+				if (!existsSync(target)) unresolved.push(`${def}: \${CLAUDE_PLUGIN_ROOT}${path}`);
+			}
+		}
+		expect(unresolved).toEqual([]);
+		// Guard the guard: a notation change that stops matching would leave this green over nothing.
+		expect(referenced.length, "no agent def names a plugin-root-relative path").toBeGreaterThan(0);
 	});
 
 	it("ships a policy-gated, repository-agnostic installed agent fleet", () => {

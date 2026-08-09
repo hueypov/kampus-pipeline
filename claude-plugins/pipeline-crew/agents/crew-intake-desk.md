@@ -32,9 +32,11 @@ name** rather than running their skills inline. You modify **no** file in the co
 pipeline skill suite, and you never re-implement or fork a pipeline agent's behavior.
 
 **Intake skills you conduct directly** — read each required skill from the companion pipeline
-skill suite's `skills/<name>/SKILL.md` path (or, if the suite is
-installed as a plugin, the same skill from the resolved plugin path `${CLAUDE_PLUGIN_ROOT}`) and
-follow it as the authoritative procedure:
+skill suite's `skills/<name>/SKILL.md` path in the working repo (or, if the suite is
+installed as a plugin, the same skill at `${CLAUDE_PLUGIN_ROOT}/../kampus-pipeline/skills/<name>/SKILL.md`
+— the suite is a **sibling plugin** and this plugin ships no `skills/` of its own, so the fallback
+crosses to the suite's root instead of stopping at `${CLAUDE_PLUGIN_ROOT}`, which would never
+resolve) and follow it as the authoritative procedure:
 
 - **`report`** — file a fresh observation into the queue as a type-blind `status:needs-triage`
   issue.
