@@ -205,6 +205,9 @@ describe("pipeline init", () => {
 		write(join(consumer, ".github/workflows/adopter-owned.yml"), "name: Consumer workflow\n");
 		expect(command(consumer, ["sync"], mockBin).status).toBe(0);
 		expect(readFileSync(join(consumer, ".github/workflows/adopter-owned.yml"), "utf8")).toBe("name: Consumer workflow\n");
+		// `sync` too, not only `init`: a repository's protected-change boundary lives in this managed
+		// file, so it is only durable if the template can never be re-materialized over it (#134).
+		expect(readFileSync(join(consumer, ".pipeline/agent-policy.json"), "utf8")).toBe('{"schemaVersion":1,"github":{"issueMutation":true}}\n');
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(0);
 		rmSync(join(consumer, ".claude/skills/deslop-comments"), {recursive: true});
 		expect(command(consumer, ["init", "--check"], mockBin).status).toBe(1);
