@@ -17,7 +17,7 @@ const wrappedWorkedExample = [
 	"## Open frontier",
 	"- #103 — Investigation: does better-auth's session model let us mint a single-use invite token",
 	"  without a new table, or do we need an `invite` store of record?",
-	"- #104 — Decision (founder-decision-fork): should an invited çaylak start at 0 karma or inherit",
+	"- #104 — Decision (decision-owner-fork): should an invited çaylak start at 0 karma or inherit",
 	"  a small vouch-backed starting balance? (options + trade-offs surfaced; awaiting founder)",
 	"",
 	"## Graduated fog",
@@ -157,7 +157,7 @@ describe("parseMapBody — CHART-time seed attribution `— from #<MAP>` (#3405)
 });
 
 describe("parseMapBody — frontier entries", () => {
-	it("captures the sub-issue ref and the founder-decision-fork flag", () => {
+	it("captures the sub-issue ref and the fork flag", () => {
 		const m = parseMapBody(cleanMapBody);
 		assert.deepStrictEqual(
 			m.openFrontier.entries.map((t) => t.issue),
@@ -172,6 +172,55 @@ describe("parseMapBody — frontier entries", () => {
 	it("a frontier line with no `#N` leaves issue undefined", () => {
 		const m = parseMapBody("## Open frontier\n- Investigation: how do invites work?\n");
 		assert.strictEqual(m.openFrontier.entries[0]?.issue, undefined);
+	});
+});
+
+describe("parseMapBody — the fork marker in both spellings (#165)", () => {
+	const forkFlags = (...lines: ReadonlyArray<string>) =>
+		parseMapBody(["## Open frontier", ...lines].join("\n")).openFrontier.entries.map(
+			(t) => t.founderDecisionFork,
+		);
+
+	it("flags the prescribed spelling and the pre-rename one alike", () => {
+		assert.deepStrictEqual(
+			forkFlags(
+				"- #104 — Decision (decision-owner-fork): starting karma?",
+				"- #105 — Decision (founder-decision-fork): starting karma?",
+			),
+			[true, true],
+		);
+	});
+
+	it("keeps the `[-\\s]` punctuation tolerance for both spellings", () => {
+		assert.deepStrictEqual(
+			forkFlags(
+				"- #104 — Decision (decision owner fork): starting karma?",
+				"- #105 — Decision (Founder Decision Fork): starting karma?",
+			),
+			[true, true],
+		);
+	});
+
+	it("leaves an unmarked frontier line answerable", () => {
+		assert.deepStrictEqual(
+			forkFlags(
+				"- #103 — Investigation: token storage?",
+				"- #106 — Investigation: should we fork the upstream session store?",
+			),
+			[false, false],
+		);
+	});
+
+	it("a garbled or since-renamed marker stays a fork, never answerable", () => {
+		// The fail-safe direction: an unrecognized `…-fork` annotation biases to fork so a
+		// typo can never route a decision owner's call to an investigation subagent.
+		assert.deepStrictEqual(
+			forkFlags(
+				"- #104 — Decision (desicion-owner-fork): starting karma?",
+				"- #105 — Decision (decision-holder-fork): starting karma?",
+			),
+			[true, true],
+		);
 	});
 });
 

@@ -853,7 +853,7 @@ A `wayfinder:map` issue body carries exactly these four sections, in order:
 - **`## Open frontier`** — the **live edge of the unknown**: the open investigation and decision
   tickets, kept as **native sub-issues** of the map (so each is a real, linkable, closable
   GitHub issue, reusing the existing infra). Each line references its sub-issue and states the
-  open question. A ticket flagged a **founder-decision-fork** is marked as such — `wayfinder`
+  open question. A ticket flagged a **decision-owner-fork** is marked as such — `wayfinder`
   surfaces it and stops rather than auto-resolving it (the preserved human seam). This section
   shrinks as tickets are answered and grows as answers reveal new unknowns; the map is "done
   enough" for handoff when it holds no more *answerable* unknowns.
@@ -886,7 +886,7 @@ that person lands as a initial contributor state with a clear first-run path —
 ## Open frontier
 - documented repository precedent — Investigation: does better-auth's session model let us mint a single-use invite token
   without a new table, or do we need an `invite` store of record?
-- documented repository precedent — Decision (founder-decision-fork): should an invited initial contributor state start at 0 configured reputation score or inherit
+- documented repository precedent — Decision (decision-owner-fork): should an invited initial contributor state start at 0 configured reputation score or inherit
   a small configured approval action-backed starting balance? (options + trade-offs surfaced; awaiting founder)
 
 ## Graduated fog
@@ -899,7 +899,7 @@ founder given with no frontier ticket to cite — so it is attributed `— from 
 number (with `(@founder)` naming the *who*). `documented repository precedent`/`documented repository precedent` have graduated (their answers are in
 `## Decisions-so-far`, they sit in `## Graduated fog`, and each spawned the next frontier ticket,
 so those two entries cite their **frontier tickets**), `documented repository precedent` is an answerable investigation
-`work` mode can clear, and `documented repository precedent` is a **founder-decision-fork** `wayfinder` surfaces and stops
+`work` mode can clear, and `documented repository precedent` is a **decision-owner-fork** `wayfinder` surfaces and stops
 on — never auto-resolves.
 
 ### Field notes
