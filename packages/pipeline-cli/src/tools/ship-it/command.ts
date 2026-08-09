@@ -11,9 +11,12 @@
  */
 import {Console, Effect, Option} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
-import {FAIL_CLOSED_POLICY} from "../class-probe/class-probe.ts";
-import {readClassificationPolicy, repositoryRoot} from "../class-probe/policy.ts";
-import {GithubTrackerLive, Tracker} from "../tracker/tracker.ts";
+import {
+	type PullRequestPolicies,
+	repositoryRoot,
+	resolvePullRequestPolicies,
+} from "../class-probe/policy.ts";
+import {GithubTrackerLive, type ReadPrResult, Tracker} from "../tracker/tracker.ts";
 import {Github as VerdictGithub, GithubLive as VerdictGithubLive} from "../verdict/github.ts";
 import {GATES, type VerdictGate} from "../verdict/verdict-match.ts";
 import {
@@ -23,11 +26,12 @@ import {
 	firstRefusal,
 	type GateState,
 	gatePrecondition,
-	gatesForFiles,
 	parseGateList,
 	mergeablePrecondition,
 	ok,
 	type Precondition,
+	type PrGateScope,
+	prGateScope,
 } from "./preconditions.ts";
 
 const exit = (verb: string, message: string, code: ExitCode): Effect.Effect<never> =>
@@ -73,12 +77,15 @@ const resolveGate = (pr: number, gate: VerdictGate): Effect.Effect<GateState, ne
  * Order is deliberate: mergeability first because it is cheapest and most terminal, then the gates
  * (the thing the pipeline is actually for), then CI.
  */
-const evaluate = (pr: number, gates: ReadonlyArray<VerdictGate>) =>
+const evaluate = (
+	pr: number,
+	gates: ReadonlyArray<VerdictGate>,
+	prState: Option.Option<ReadPrResult>,
+) =>
 	Effect.gen(function* () {
 		const tracker = yield* Tracker;
 		const out: Array<Precondition> = [];
 
-		const prState = yield* tracker.readPullRequest(pr).pipe(Effect.option);
 		if (Option.isNone(prState)) {
 			return [
 				{
@@ -129,6 +136,42 @@ const unknownScope = (pr: number, why: string, verb = "check"): Effect.Effect<ne
 		EXIT.PRECONDITION_UNKNOWN,
 	);
 
+const short = (sha: string): string => sha.slice(0, 7);
+
+const gateList = (gates: ReadonlyArray<VerdictGate> | null): string =>
+	gates === null || gates.length === 0 ? "no namespace" : gates.join(", ");
+
+/**
+ * Say which two policies produced the required set, and where they differed.
+ *
+ * Printed on every run, not only on a disagreement. The defect this closes was invisible precisely
+ * because nothing named the policy in force: `ship-it` reported a required set and no reader could
+ * tell it had been derived from the rule the pull request was replacing (#120).
+ */
+const reportScope = (
+	prState: ReadPrResult,
+	loaded: PullRequestPolicies,
+	scope: PrGateScope,
+): Effect.Effect<void> =>
+	Effect.gen(function* () {
+		for (const [side, ref] of [
+			["base", prState.base],
+			["head", prState.head],
+		] as const) {
+			const state = loaded[side];
+			if (!state.trusted) {
+				yield* Console.log(
+					`policy scope: the ${side} policy at ${short(ref)} could not be trusted (${state.reason}) — classified fail-closed`,
+				);
+			}
+		}
+		yield* Console.log(
+			scope.only.length === 0
+				? `policy scope: base ${short(prState.base)} and head ${short(prState.head)} agree — ${gateList(scope.gates)}`
+				: `policy scope: base ${short(prState.base)} → ${gateList(scope.base)}; head ${short(prState.head)} → ${gateList(scope.head)}; union required because ${gateList(scope.only)} is required by one side only`,
+		);
+	});
+
 /**
  * Which gates this PR requires, derived from **what it changes**.
  *
@@ -144,8 +187,19 @@ const unknownScope = (pr: number, why: string, verb = "check"): Effect.Effect<ne
  * Reading the diff is a precondition like any other here. A file list that cannot be read is UNKNOWN,
  * and an empty one is not "nothing to review" — a pull request that changes nothing is anomalous, and
  * treating it as clean is the same vacuous pass in a different costume.
+ *
+ * The classification runs against both sides of the PR's policy and requires their union — see
+ * `prGateScope` and ADR 0002 for why. It used to run against whatever `.pipeline/agent-policy.json`
+ * sat in the caller's cwd (#120). Reading two commits means both must be in the object store, which
+ * a caller that has not fetched since the author's last push does not have; `resolvePullRequestPolicies`
+ * fetches them, and a ref it still cannot resolve is UNKNOWN scope like any other unreadable
+ * precondition.
  */
-const requiredGates = (pr: number, named: Option.Option<string>) =>
+const requiredGates = (
+	pr: number,
+	named: Option.Option<string>,
+	prState: Option.Option<ReadPrResult>,
+) =>
 	Effect.gen(function* () {
 		// An explicit `--gates` is an assertion by the caller, and every named gate is required
 		// whether or not a verdict exists. That is the difference between asserting the requirement
@@ -182,15 +236,39 @@ const requiredGates = (pr: number, named: Option.Option<string>) =>
 			);
 		}
 
+		if (Option.isNone(prState)) {
+			return yield* unknownScope(
+				pr,
+				"it could not be read, so neither the base nor the head policy has a ref to resolve against",
+			);
+		}
+		// The root supplies the object store the two refs are resolved in — never the policy content
+		// itself, which is what made the answer depend on the caller's checkout.
 		const root = repositoryRoot();
-		const policy = root === null ? null : readClassificationPolicy(root, null);
-		// An unreadable policy classifies everything rather than nothing — the classifier's own
-		// fail-closed default, reused here rather than re-decided.
-		const gates = gatesForFiles(files, policy?.policy ?? FAIL_CLOSED_POLICY);
-		if (gates === null) {
+		if (root === null) {
+			return yield* unknownScope(pr, "there is no repository here to resolve its two policy refs in");
+		}
+		const resolution = resolvePullRequestPolicies(root, prState.value.base, prState.value.head);
+		// A ref that will not resolve even after the fetch is UNKNOWN scope, not a strict one. Loading
+		// it as the classify-everything fallback would union to every namespace — including one this
+		// repository configures with no include pattern, so no reviewer can ever be routed to it and
+		// the merge gate can never be satisfied. Wrong, and phrased like a legitimate answer.
+		if (resolution._tag === "unresolved") {
+			return yield* unknownScope(
+				pr,
+				`${resolution.refs.map(short).join(" and ")} could not be resolved${resolution.remote === null ? " and this repository has no remote to fetch from" : ` after fetching from ${resolution.remote}`}, so that side's policy cannot be read`,
+			);
+		}
+		const loaded = resolution.policies;
+		// Both refs resolved, so a policy that still will not load is malformed at that commit — a
+		// real, actionable condition rather than an unknown one. That keeps the classifier's own
+		// fail-closed default, reused here rather than re-decided, and `reportScope` names the side.
+		const scope = prGateScope(files, {base: loaded.base.policy, head: loaded.head.policy});
+		if (scope.gates === null) {
 			return yield* unknownScope(pr, `${files.length} changed file(s) matched no review namespace`);
 		}
-		return gates;
+		yield* reportScope(prState.value, loaded, scope);
+		return scope.gates;
 	});
 
 const report = (preconditions: ReadonlyArray<Precondition>) =>
@@ -204,9 +282,10 @@ const check = Command.make(
 	"check",
 	{pr: prFlag, gates: gatesFlag},
 	Effect.fn(function* ({pr, gates}) {
-		const required = yield* requiredGates(pr, gates);
+		const prState = yield* (yield* Tracker).readPullRequest(pr).pipe(Effect.option);
+		const required = yield* requiredGates(pr, gates, prState);
 		yield* Console.log(`gates required: ${required.length === 0 ? "(none found)" : required.join(", ")}`);
-		const preconditions = yield* evaluate(pr, required);
+		const preconditions = yield* evaluate(pr, required, prState);
 		yield* report(preconditions);
 		const refusal = firstRefusal(preconditions);
 		if (refusal) return yield* exit("check", `#${pr} ${refusal.name}: ${refusal.detail}`, refusal.code);
@@ -229,8 +308,9 @@ const merge = Command.make(
 	"merge",
 	{pr: prFlag, gates: gatesFlag, method: methodFlag, dryRun: dryRunFlag},
 	Effect.fn(function* ({pr, gates, method, dryRun}) {
-		const required = yield* requiredGates(pr, gates);
-		const preconditions = yield* evaluate(pr, required);
+		const prState = yield* (yield* Tracker).readPullRequest(pr).pipe(Effect.option);
+		const required = yield* requiredGates(pr, gates, prState);
+		const preconditions = yield* evaluate(pr, required, prState);
 		const refusal = firstRefusal(preconditions);
 		if (refusal) {
 			yield* report(preconditions);

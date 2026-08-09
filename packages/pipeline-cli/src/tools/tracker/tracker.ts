@@ -318,6 +318,7 @@ export type ReadPrResult = {
 	readonly author: string;
 	readonly body: string;
 	readonly head: string;
+	readonly base: string;
 	readonly state: string;
 	readonly draft: boolean;
 	readonly merged: boolean;
@@ -594,6 +595,9 @@ const RawPr = Schema.Struct({
 	body: Schema.NullOr(Schema.String),
 	user: Schema.NullOr(Schema.Struct({login: Schema.String})),
 	head: Schema.Struct({sha: Schema.String}),
+	// The base commit is read for the same reason the head is: a PR has two policies, and which
+	// gates it requires is a question about both (#120).
+	base: Schema.Struct({sha: Schema.String}),
 	html_url: Schema.String,
 	state: Schema.optional(Schema.String),
 	draft: Schema.optional(Schema.Boolean),
@@ -946,6 +950,7 @@ const readPullRequest = Effect.fn("Tracker.readPullRequest")(function* (repo: st
 		author: raw.user?.login ?? "",
 		body: raw.body ?? "",
 		head: raw.head.sha,
+		base: raw.base.sha,
 		state: raw.state ?? "open",
 		draft: raw.draft ?? false,
 		merged: raw.merged ?? false,

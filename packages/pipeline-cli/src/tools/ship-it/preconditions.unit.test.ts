@@ -9,11 +9,13 @@ import {
 	firstRefusal,
 	gatePrecondition,
 	gatesForFiles,
+	guardPolicies,
 	guardPolicy,
 	namespaceCheck,
 	parseGateList,
 	mergeablePrecondition,
 	ok,
+	prGateScope,
 	refused,
 } from "./preconditions.ts";
 
@@ -153,6 +155,90 @@ describe("gatesForFiles — the scope the merge gate rests on", () => {
 	});
 });
 
+describe("prGateScope — a PR has two policies, and the union of them is the requirement", () => {
+	// The base policy has no rule for eval sets, so they fall through to the code backstop; the head
+	// policy adds one. This is #93's change, reduced to the two lines that matter.
+	const base = {
+		code: {includePatterns: ["^packages/"], excludePatterns: []},
+		docs: {includePatterns: ["\\.md$"], excludePatterns: ["(^|/)skills/"]},
+		skills: {includePatterns: ["(^|/)skills/"], excludePatterns: []},
+		design: {includePatterns: [], excludePatterns: []},
+	};
+	const head = {
+		...base,
+		skills: {includePatterns: ["(^|/)skills/", "^plugins/[^/]+/evals/"], excludePatterns: []},
+	};
+	const files = ["plugins/kit/evals/triage/evals.json", "docs/authoring.md", "packages/a.ts"];
+
+	it("requires the namespace only the HEAD policy asks for", () => {
+		// The defect, stated as its fix: classified against the base alone this diff needs code and
+		// doc, so #93 merged with the very namespace it existed to introduce ungated.
+		expect(gatesForFiles(files, base)).toEqual(["code", "doc"]);
+		expect(prGateScope(files, {base, head}).gates).toEqual(["code", "doc", "skill"]);
+	});
+
+	it("requires the namespace only the BASE policy asks for", () => {
+		// The union is not "trust the head". A PR that DELETES a classification rule must not thereby
+		// delete the gate that would have reviewed the deletion.
+		expect(prGateScope(files, {base: head, head: base}).gates).toEqual(["code", "doc", "skill"]);
+	});
+
+	it("reports which side each disputed namespace came from rather than swallowing it", () => {
+		// Union is the fail-closed default, not a reason to hide that the sides disagreed: a policy
+		// change is exactly the diff a human may want routed to them, and this is the cheap signal.
+		expect(prGateScope(files, {base, head}).only).toEqual(["skill"]);
+		expect(prGateScope(files, {base, head}).base).toEqual(["code", "doc"]);
+		expect(prGateScope(files, {base, head}).head).toEqual(["code", "doc", "skill"]);
+	});
+
+	it("reports no disagreement when the two sides classify alike", () => {
+		const agreed = prGateScope(files, {base, head: base});
+		expect(agreed.only).toEqual([]);
+		expect(agreed.gates).toEqual(["code", "doc"]);
+	});
+
+	it("returns null gates for an empty file list, exactly as one policy does", () => {
+		// The union must not turn "scope unknown" into "scope empty" — that reading is what let an
+		// unreviewed PR through the merge gate (#60).
+		expect(prGateScope([], {base, head}).gates).toBeNull();
+	});
+
+	it("requires every gate when either side cannot be trusted", () => {
+		expect(prGateScope(["anything"], {base, head: FAIL_CLOSED_POLICY}).gates).toEqual([
+			"code",
+			"doc",
+			"skill",
+			"design",
+		]);
+	});
+});
+
+describe("guardPolicies — the refusal guard needs BOTH sides trustworthy", () => {
+	const trusted = {policy: FAIL_CLOSED_POLICY, trusted: true};
+	const untrusted = {policy: FAIL_CLOSED_POLICY, trusted: false};
+
+	it("passes both trusted sides through", () => {
+		expect(guardPolicies({base: trusted, head: trusted})).toEqual({
+			base: FAIL_CLOSED_POLICY,
+			head: FAIL_CLOSED_POLICY,
+		});
+	});
+
+	it.each([
+		["base", {base: untrusted, head: trusted}],
+		["head", {base: trusted, head: untrusted}],
+	])("returns null when the %s side is untrusted", (_side, loaded) => {
+		// One good side is not half a check. The untrusted side loads as classify-everything, which
+		// unions to every namespace and leaves the guard nothing it can refuse — `guardPolicy`'s
+		// fail-open arriving through the union instead of through a single load.
+		expect(guardPolicies(loaded)).toBeNull();
+	});
+
+	it("returns null outside a repository", () => {
+		expect(guardPolicies(null)).toBeNull();
+	});
+});
+
 describe("parseGateList — an explicit --gates must not weaken the gate", () => {
 	it("refuses a token that is not a gate rather than filtering it away", () => {
 		// The live hole: filtering left an empty required set, so `--gates=nonsense` passed a PR with
@@ -195,15 +281,16 @@ describe("namespaceCheck — a verdict may only land in a namespace the diff req
 		skills: {includePatterns: ["(^|/)skills/"], excludePatterns: []},
 		design: {includePatterns: ["\\.css$"], excludePatterns: []},
 	};
+	const unchanged = {base: policy, head: policy};
 
 	it("allows a gate the diff requires", () => {
-		expect(namespaceCheck("code", ["packages/a.ts"], policy)).toEqual({_tag: "allowed"});
+		expect(namespaceCheck("code", ["packages/a.ts"], unchanged)).toEqual({_tag: "allowed"});
 	});
 
 	it("refuses the habitual gate on a diff that classifies elsewhere, naming what it requires", () => {
 		// The defect class behind #60's history: skill diffs carrying review-code verdicts, the
 		// required gates unmet while the reviewer believed it reviewed.
-		expect(namespaceCheck("code", ["skills/triage/SKILL.md"], policy)).toEqual({
+		expect(namespaceCheck("code", ["skills/triage/SKILL.md"], unchanged)).toEqual({
 			_tag: "refused",
 			required: ["skill"],
 		});
@@ -212,13 +299,15 @@ describe("namespaceCheck — a verdict may only land in a namespace the diff req
 	it("allows any one gate of a mixed diff's several", () => {
 		// Posting one of N required gates is legitimate; COVERAGE of all N is ship-it's check, not
 		// this one. Refusing here would force one reviewer to fabricate the sibling checklists.
-		expect(namespaceCheck("doc", ["packages/a.ts", "docs/b.md"], policy)).toEqual({_tag: "allowed"});
+		expect(namespaceCheck("doc", ["packages/a.ts", "docs/b.md"], unchanged)).toEqual({
+			_tag: "allowed",
+		});
 	});
 
 	it("returns unchecked for an empty file list rather than refusing", () => {
 		// Deliberately weaker than ship-it's refusal on the same input: a merge on unknown scope is
 		// unsafe, a review withheld on unknown scope is just lost. The caller warns aloud.
-		expect(namespaceCheck("code", [], policy)).toEqual({_tag: "unchecked"});
+		expect(namespaceCheck("code", [], unchanged)).toEqual({_tag: "unchecked"});
 	});
 
 	it("returns unchecked for a NULL policy — never allowed", () => {
@@ -232,7 +321,26 @@ describe("namespaceCheck — a verdict may only land in a namespace the diff req
 	it("still refuses under an explicit classify-everything policy only by inclusion", () => {
 		// If a caller DOES hand over the fail-closed policy, every namespace is genuinely in scope
 		// and allowing is correct — the defect was the silent defaulting, not this input.
-		expect(namespaceCheck("design", ["whatever"], FAIL_CLOSED_POLICY)).toEqual({_tag: "allowed"});
+		expect(
+			namespaceCheck("design", ["whatever"], {base: FAIL_CLOSED_POLICY, head: FAIL_CLOSED_POLICY}),
+		).toEqual({_tag: "allowed"});
+	});
+
+	it("allows a namespace only the HEAD policy introduces", () => {
+		// The reviewer half of #120. A PR that teaches the policy to classify evals as skills would
+		// otherwise have its review-skill verdict refused by the base policy — the guard turning away
+		// the one review the PR most needs, on the authority of the rule the PR replaces.
+		const head = {
+			...policy,
+			skills: {includePatterns: ["(^|/)skills/", "^evals/"], excludePatterns: []},
+		};
+		expect(namespaceCheck("skill", ["evals/triage/evals.json"], {base: policy, head})).toEqual({
+			_tag: "allowed",
+		});
+		expect(namespaceCheck("skill", ["evals/triage/evals.json"], unchanged)).toEqual({
+			_tag: "refused",
+			required: ["code"],
+		});
 	});
 });
 
@@ -268,7 +376,9 @@ describe("namespaceCheck — the page-size cap", () => {
 		// ship-it's direction, where truncation can only under-require. Unknown scope on a refusal
 		// guard warns; it never guesses.
 		const files = Array.from({length: 100}, (_, i) => `packages/f${i}.ts`);
-		expect(namespaceCheck("code", files, policy)).toEqual({_tag: "unchecked"});
-		expect(namespaceCheck("code", files.slice(0, 99), policy)).toEqual({_tag: "allowed"});
+		expect(namespaceCheck("code", files, {base: policy, head: policy})).toEqual({_tag: "unchecked"});
+		expect(namespaceCheck("code", files.slice(0, 99), {base: policy, head: policy})).toEqual({
+			_tag: "allowed",
+		});
 	});
 });

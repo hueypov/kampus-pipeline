@@ -29,8 +29,8 @@
 import {readFileSync} from "node:fs";
 import {Console, Effect, Option} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
-import {readClassificationPolicy, repositoryRoot} from "../class-probe/policy.ts";
-import {guardPolicy, namespaceCheck} from "../ship-it/preconditions.ts";
+import {repositoryRoot, resolvePullRequestPolicies} from "../class-probe/policy.ts";
+import {guardPolicies, namespaceCheck} from "../ship-it/preconditions.ts";
 import {GithubTrackerLive, Tracker} from "../tracker/tracker.ts";
 import * as Exit from "../../exit-codes.ts";
 import {Github, GithubLive} from "./github.ts";
@@ -198,16 +198,12 @@ const post = Command.make(
 		const authenticated = yield* (yield* Github)
 			.whoAmI()
 			.pipe(Effect.catchTag("gh-io/GhCommandError", () => unresolved));
-		// A read that fails resolves to the empty string, which routes into the fail-closed branch
-		// below rather than silently permitting the post.
-		const author = yield* (yield* Tracker).readPullRequest(pr).pipe(
-			Effect.map((r) => r.author),
-			Effect.catchTags({
-				"gh-io/GhCommandError": () => unresolved,
-				"gh-io/GhParseError": () => unresolved,
-				"gh-io/RepoResolutionError": () => unresolved,
-			}),
-		);
+		// One read answers two questions: WHO authored this PR (the firewall above) and WHICH two
+		// commits its policy has to be resolved against (the namespace check below). A read that
+		// fails resolves the author to the empty string, which routes into the fail-closed branch
+		// rather than silently permitting the post.
+		const prState = yield* (yield* Tracker).readPullRequest(pr).pipe(Effect.option);
+		const author = Option.isSome(prState) ? prState.value.author : yield* unresolved;
 		const refusal = identityCheck({
 			pr,
 			authenticated,
@@ -230,18 +226,31 @@ const post = Command.make(
 				SchemaError: () => Effect.succeed([] as ReadonlyArray<string>),
 			}),
 		);
+		// Both sides of the PR's policy, each from its own ref, resolved by the SAME function ship-it
+		// derives the merge scope from — so a reviewer and a shipper standing in different checkouts
+		// cannot require different sets (see `prGateScope`, #120). The resolver fetches a commit this
+		// checkout does not have; a ref it still cannot resolve stays null and lands in `unchecked`
+		// below, which is this verb's whole failure direction — see ADR 0002.
 		const root = repositoryRoot();
-		const loaded = root === null ? null : readClassificationPolicy(root, null);
-		// Through guardPolicy, which honours the loader's trust flag — the loader never returns null,
-		// so a bare `?? null` here was dead code and the untrusted classify-everything fallback
+		const resolution =
+			root === null || Option.isNone(prState)
+				? null
+				: resolvePullRequestPolicies(root, prState.value.base, prState.value.head);
+		const loaded = resolution?._tag === "resolved" ? resolution.policies : null;
+		// Through guardPolicies, which honours each loader's trust flag — the loader never returns
+		// null, so a bare `?? null` here was dead code and the untrusted classify-everything fallback
 		// flowed into the guard, fail-opening it in every worktree (caught by review, live).
-		const scope = namespaceCheck(g, changed, guardPolicy(loaded));
+		const scope = namespaceCheck(g, changed, guardPolicies(loaded));
 		if (scope._tag === "refused") return yield* refuseWrongNamespace(pr, g, scope.required);
 		if (scope._tag === "unchecked") {
 			// Said aloud rather than skipped silently — a check that did not run must never read as
 			// one that passed. ship-it re-derives this scope at the merge and refuses there.
 			yield* Console.error(
-				`verdict post: #${pr}'s namespace check did NOT run (no readable policy or file list from ${root ?? "an unresolved root"}) — ship-it re-derives this at the merge`,
+				`verdict post: #${pr}'s namespace check did NOT run (${
+					resolution?._tag === "unresolved"
+						? `${resolution.refs.map((ref) => ref.slice(0, 7)).join(" and ")} could not be resolved, so that side's policy could not be read`
+						: `no readable policy or file list from ${root ?? "an unresolved root"}`
+				}) — ship-it re-derives this at the merge`,
 			);
 		}
 
