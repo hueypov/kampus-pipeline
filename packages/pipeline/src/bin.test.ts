@@ -518,6 +518,37 @@ describe("pipeline init", () => {
 		expect(command(consumer, ["check"], mockBin).stderr).not.toContain(TERMINAL_DIAGNOSTIC);
 	}, 20_000);
 
+	// Drives the REAL shipped template rather than the fixture stub, because the claim is about what an
+	// adopter actually materializes. The template ships `cliVersion` commented out so that a stand-up
+	// obeying "leave no `<...>` behind" still lands on the recommended unpinned launch instead of a pin
+	// that fail-closes at the next Claude Code auto-update (#171). The commented example carries a
+	// literal version rather than a placeholder because the placeholder probe reads the RAW config text
+	// and does not strip comments — a placeholder parked in a comment would mark even a fully
+	// personalized config as unpersonalized forever, silently suppressing the terminal check above.
+	it("ships a crew template whose by-the-book personalization is unpinned and reads as personalized", () => {
+		const {consumer, mockBin} = fixture();
+		const template = join(process.cwd(), "../../claude-plugins/pipeline-crew/crew.config.template.jsonc");
+		copyFileSync(template, join(consumer, ".pipeline/toolkit/claude-plugins/pipeline-crew/crew.config.template.jsonc"));
+		expect(command(consumer, ["init"], mockBin).status).toBe(0);
+		// init materializes byte for byte, so the commented-out key survives into the adopter's config.
+		const materialized = readFileSync(join(consumer, ".claude/crew.config.jsonc"), "utf8");
+		expect(materialized).toBe(readFileSync(template, "utf8"));
+		expect(materialized).not.toMatch(/^\s*"cliVersion"/m);
+		// Exactly what the stand-up asks: fill every `<placeholder>`. An operator fills KEYS, not prose,
+		// so comment lines are left alone — which is precisely what leaves a placeholder parked in a
+		// comment behind, and why the assertion below is not vacuous. The values need not be meaningful
+		// (the probe this drives is textual), but they resolve `terminal` to the default, tmux.
+		const personalized = materialized
+			.split("\n")
+			.map((line) => (line.trimStart().startsWith("//") ? line : line.replace(/"<[^">\n]+>"/g, '"tmux"')))
+			.join("\n");
+		write(join(consumer, ".claude/crew.config.jsonc"), personalized);
+		const result = command(consumer, ["init"], mockBin);
+		expect(result.stderr).not.toContain("Crew setup required");
+		// The consequence rather than a restatement: the install-time terminal check is reached again.
+		expect(result.stderr).toContain(TERMINAL_DIAGNOSTIC);
+	}, 20_000);
+
 	it("requires a CLI tool name", () => {
 	const result = spawnSync(join(process.cwd(), "../../bin/pipeline"), ["cli"], {
 			cwd: process.cwd(),
