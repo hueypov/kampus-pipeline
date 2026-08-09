@@ -368,9 +368,7 @@ describe("judge — the enforced-allowlist coverage decision", () => {
 		expect(CARTOGRAPHER.charterExclusions).toContain("reviewer");
 		expect(BRIDGE_ALLOWLIST["crew-chief-of-staff"]).not.toContain("reviewer");
 		expect(CHIEF.charterExclusions).toContain("reviewer");
-		expect(judge({rosterAgents: FULL_ROSTER, bridges: [CARTOGRAPHER, CHIEF, INTAKE]}).pass).toBe(
-			true,
-		);
+		expect(judge(input([CARTOGRAPHER, CHIEF, INTAKE])).pass).toBe(true);
 	});
 
 	it("fails closed on zero roster and on zero bridges (the zero-scope fail-closed invariant)", () => {
