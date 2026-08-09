@@ -211,7 +211,7 @@ export interface ProjectScopeRegisterInput {
  *
  * `register` makes a pane's server VISIBLE only. The two boot gates that decide whether the CLI ever
  * spawns it — folder trust in `~/.claude.json`, and the server name in `enabledMcpjsonServers` in
- * merged settings — are operator-owned host state that no launch path seeds or verifies. See ADR 0002.
+ * merged settings — are operator-owned host state that no launch path seeds or verifies. See ADR 0003.
  */
 export interface ProjectScopeRegistrar {
 	readonly reap: (
@@ -228,7 +228,7 @@ export interface ProjectScopeRegistrar {
 	) => Effect.Effect<void, ProjectScopeWriteError>;
 }
 
-/** The production project-scope registrar: the real crew-run reaper, per-pane cwd, and `.mcp.json` register (visibility only — see ADR 0002). */
+/** The production project-scope registrar: the real crew-run reaper, per-pane cwd, and `.mcp.json` register (visibility only — see ADR 0003). */
 export const productionProjectScopeRegistrar: ProjectScopeRegistrar = {
 	reap: (projectRoot, serverName) => reapCrewProjectScopeFor(projectRoot, serverName),
 	paneCwd: (projectRoot, runId, paneLabel) =>
@@ -556,7 +556,7 @@ export const runStandUp = (
 
 		// Start-of-stand-up reaper (crash-safety, the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure): clear any prior run's
 		// crew-run dirs — a launcher that died mid-run leaves leftovers this run clears here, before it
-		// re-mints. Host boot-gate state is operator-owned and is not touched (ADR 0002).
+		// re-mints. Host boot-gate state is operator-owned and is not touched (ADR 0003).
 		yield* localScope.reap(projectRoot, serverName);
 
 		const sessions = deriveSessionSet({engineCount: config.engineCount, instanceId});
@@ -592,7 +592,7 @@ export const runStandUp = (
 		// persisted project scope, never the old inline `--mcp-config`. Each `.mcp.json` sits in the pane's
 		// own cwd, on no sibling's ancestor chain, so a pane sees ONLY its own server (no role-lease storm).
 		// This makes the server VISIBLE only: the boot gates that decide whether the CLI ever spawns it are
-		// operator-owned and seeded by no launch path (register-project-scope.ts, ADR 0002).
+		// operator-owned and seeded by no launch path (register-project-scope.ts, ADR 0003).
 		yield* localScope.register({
 			projectRoot,
 			runId,
@@ -629,12 +629,12 @@ export const runStandUp = (
 /** What a stand-down consumes: the project whose crew `.mcp.json` files + crew-run dirs to tear down. */
 export interface StandDownInput {
 	readonly projectRoot: string;
-	/** The crew server name the reap is keyed by. Default: `SESSION_SERVER_NAME`. Nothing is revoked (ADR 0002). */
+	/** The crew server name the reap is keyed by. Default: `SESSION_SERVER_NAME`. Nothing is revoked (ADR 0003). */
 	readonly serverName?: string;
 	/**
 	 * Remove the launcher-owned crew-run dir tree (every pane's leaf `.mcp.json` with it). Default:
 	 * `reapCrewProjectScopeFor`, which removes that tree and nothing else — it revokes no approval and
-	 * never opens `~/.claude/settings.json` (ADR 0002). Injected in tests so no real dir is removed.
+	 * never opens `~/.claude/settings.json` (ADR 0003). Injected in tests so no real dir is removed.
 	 */
 	readonly reap?: () => Effect.Effect<void, ProjectScopeWriteError>;
 }
@@ -642,7 +642,7 @@ export interface StandDownInput {
 /**
  * Tear this run's crew registration down (the symmetric `stand-down`, the channel-probe rule: distinguish a connected server, a brief boot delay, and a persistent failure): remove the launcher-owned
  * crew-run dir tree (every pane's `.mcp.json` with it). The operator's server approval is left in
- * place — stand-down owns launcher artifacts, not host state (ADR 0002).
+ * place — stand-down owns launcher artifacts, not host state (ADR 0003).
  * Removal is safe even while a crew is live — a booted stdio server is never re-read against its
  * `.mcp.json`. Idempotent: a second stand-down is a clean no-op.
  */

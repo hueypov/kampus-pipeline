@@ -32,7 +32,7 @@
  * An unsatisfied gate is answered interactively at the pane's own boot and is read ONCE, so a pane that
  * comes up ungated has no crew server for its whole life while a sibling launched after the acceptance
  * persists has one — the per-session divergence recorded in
- * `.decisions/0002-crew-channel-is-an-operator-gated-boot-precondition.md`, which also records why
+ * `.decisions/0003-crew-channel-is-an-operator-gated-boot-precondition.md`, which also records why
  * closing the gate from the launcher is a separate decision rather than a fix to make here.
  *
  * `ensureFolderTrusted` / `enableCrewServerApproval` / `disableCrewServerApproval` below implement both
@@ -371,9 +371,9 @@ export interface RegisterCrewProjectScopeInput {
 	readonly runId: string;
 	readonly serverName: string;
 	readonly entries: readonly CrewMcpEntry[];
-	/** Dead: `registerCrewProjectScope` seeds no folder trust and never opens `~/.claude.json` (ADR 0002). */
+	/** Dead: `registerCrewProjectScope` seeds no folder trust and never opens `~/.claude.json` (ADR 0003). */
 	readonly configPath?: string;
-	/** Dead: `registerCrewProjectScope` seeds no approval and never opens `~/.claude/settings.json` (ADR 0002). */
+	/** Dead: `registerCrewProjectScope` seeds no approval and never opens `~/.claude/settings.json` (ADR 0003). */
 	readonly settingsPath?: string;
 }
 

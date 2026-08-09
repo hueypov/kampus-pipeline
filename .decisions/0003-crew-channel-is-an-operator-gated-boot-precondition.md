@@ -1,5 +1,5 @@
 ---
-id: 0002
+id: 0003
 title: A crew pane's channel is an operator-gated boot precondition, not a launcher guarantee
 status: accepted
 date: 2026-08-08

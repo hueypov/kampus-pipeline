@@ -153,6 +153,6 @@ is already board-visible: an engine posts its lane as the issue assignee plus a 
 its session before opening the lane, and reads both before claiming one, because a seat that cannot
 take the cross-engine claim also cannot read it. That is weaker than the lock and is the whole
 mitigation available at engine count > 1. The mechanism, the evidence, and what is deliberately left
-unfixed are recorded in `.decisions/0002-crew-channel-is-an-operator-gated-boot-precondition.md`.
+unfixed are recorded in `.decisions/0003-crew-channel-is-an-operator-gated-boot-precondition.md`.
 Recovery, if an operator is at the keyboard, is `retire-role` then `spawn-role` — it costs the seat
 its context, so it is a recovery and not a fix.
