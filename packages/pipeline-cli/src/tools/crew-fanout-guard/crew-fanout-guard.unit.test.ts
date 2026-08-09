@@ -72,9 +72,10 @@ const CHIEF = bridge("crew-chief-of-staff", [
 	"crew-intake-desk",
 	"crew-chief-of-staff",
 ]);
+// The intake-desk does NOT exclude `reviewer`: it is allowlisted, scoped to `review-plan` over an
+// epic ledger — the one sanctioned bridge→review-gate spawn.
 const INTAKE = bridge("crew-intake-desk", [
 	"coder",
-	"reviewer",
 	"shipper",
 	"crew-engineering-manager",
 	"crew-cartographer",
@@ -244,6 +245,20 @@ describe("judge — the enforced-allowlist coverage decision", () => {
 		expect(v.pass).toBe(true);
 		expect(BRIDGE_ALLOWLIST["crew-intake-desk"]).toContain("planner");
 		expect(INTAKE.charterExclusions).not.toContain("planner");
+	});
+
+	it("sanctions the intake-desk's review-plan `reviewer` while every other bridge excludes it", () => {
+		// The one bridge→review-gate spawn: allowlisted for the intake-desk (scoped to review-plan
+		// over an epic ledger), and still charter-excluded by both peer bridges.
+		expect(BRIDGE_ALLOWLIST["crew-intake-desk"]).toContain("reviewer");
+		expect(INTAKE.charterExclusions).not.toContain("reviewer");
+		expect(BRIDGE_ALLOWLIST["crew-cartographer"]).not.toContain("reviewer");
+		expect(CARTOGRAPHER.charterExclusions).toContain("reviewer");
+		expect(BRIDGE_ALLOWLIST["crew-chief-of-staff"]).not.toContain("reviewer");
+		expect(CHIEF.charterExclusions).toContain("reviewer");
+		expect(judge({rosterAgents: FULL_ROSTER, bridges: [CARTOGRAPHER, CHIEF, INTAKE]}).pass).toBe(
+			true,
+		);
 	});
 
 	it("fails closed on zero roster and on zero bridges (the zero-scope fail-closed invariant)", () => {
