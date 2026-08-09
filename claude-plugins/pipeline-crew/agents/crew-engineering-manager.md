@@ -38,7 +38,7 @@ fork their behavior:
   otherwise pollute your context (a codebase grep's `node_modules` noise, a flag/board sweep's
   WARN spam, a version diff's many-call chatter), dispatch it and receive **only the distilled
   finding**. It is write-tool-free — a context-hygiene primitive, not an execution edge. You are
-  the engine, so unlike a bridge you carry no `disallowedTools` spawn scoping; the investigator is
+  the engine, so unlike a bridge you carry no charter spawn scoping; the investigator is
   simply a cleaner way to run the verified reads your lane loop already needs (a head-bound verdict
   check, a merge-landed confirm) without the artifact byproduct entering your standing seat.
 

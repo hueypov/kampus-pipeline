@@ -56,19 +56,27 @@ The exact shipped values, matching each def head:
 
 | Def file | `name` | `color` | `tools` |
 |---|---|---|---|
-| [`agents/crew-cartographer.md`](agents/crew-cartographer.md) | `crew-cartographer` | `green` | `Read`, `Bash`, `Grep`, `Glob`, `Task`, `channel_send`, `channel_kinds` |
-| [`agents/crew-intake-desk.md`](agents/crew-intake-desk.md) | `crew-intake-desk` | `yellow` | `Read`, `Bash`, `Grep`, `Glob`, `Task`, `channel_send`, `channel_kinds` |
+| [`agents/crew-cartographer.md`](agents/crew-cartographer.md) | `crew-cartographer` | `green` | `Read`, `Bash`, `Task`, `channel_send`, `channel_kinds` |
+| [`agents/crew-intake-desk.md`](agents/crew-intake-desk.md) | `crew-intake-desk` | `yellow` | `Read`, `Bash`, `Task`, `channel_send`, `channel_kinds` |
 | [`agents/crew-engineering-manager.md`](agents/crew-engineering-manager.md) | `crew-engineering-manager` | `cyan` | `Task`, `Bash`, `Read`, `Grep`, `Glob`, `channel_send`, `channel_claim`, `channel_kinds` |
-| [`agents/crew-chief-of-staff.md`](agents/crew-chief-of-staff.md) | `crew-chief-of-staff` | `magenta` | `Read`, `Bash`, `Grep`, `Glob`, `channel_send`, `channel_kinds` |
+| [`agents/crew-chief-of-staff.md`](agents/crew-chief-of-staff.md) | `crew-chief-of-staff` | `magenta` | `Read`, `Bash`, `Task`, `channel_send`, `channel_kinds` |
 
 Each `channel_*` name above is abbreviated for width — the def carries the full
 `mcp__pipeline-crew-mcp__<tool>` token. Every seat carries `channel_send` + `channel_kinds`;
 only the engineering-manager (the one engine) adds `channel_claim` (see the channel-token
 subsection above). `model` is `inherit` for all four.
 
-The `Task` tool marks a role that **spawns subagents**: the three spawning roles
-(cartographer, intake-desk, engineering-manager) carry it; the chief-of-staff, which only
-reads and carries, does **not**.
+**All four roles carry `Task`**, because all four spawn subagents — the chief-of-staff spawns only
+the read-only `crew-investigator`, but that fanout is still a spawn. *Which* subagents a role may
+spawn is not a tool grant: the platform has no per-subagent deny at this layer (a `Task(x)` entry in
+`disallowedTools` is matched by its base tool name and subtracts the whole `Task` tool, booting the
+seat unable to spawn anything — #121). Each bridge therefore states its scope as a `**Never spawn**`
+charter paragraph in its def, and `pipeline-cli crew-fanout-guard check` reds the build if that
+paragraph stops covering the roster.
+
+Bridges deliberately do **not** list `Grep`/`Glob`: those names are never served to a top-level
+session, so declaring them reads as a capability the seat does not have. Fan an expensive read out
+to `crew-investigator`, which does hold them, instead.
 
 ## Role roster — bridges and the engine
 
