@@ -20,7 +20,7 @@ that lives in the seat's def, and the enforced copy lives in the guard.
 | Seat | Kind | Spawn scope |
 |---|---|---|
 | [`crew-cartographer`](agents/crew-cartographer.md) | bridge | the investigator, its Prototype-spike `coder`, and the ideation-legwork agents |
-| [`crew-intake-desk`](agents/crew-intake-desk.md) | bridge | the investigator and its planning/canon/intake agents |
+| [`crew-intake-desk`](agents/crew-intake-desk.md) | bridge | the investigator, its planning/canon/intake agents, and — the one scoped exception — a `reviewer` wrapping `review-plan` over a ledger it planned |
 | [`crew-chief-of-staff`](agents/crew-chief-of-staff.md) | bridge | the investigator, and nothing else — it is pure verify-and-carry |
 | [`crew-engineering-manager`](agents/crew-engineering-manager.md) | engine | **unscoped by design** — spawning `coder → reviewer → shipper` *is* its charter |
 | [`crew-investigator`](agents/crew-investigator.md) | fanout | holds no `Task`, so it spawns nothing at all |
@@ -38,10 +38,42 @@ Two properties of the shape are worth stating once, because no single def can:
   engine — whose charter *is* the build drain — the peer bridges, and its own seat. The
   investigator holds no `Task`, which closes the last edge. The exclusion is therefore complete
   over every agent-type that exists, rather than a bet on how nested spawns behave.
-- **No bridge holds a scoped exception.** Not for a gate it might seem entitled to fire: an
-  intake-desk that spawned the `planner` over an epic does not then spawn a `reviewer` to gate the
-  resulting ledger. The planned children become pickable on the board, which is how work has always
-  crossed from a bridge to the engine; a bridge does not follow them across.
+- **Exactly one bridge holds a scoped exception**, and it is scoped by *gate*, not by trust — the
+  intake-desk's `review-plan`, described in the next section. Every other gate a bridge might seem
+  entitled to fire stays the engine's. The general rule still holds everywhere else: planned
+  children become pickable on the board, which is how work crosses from a bridge to the engine, and
+  a bridge does not follow them across.
+
+## The one scoped exception — the intake-desk's `review-plan` gate
+
+The intake-desk spawns `reviewer` **only when wrapping `review-plan`** over an epic ledger it had
+itself planned — the closing step of planning, not an entry into the build drain. The four PR-stage
+gates (`review-code`, `review-doc`, `review-skill`, `review-design`) plus `coder` and `shipper`
+remain the engine's seam, and no other bridge gains `reviewer`.
+
+The line the roster law draws is intact, because **a plan-layer gate routes nothing**. What the
+roster law forbids a bridge is an *execution-routing* edge, and a gate fired over a planned ledger
+hands no work to an engine: a flipped child becomes pickable off the board exactly as a
+`triage`-produced one does. Three properties of this repo make that concrete rather than asserted —
+check them before widening the exception:
+
+- `review-plan` reads a **ledger, never a diff** — its subject is the epic and its children.
+- It posts into **no verdict namespace**: `verdict-match.ts` carries only `code`, `doc` and `skill`,
+  so a `review-plan` run produces no marker any downstream gate consumes.
+- The engine is **structurally disqualified** from firing it. It consumes triaged children; it
+  cannot produce them. The seat that planned the ledger is the only one positioned to close it.
+
+The reviewer's independence comes from **isolation, not from which seat fired it**: it is a
+separately spawned agent that reads the epic and its children cold. That is why dispatch stays a
+fixed template — the intake-desk hands over an epic number and nothing else, so it cannot colour the
+review of a ledger it wrote.
+
+**The guard cannot express this scoping.** `BRIDGE_ALLOWLIST` classifies per agent-type, not per
+skill, so it can only record that the intake-desk may spawn `reviewer` at all. The `review-plan`-only
+restriction therefore lives in the intake-desk's charter prose — including the fixed dispatch
+template it must use — and the guard carries the agent-type alone. If you are reading the guard to
+learn the scope, you are reading the wrong file:
+[`agents/crew-intake-desk.md`](agents/crew-intake-desk.md) is the binding one.
 
 ## The line is a charter rule, not a permission mechanism
 
