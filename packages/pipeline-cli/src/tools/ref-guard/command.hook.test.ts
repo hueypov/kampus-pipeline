@@ -1,5 +1,5 @@
 import {execFileSync, spawnSync} from "node:child_process";
-import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
+import {existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {fileURLToPath} from "node:url";
@@ -211,6 +211,37 @@ describe("ref-guard installed hook", () => {
 	it("allows a raw primary fast-forward without a pipeline caller", () => {
 		expect(() => execFileSync("git", ["update-ref", "refs/heads/trunk", remoteTip], {cwd: clone, stdio: "pipe"})).not.toThrow();
 		expect(git(clone, "rev-parse", "refs/heads/trunk")).toBe(remoteTip);
+	}, HOOK_TIMEOUT);
+
+	it("lets a real `git rebase` detach and reattach the shared HEAD", () => {
+		// The detach rung's rebase/bisect exception was only ever asserted by handing the decision an
+		// `operationInProgress: true` it had not measured. That asks for the property rather than
+		// proving it: nothing checked that a real rebase actually presents that shape to a real hook.
+		// Driving the command is the only way to find out, because the evidence is gathered from
+		// on-disk state the decision never sees in a unit test.
+		//
+		// Rebase, not bisect: both reach the same rung, and rebase exercises it end to end inside one
+		// command — detach and reattach — which is the shape the unit test was faking. Bisect parks HEAD
+		// detached across many invocations and needs a bisectable range built first; it would cover the
+		// same decision at several times the setup, so the rung is proven here instead.
+		git(clone, "checkout", "-q", "-b", "rebase-probe", base);
+		git(clone, "commit", "--allow-empty", "-q", "-m", "probe-work");
+		try {
+			// A real rebase onto a divergent-but-non-primary base. Git detaches the shared HEAD onto
+			// the upstream tip and reattaches it within the one command; the guard must allow both
+			// halves or the operator is stranded mid-rebase.
+			expect(() => execFileSync("git", ["rebase", remoteTip], {cwd: clone, stdio: "pipe"})).not.toThrow();
+			// Reattached, not left detached — and no half-started state the refusal used to leave behind.
+			expect(git(clone, "rev-parse", "--abbrev-ref", "HEAD")).toBe("rebase-probe");
+			expect(existsSync(join(clone, ".git/rebase-merge"))).toBe(false);
+			expect(existsSync(join(clone, ".git/rebase-apply"))).toBe(false);
+		} finally {
+			// `--abort` is for the failure path only: on success there is no rebase to abort and the
+			// command exits non-zero, so teardown must tolerate that rather than mask the real result.
+			spawnSync("git", ["rebase", "--abort"], {cwd: clone, stdio: "ignore"});
+			spawnSync("git", ["checkout", "-q", "trunk"], {cwd: clone, stdio: "ignore"});
+			spawnSync("git", ["branch", "-qD", "rebase-probe"], {cwd: clone, stdio: "ignore"});
+		}
 	}, HOOK_TIMEOUT);
 
 	it("packs the primary ref, then still refuses to delete it once packed", () => {
