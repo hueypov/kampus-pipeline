@@ -741,31 +741,54 @@ echo '{"reason":"TypeError: …","resumeFromRunId":"run_x","priorResumes":0}' \
   | node packages/pipeline-cli/src/bin.ts resume-policy decide         # → surface (logic)
 ```
 
-### `wayfinder-map` — parse + validate a `wayfinder:map` issue's state (the related failure modes)
+### `wayfinder-map` — read + graduate a `wayfinder:map` issue's state (the related failure modes)
 
 The machine-readable substrate the `wayfinder` skill's fog-graduation and emission modes
-read instead of prose-guessing a map's state. A `wayfinder:map` issue is the ideation-layer
-map that sits upstream of the execution pipeline; its body carries four canonical sections
-(`## Destination` / `## Decisions-so-far` / `## Open frontier` / `## Graduated fog`), defined
-once in the [formats contract](../../claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md).
-This tool parses that body into `{destination, decisionsSoFar, openFrontier, graduatedFog}`,
+read *and write* instead of prose-guessing — and hand-editing — a map's state. A
+`wayfinder:map` issue is the ideation-layer map that sits upstream of the execution pipeline;
+its body carries four canonical sections (`## Destination` / `## Decisions-so-far` /
+`## Open frontier` / `## Graduated fog`), defined once in the
+[formats contract](../../claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md).
+
+`read` parses that body into `{destination, decisionsSoFar, openFrontier, graduatedFog}`,
 validates it against a structural floor (the epic-ledger idiom: a closed defect enum, sorted
 deterministically), and exposes a **graduation-readiness** predicate — is the open frontier
 cleared of every *answerable* unknown (a well-formed, non-fork ticket), so the map is ready to
 emit.
 
-The tool is **read-only** — it parses and validates; the map's writes belong to the
-`wayfinder` skill's chart/work modes. The pure core (`markdown.ts` parse, `validate.ts` floor
-+ `isGraduationReady`) is unit-tested directly; the GitHub boundary (`github.ts`) fetches the
-map body + its native sub-issues and resolves a frontier ref that names a non-sub-issue as
-`DANGLING_FRONTIER_REF`.
+`graduate` is the map's **sanctioned mutation path** — WORK mode's steps 4 and 5 in one
+invocation. It is a single verb rather than three because the contract's lockstep rule (a
+ticket leaves `## Open frontier` only by its answer landing in `## Decisions-so-far` and the
+ticket moving to `## Graduated fog`) constrains the API shape: separate verbs would let any
+caller reach the state the invariant forbids. It edits the raw body's sections in place rather
+than re-rendering a parsed map, because the parser is lossy by design and a re-render would
+delete the extra notes and prose §Field notes explicitly sanctions. It refuses — and writes
+nothing — when the ticket is not on the frontier (`7`), when the input or the resulting map is
+malformed (`4`), when the body changed between read and write (`6`), and when the read-back
+does not match what was sent (`13`).
+
+The pure core (`markdown.ts` parse + section/item locators, `validate.ts` floor +
+`isGraduationReady`, `mutate.ts` edits + pre-write proof) is unit-tested directly; the GitHub
+boundary (`github.ts`) fetches the map body + its native sub-issues, resolves a frontier ref
+that names a non-sub-issue as `DANGLING_FRONTIER_REF`, and owns the body PATCH.
 
 ```bash
 # human verdict: valid/malformed + the graduation-ready flag
-node packages/pipeline-cli/src/bin.ts wayfinder-map 2421
+node packages/pipeline-cli/src/bin.ts wayfinder-map read 2421
 
 # the full parsed state + defects as one JSON object (what the skill modes / a CI hook consume)
-node packages/pipeline-cli/src/bin.ts wayfinder-map 2421 --json
+node packages/pipeline-cli/src/bin.ts wayfinder-map read 2421 --json
+
+# graduate one frontier ticket: record the answer, clear the frontier line, land it in the fog,
+# and lay down the frontier the answer revealed — all three edits, or none
+node packages/pipeline-cli/src/bin.ts wayfinder-map graduate 2421 \
+  --ticket 2423 \
+  --decision "better-auth mints a single-use invite token with no new table" \
+  --spawn "#2431 — Investigation: how long should an unused invite token live?"
+
+# compose and print the resulting body without writing it
+node packages/pipeline-cli/src/bin.ts wayfinder-map graduate 2421 --ticket 2423 \
+  --decision "…" --dry-run
 ```
 
 ### `reachability-guard` — optional configured feature reachability

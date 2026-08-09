@@ -304,10 +304,15 @@ an extra note under a section silently corrupts a hand-edit, whereas the CLI rea
 four sections against the single-source shape. The CLI is the same reader/writer CHART's output is
 shaped for and the durable seam between runs — WORK mutates the map only through it.
 
+Its two verbs are `wayfinder-map read <N>` (steps 1 and 2) and `wayfinder-map graduate <N>` (steps
+4 and 5 together). `graduate` is deliberately **one** verb, not three: the lockstep rule above is a
+constraint on the CLI's shape as much as on the caller, so the append, the frontier removal and the
+fog entry are a single atomic edit that either all land or none do.
+
 ### The walk
 
 1. **Resolve the map and read its frontier through the CLI.** Load map `#N`'s state via
-   `wayfinder-map` and take its `## Open frontier` list. First ask the CLI whether the map is
+   `wayfinder-map read <N>` and take its `## Open frontier` list. First ask the CLI whether the map is
    **emission-ready** — its `## Open frontier` cleared of answerable unknowns (the
    graduation-readiness signal, see [Emission](#emission--the-cleared-map-graduates-into-its-durable-artifacts));
    if so, this map has nothing left to resolve and WORK hands off to emission rather than picking a
@@ -332,7 +337,9 @@ shaped for and the durable seam between runs — WORK mutates the map only throu
 4. **Record the answer into `## Decisions-so-far`.** Append **one** entry naming *what was
    decided/found* and the ticket it came from (`— from #N`), via the CLI. This is append-only
    history — never rewrite or delete an earlier entry; a later revision lands as a new superseding
-   line (§the map-shape contract).
+   line (§the map-shape contract). The CLI composes the `— from #N` attribution from the ticket you
+   name, and performs this step together with step 5 in one call — do not look for a verb that does
+   only this.
 
 5. **Fog-graduation — graduate the resolved ticket and spawn any new frontier it reveals.** Close
    the resolved sub-issue, and move it from `## Open frontier` into `## Graduated fog` via the CLI
@@ -344,6 +351,18 @@ shaped for and the durable seam between runs — WORK mutates the map only throu
    routinely reveals the next one; that spawn is the map's forward motion, not a failure to finish.
    Compose each new ticket body and the recorded decision line per §the distributable-plugin-only
    artifact rule — repository-owned configuration only; no personal local framing.
+
+   File the spawned sub-issues **first**, then make steps 4 and 5 as one call:
+
+   ```bash
+   pipeline cli wayfinder-map graduate <N> --ticket <resolved-ticket> \
+     --decision "<what was decided or found>" \
+     --spawn "#<M> — Investigation: <the next unknown>"
+   ```
+
+   It refuses and writes nothing if the ticket is not on the frontier, if a `--spawn` names an
+   issue that is not yet a real sub-issue of the map, or if another session moved the body while
+   you were resolving — re-read the map and start the step again rather than retrying blind.
 
 6. **Stop — exactly one ticket resolved.** One frontier ticket is now answered, recorded, and
    graduated, with any newly-revealed fog laid down for a future run. Do **not** pick a second

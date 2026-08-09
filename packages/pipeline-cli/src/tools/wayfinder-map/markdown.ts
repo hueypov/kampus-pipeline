@@ -7,6 +7,13 @@
  * pure and deterministic: the same body always yields the same `WayfinderMap`,
  * with entries emitted in document order.
  *
+ * This module also owns *locating* those sections and their list items in the raw
+ * line array (`sectionRange`, `listItemRanges`), which is what the write path in
+ * `mutate.ts` edits against. Reader and writer share one locator on purpose: the
+ * lines the writer removes for a ticket are exactly the lines the reader folded
+ * into that ticket's entry, so the two can never disagree about where an entry
+ * begins and ends.
+ *
  * See `gh-issue-intake-formats.md` §The `wayfinder:map` issue shape for the four
  * sections and the worked example these regexes are calibrated against.
  */
@@ -44,9 +51,60 @@ const headingLevel = (line: string): number => {
 	return match?.[1] ? match[1].length : 0;
 };
 
-const firstIssueRef = (text: string): number | undefined => {
+/**
+ * The first `#N` in a line — a frontier ticket's sub-issue, a fog entry's subject.
+ * Exported so the write path resolves a ticket to its line by the same rule the
+ * parser resolved that line to a ticket.
+ */
+export const firstIssueRef = (text: string): number | undefined => {
 	const match = /#(\d+)/.exec(text);
 	return match?.[1] ? Number(match[1]) : undefined;
+};
+
+/** The four sections, keyed by the `WayfinderMap` field each one lowers into. */
+export type MapSection = "destination" | "decisionsSoFar" | "openFrontier" | "graduatedFog";
+
+const SECTION_HEADING: Record<MapSection, RegExp> = {
+	destination: DESTINATION_HEADING,
+	decisionsSoFar: DECISIONS_HEADING,
+	openFrontier: FRONTIER_HEADING,
+	graduatedFog: FOG_HEADING,
+};
+
+/**
+ * Where a section sits in a body's line array: `heading` is the heading line's
+ * own index, and `[start, end)` spans the section's lines with the heading
+ * excluded.
+ */
+export interface SectionRange {
+	readonly heading: number;
+	readonly start: number;
+	readonly end: number;
+}
+
+/**
+ * Locate the first section whose heading matches `section` in a body's lines: it
+ * runs from just after the heading up to the next heading of the same or higher
+ * level. `undefined` when the heading is absent — read by the validator as the
+ * section's `MISSING_*` defect, and by the writer as "no place to put this line".
+ */
+export const sectionRange = (
+	lines: ReadonlyArray<string>,
+	section: MapSection,
+): SectionRange | undefined => {
+	const headingRe = SECTION_HEADING[section];
+	const heading = lines.findIndex((line) => headingRe.test(line));
+	if (heading === -1) return undefined;
+	const level = headingLevel(lines[heading] ?? "");
+	let end = lines.length;
+	for (let i = heading + 1; i < lines.length; i++) {
+		const line = lines[i] ?? "";
+		if (ANY_HEADING.test(line) && headingLevel(line) <= level) {
+			end = i;
+			break;
+		}
+	}
+	return {heading, start: heading + 1, end};
 };
 
 interface Section {
@@ -55,57 +113,63 @@ interface Section {
 	readonly lines: ReadonlyArray<string>;
 }
 
-/**
- * Slice the first section whose heading matches `headingRe` out of a body: every
- * line after the heading up to the next heading of the same or higher level. An
- * absent heading yields `{present: false, lines: []}` — read by the validator as
- * the section's `MISSING_*` defect.
- */
-const sliceSection = (body: string, headingRe: RegExp): Section => {
+const sliceSection = (body: string, section: MapSection): Section => {
 	const lines = body.split("\n");
-	const start = lines.findIndex((line) => headingRe.test(line));
-	if (start === -1) return {present: false, lines: []};
-	const level = headingLevel(lines[start] ?? "");
-	const out: string[] = [];
-	for (const line of lines.slice(start + 1)) {
-		if (ANY_HEADING.test(line) && headingLevel(line) <= level) break;
-		out.push(line);
-	}
-	return {present: true, lines: out};
+	const range = sectionRange(lines, section);
+	if (!range) return {present: false, lines: []};
+	return {present: true, lines: lines.slice(range.start, range.end)};
 };
 
 /**
- * The list-item bodies (text after the bullet) of a section, in document order.
- * A wrapped item's continuation lines fold into its text: a non-blank line under
- * a bullet that is not itself a bullet is glued onto the current item before ref
- * extraction, and a blank line ends the item. Without this a `— from #N`
- * attribution that wraps onto a continuation line (as in the §worked-example map)
- * is dropped, spuriously yielding MALFORMED_DECISION_ENTRY (the originating work item).
+ * One list item of a section: the folded text the parser reads, plus the span of
+ * section-relative lines it occupies. `[start, end)` covers the bullet line and
+ * its continuation lines and nothing else, so removing that span removes exactly
+ * one entry.
  */
-const listItems = (section: Section): ReadonlyArray<string> => {
-	const items: string[] = [];
-	let current: string[] | undefined;
+export interface ListItemRange {
+	readonly text: string;
+	readonly start: number;
+	readonly end: number;
+}
+
+/**
+ * The list items of a section's lines, in document order. A wrapped item's
+ * continuation lines fold into its text: a non-blank line under a bullet that is
+ * not itself a bullet is glued onto the current item before ref extraction, and a
+ * blank line ends the item. Without this a `— from #N` attribution that wraps onto
+ * a continuation line (as in the §worked-example map) is dropped, spuriously
+ * yielding MALFORMED_DECISION_ENTRY (the originating work item).
+ */
+export const listItemRanges = (
+	sectionLines: ReadonlyArray<string>,
+): ReadonlyArray<ListItemRange> => {
+	const items: ListItemRange[] = [];
+	let current: {parts: string[]; start: number; end: number} | undefined;
 	const flush = () => {
-		if (current) items.push(current.join(" ").trim());
+		if (current) items.push({text: current.parts.join(" ").trim(), start: current.start, end: current.end});
 		current = undefined;
 	};
-	for (const line of section.lines) {
+	sectionLines.forEach((line, index) => {
 		const match = LIST_ITEM.exec(line);
 		if (match?.[1]) {
 			flush();
-			current = [match[1].trim()];
+			current = {parts: [match[1].trim()], start: index, end: index + 1};
 		} else if (line.trim().length === 0) {
 			flush();
 		} else if (current) {
-			current.push(line.trim());
+			current.parts.push(line.trim());
+			current.end = index + 1;
 		}
-	}
+	});
 	flush();
 	return items;
 };
 
+const listItems = (section: Section): ReadonlyArray<string> =>
+	listItemRanges(section.lines).map((item) => item.text);
+
 const parseDestination = (body: string): WayfinderMap["destination"] => {
-	const section = sliceSection(body, DESTINATION_HEADING);
+	const section = sliceSection(body, "destination");
 	const text = section.lines
 		.map((l) => l.trim())
 		.filter((l) => l.length > 0)
@@ -115,7 +179,7 @@ const parseDestination = (body: string): WayfinderMap["destination"] => {
 };
 
 const parseDecisions = (body: string): {present: boolean; entries: ReadonlyArray<Decision>} => {
-	const section = sliceSection(body, DECISIONS_HEADING);
+	const section = sliceSection(body, "decisionsSoFar");
 	const entries = listItems(section).map((text): Decision => {
 		const match = FROM_REF.exec(text);
 		return match?.[1] ? {text, fromIssue: Number(match[1])} : {text};
@@ -126,7 +190,7 @@ const parseDecisions = (body: string): {present: boolean; entries: ReadonlyArray
 const parseFrontier = (
 	body: string,
 ): {present: boolean; entries: ReadonlyArray<FrontierTicket>} => {
-	const section = sliceSection(body, FRONTIER_HEADING);
+	const section = sliceSection(body, "openFrontier");
 	const entries = listItems(section).map(
 		(question): FrontierTicket => ({
 			issue: firstIssueRef(question),
@@ -146,7 +210,7 @@ const collectSpawned = (text: string): ReadonlyArray<number> => {
 };
 
 const parseFog = (body: string): {present: boolean; entries: ReadonlyArray<FogEntry>} => {
-	const section = sliceSection(body, FOG_HEADING);
+	const section = sliceSection(body, "graduatedFog");
 	const entries = listItems(section).map((note): FogEntry => {
 		// The graduated issue is the FIRST ref on the line; `spawned #M` refs are
 		// follow-on frontier, captured separately, so a line's own subject is never
