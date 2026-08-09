@@ -58,8 +58,9 @@ hands no work to an engine: a flipped child becomes pickable off the board exact
 check them before widening the exception:
 
 - `review-plan` reads a **ledger, never a diff** — its subject is the epic and its children.
-- It posts into **no verdict namespace**: `verdict-match.ts` carries only `code`, `doc` and `skill`,
-  so a `review-plan` run produces no marker any downstream gate consumes.
+- It posts into **no verdict namespace**: `verdict-match.ts` carries `code`, `doc`, `skill` and
+  `design` — `review-plan` is not among them, and the name appears nowhere under `tools/verdict/`
+  or `tools/ship-it/` — so a `review-plan` run produces no marker any downstream gate consumes.
 - The engine is **structurally disqualified** from firing it. It consumes triaged children; it
   cannot produce them. The seat that planned the ledger is the only one positioned to close it.
 

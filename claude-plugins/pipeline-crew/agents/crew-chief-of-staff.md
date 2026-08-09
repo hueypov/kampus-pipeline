@@ -107,7 +107,8 @@ session; the substrate resolves the target role's inbox for you:
 A PR touching the agent control plane (§CP) is never auto-merged: under the §CP hard gate — a
 non-author must approve the current head before the pipeline enqueues the change — it needs a human
 approval at that head. **Who may give it is repo config, not a name you carry:** read the authority
-out of [`../../../.pipeline/agent-policy.json`](../../../.pipeline/agent-policy.json)
+out of `.pipeline/agent-policy.json` at the repo root — given as text, not a link, because it
+leaves this plugin directory, which is a managed symlink in an adopting repo —
 (`protectedChangeApproval`), which on this repo resolves the approver set through the
 `github-collaborators` provider and requires one non-author approval. Never assume an org or a
 review team — this repo has neither. The human approves and the engine's approval-aware shipper

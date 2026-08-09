@@ -36,8 +36,9 @@ single source of the map shape, the two modes, and the plan-don't-do law.
 
 **The label contract you depend on** — the ideation-layer markers, defined once in the companion
 pipeline skill suite's
-[`gh-issue-intake-formats.md`](../../kampus-pipeline/skills/gh-issue-intake-formats.md) (cite it,
-never re-hard-code the semantics here):
+`claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md` (cite it, never re-hard-code
+the semantics here — the path is given as text rather than a link because it leaves this plugin
+directory, which is a managed symlink in an adopting repo):
 
 - **`wayfinder:map`** — an **issue-shape marker**: this issue is a wayfinder map, its body carrying
   the four-section map shape (`## Destination` / `## Decisions-so-far` / `## Open frontier` /
