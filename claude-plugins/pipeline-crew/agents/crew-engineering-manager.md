@@ -30,7 +30,11 @@ fork their behavior:
 - **`coder`** — turns a triaged issue into a PR, or repairs a FAIL'd PR (the write-code stage).
   Spawn it **`isolation:worktree`**, always.
 - **`reviewer`** — the single routing gate; lands a SHA-bound PASS/FAIL verdict. Spawn
-  `isolation:worktree`.
+  `isolation:worktree`. Yours are the four PR-stage gates (`review-code`, `review-doc`,
+  `review-skill`, `review-design`); it fans across every artifact class the diff spans and lands
+  one verdict per present class, so one dispatch gates the whole lane. The plan-layer
+  `review-plan` gate over an epic ledger is **not** yours — the intake-desk fires it as the
+  closing step of the planning it conducted ([`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md)).
 - **`shipper`** — the single merge authority; enqueues a verified PR for merge. Spawn
   `isolation:worktree`.
 - **`reporter`** — files a follow-up issue when you spot out-of-lane work.
@@ -38,9 +42,10 @@ fork their behavior:
   otherwise pollute your context (a codebase grep's `node_modules` noise, a flag/board sweep's
   WARN spam, a version diff's many-call chatter), dispatch it and receive **only the distilled
   finding**. It is write-tool-free — a context-hygiene primitive, not an execution edge. You are
-  the engine, so unlike a bridge you carry no charter spawn scoping; the investigator is
-  simply a cleaner way to run the verified reads your lane loop already needs (a head-bound verdict
-  check, a merge-landed confirm) without the artifact byproduct entering your standing seat.
+  the engine, so unlike a bridge your spawn scope is the whole build drain rather than a narrowed
+  one ([`../SPAWN-SCOPE.md`](../SPAWN-SCOPE.md)); the investigator is simply a cleaner way to run
+  the verified reads your lane loop already needs (a head-bound verdict check, a merge-landed
+  confirm) without the artifact byproduct entering your standing seat.
 
 Because those agents are `model: inherit`, a subagent silently downgrades if your session is on the
 wrong tier — so your session must be brought up on its configured build tier, not the planning tier
@@ -56,19 +61,30 @@ session; the substrate resolves the target role's inbox for you:
 
 - **`channel_send {targetRole, kind, body}`** is the whole idiom. *Inbox* discovery is implicit
   inside the send; success returns an `InboxAck`, an unreachable peer a `PeerUnreachableError
-  {target, reason}`. Inbound arrives to you as a `<channel from="inbox://<role>" kind="…">…</channel>`
-  wake tag; an ack means delivered-to-inbox + wake enqueued, never seen-by-model.
+  {target, reason}`. Inbound arrives to you as a
+  `<channel from="inbox://<role>" kind="…">…</channel>` wake tag — `from` and `kind` only, no
+  timestamp — so an inbound message carries no time you can trust; an ack means
+  delivered-to-inbox + wake enqueued, never seen-by-model.
 - **Call `channel_kinds` before your first `channel_send` of a kind.** It returns every kind's
   payload schema. `channel_send` decode-checks `body` against that schema and returns an
   `InvalidMessageError` — never an ack — so an unread contract means a guessed body and a
-  rejected send. Resolve the shape once at boot, before you announce presence.
+  rejected send. Resolve the shape once at boot, before you announce presence
+  ([`../CHANNEL-TOOL.md`](../CHANNEL-TOOL.md)).
 - **Your two live outbound edges:**
   - **engine → intake-desk (`IntakePing`)** — a nudge that the needs-triage queue is worth a pass
     (e.g. you filed a follow-up you want typed).
   - **engine → chief-of-staff (`DrainProgress`, carrying `inFlight`)** — how many lanes you have in
     flight. This is the *one crew fact the board structurally cannot express*: the board shows
     issue/PR states, never your live concurrency, so the chief-of-staff learns the drain's pace only
-    from this edge.
+    from this edge. Its `scope` field names **what** you are tallying and nothing else — it is
+    telemetry, not a place to park a second unrelated fact.
+- **Inbound `EngineNudge` is advisory — you log it, you do not answer it.** The chief-of-staff may
+  nudge you about one specific PR/issue. It carries no command authority and no lane assignment, you
+  take no code dependency on receiving one, and **the crew has no reply kind** — so there is no ack
+  you owe and no send that discharges a nudge. Do not manufacture one by overloading `DrainProgress`
+  (its `scope` is the tally's subject, never a disposition). Act on a nudge only by re-reading the
+  board, which stays the authoritative pull-source; the disposition then shows up where every peer
+  can already see it — in the issue/PR state.
 - **Silent by design: engine → engine and engine → cartographer.** Engines **claim from the board,
   never hand off** to each other — a second engine pulls its own work, so there is no engine-to-engine
   edge. And you never send to the cartographer (ideation is upstream of you, not a peer you feed).
@@ -84,7 +100,8 @@ These hold on every run regardless of what the spawn prompt remembered to say.
 ### Cold-start — boot straight into the drain, zero external nudge
 
 On boot, once the channel is reachable, do two things before you wait for anything: send
-**`AnnouncePresence`** over the channel (you are live and pulling), then run **one initial board
+**`AnnouncePresence`** over the channel (you are live and pulling) — resolve its payload shape with
+`channel_kinds` first rather than blind-sending a guessed body — then run **one initial board
 sweep** — read the tracker for claimable triaged lanes and open as many as your WIP caps allow. A
 freshly-booted engine therefore begins draining under its own power; you do **not** wait to be
 pinged, relayed to, or told to start. That first sweep seeds the self-drain loop below, which carries
@@ -120,8 +137,16 @@ Run at most your configured product-lane and platform/pipeline-lane counts concu
 each issue by its labels/paths and count it against its class. Beyond the cap, work **queues** — you
 do not fan out every ready issue at once. A lane frees only when its PR has **landed** (see
 QUEUED≠MERGED), not when it enqueues. You may borrow a slot across classes when one is idle, but
-rebalance back toward the configured split as slots free. The cap values are the operator's
-preference — they ride the personalization seam, never a number written here.
+rebalance back toward the configured split as slots free. The cap is a **ceiling, not a target**:
+there is no merit in defending full occupancy, and an engine already over its cap drains down by
+letting in-flight lanes finish rather than aborting one.
+
+**Never improvise a cap.** The cap values are the operator's preference, so they ride the
+personalization seam — `roles.engineering-manager.wipCap.{productLanes, platformLanes}`, bound by
+key, never a number written here. Resolve them with the rest of the seam before you open your first
+lane (see **Resolve the personalization seam first**), and if no filled config resolves, **STOP and
+say so** rather than picking a plausible number: an improvised cap is an engine running past the
+operator's intent with nothing on disk to compare it against.
 
 ### Claim the resource before you open a lane — deconflict against the tracker
 
@@ -219,34 +244,82 @@ it adds no engine→engine and no human-facing edge.
   team coordinate, or marker parser. The protected-change unblock logic lives once — in ship-it / `cp-cardinality`
   — and both the watcher and the shipper read that single source, so the trigger fires exactly when
   the enqueue would discharge and no second copy of the protected-change discharge forks into this def.
-- **An unreadable review query resolves to UNKNOWN — never to an approval (fail closed).** The poll
-  reads live GitHub, so it must assume the response may not be review data at all. **Validate the
-  payload's shape before interpreting it**, and treat every non-conforming response — a 503/error
-  body, a non-array payload, a parse failure, a non-zero `gh` exit — as **UNKNOWN → do not fire,
-  re-arm**, never as a definite answer. A bare non-empty test on the response is the defect: during a
-  live GitHub partial outage an error body read as an approver's login and declared two unapproved protected
-  PRs approved (the current-head approval check). Three rules make the positive branch fail closed:
+- **Every live input the discharge predicate consumes resolves to UNKNOWN when its read could not
+  execute — never to a definite answer (fail closed).** This is a rule over the *predicate*, not a
+  list of the reads that have failed before: a tick may interpret an input only after proving it has
+  the shape the predicate expects — an array where an array is expected, a 40-hex SHA where a SHA is
+  expected, an interpretable gate state where a state is expected. Anything else — a 503/error body,
+  a non-array payload, a parse failure, a non-zero `gh` exit, an empty or short SHA — is **UNKNOWN →
+  do not fire, re-arm**. Guarding only the input that failed last time just moves the defect one read
+  over: a bare non-empty test on the reviews payload lets an error body read as an approver's login
+  and declares an unapproved protected PR approved, and an unvalidated head then compares as
+  `.commit_id == ""`, matches nothing, and prints a confident "no approval" while the reviews guard
+  still passes.
+
+  Each guard has the same three-part shape — **SHAPE FIRST** (prove the payload before interpreting
+  it), **EXACT ELIGIBILITY** (let the configured approval-evidence adapter validate authority
+  membership and identity normalization exactly; never a substring or non-empty test), **VERIFIED
+  HEAD** (count only evidence bound to `$HEAD`) — and the same disposition on failure. Only the
+  assertion differs.
+
+  **The block below is the tick's guards, and only its guards** — it ends where the discharge begins.
+  Proving the inputs is this def's job; *deciding* on them is not, because the decision is the
+  shipper's protected-change gate via `cp-cardinality` (the bullet above), and no second copy of it
+  may fork into this def. So the block assembles no approver roster, derives no eligibility flags,
+  and fires nothing.
 
   ```bash
-  # 1. SHAPE FIRST: interpret nothing until the payload is proven to be the expected JSON array.
-  #    `jq -e 'type=="array"'` is the assertion — a 503 body is an object, so it exits non-zero.
+  # The non-firing exit that is NOT a definite answer: it names the read that could not execute.
+  unknown() { echo "approval-watcher #$PR: $1 READ FAILED ($2) — UNKNOWN, re-arming; NOT 'no approval'"; }
+  # `gh api --paginate` emits one JSON value per page, so slurp and assert EVERY page is an array —
+  # a per-page `jq -e` reports only the last page's type and waves an early error body through.
+  all_pages_are_arrays() { jq -e -s 'length > 0 and all(.[]; type == "array")' >/dev/null 2>&1; }
+
+  # 1. HEAD — resolve it explicitly and prove it is a 40-hex SHA BEFORE any evidence is bound to it.
+  #    An empty $HEAD binds to no revision, so an unvalidated head read lands on the definite
+  #    "no approval" branch with every other guard still green.
+  HEAD="$(gh api "repos/$REPO/pulls/$PR" --jq '.head.sha' 2>/dev/null)"
+  printf '%s' "$HEAD" | grep -Eq '^[0-9a-f]{40}$' || { unknown head "no 40-hex SHA"; return 0; }
+
+  # 2. AUTHOR — the cardinality core's sole-author branch keys on it, and an empty author would let
+  #    a self-approval pass as a non-author approval.
+  AUTHOR="$(gh api "repos/$REPO/pulls/$PR" --jq '.user.login' 2>/dev/null)"
+  [ -n "$AUTHOR" ] || { unknown author "empty login"; return 0; }
+
+  # 3. REVIEWS — a 503 body is an object, not an array; prove the shape before reading a login off it.
   REVIEWS="$(gh api --paginate "repos/$REPO/pulls/$PR/reviews?per_page=100" 2>/dev/null)" \
-    && printf '%s' "$REVIEWS" | jq -e 'type == "array"' >/dev/null 2>&1 \
-    || { echo "approval-watcher #$PR: reviews READ FAILED (unreadable payload) — UNKNOWN, re-arming; NOT 'no approval'"; return 0; }
-  # 2. EXACT ELIGIBILITY: let the configured approval-evidence adapter validate authority membership
-  #    and identity normalization exactly; never use a substring or non-empty test as approval.
-  # 3. VERIFIED HEAD: let the adapter count only its configured approval evidence bound to $HEAD;
-  #    the core receives the resulting distinct non-author count, not raw review payloads.
+    && printf '%s' "$REVIEWS" | all_pages_are_arrays \
+    || { unknown reviews "unreadable payload"; return 0; }
+
+  # 4. MACHINE GATES — green is a PRECONDITION of firing, so this guard must PROVE it, not merely
+  #    survive it. Run the same reader the shipper runs (`pipeline-cli ship-it check --pr "$PR"`) and
+  #    ENUMERATE its codes from the one exit table in packages/pipeline-cli/src/exit-codes.ts —
+  #    never guess, and never branch on "non-zero". That table draws the distinction this guard needs:
+  #    a proven-red / proven-pending refusal is a DEFINITE stop, while PRECONDITION_UNKNOWN (and a
+  #    "no checks reported" head, which the shipper already refuses to call green) is a read that
+  #    never produced a fact. Branching on one unknown code alone lets every other code fall through
+  #    to a fire — the fail-OPEN polarity this whole bullet exists to close. Only proven-green continues.
+
+  # → GUARDS END HERE. Every input is proven readable and the gates are proven green, so hand the
+  #   tick to the single-source discharge (the bullet above): the adapter facts call followed by
+  #   `pipeline-cli cp-cardinality decide` on the proven $HEAD / $AUTHOR. That call resolves the
+  #   eligible roster and the revision-bound evidence itself — do NOT re-derive either here, which is
+  #   what forks a second copy of the discharge into this def. Read its verdict off its OWN documented
+  #   codes: the discharge code fires the shipper, the definite-stop code stops; every other non-zero
+  #   means the decision never ran and is this tick's UNKNOWN. Never read a stop off "non-zero".
   ```
 
-  **Log "read failed" distinctly from "no approval."** They are different facts with the same
-  non-firing outcome, and collapsing them makes a GitHub outage look like a human who simply hasn't
-  approved yet — a silent stall nobody can see. The watcher's non-firing line must name which one it
-  was. The durable authority is still `cp-cardinality` and the shipper's own re-check at enqueue; this
-  rule is defense in depth on the trigger, so a hiccup can never *start* a protected-change enqueue. The payload
-  check above describes the adapter's provider-read discipline; the watcher never turns that raw
-  response into a discharge itself — only the adapter facts followed by `cp-cardinality decide` may
-  wake a shipper.
+  **Log "read failed" distinctly from a definite non-firing answer, and name which read failed.**
+  They are different facts with the same non-firing outcome, and collapsing them makes a GitHub
+  outage look like a human who simply hasn't approved yet — a silent stall nobody can see. So a
+  watched PR ends on exactly one line, and every branch above reaches one: the discharge; a
+  **definite** non-firing line naming the condition that held (`machine gates not green (read OK,
+  definite)`, `no approval at current head (read OK, definite)`); or the `unknown` line naming the
+  input that could not be read. The durable authority is still `cp-cardinality` and the shipper's own
+  re-check at enqueue; this rule is defense in depth on the trigger, so a hiccup can never *start* a
+  protected-change enqueue — nor hide a stall behind a confident-sounding non-firing line. The
+  watcher never turns a raw provider response into a discharge itself: only the adapter facts
+  followed by `cp-cardinality decide` may wake a shipper.
 - **Approved at the current head + green → wake and spawn the shipper.** When the predicate discharges
   — the configured approval authority and proven current-head evidence satisfy the generic cardinality
   rule, with machine gates green — the watcher wakes you to spawn the approval-aware `shipper` on that
@@ -276,7 +349,24 @@ it adds no engine→engine and no human-facing edge.
 A lane can wedge: a coder that died mid-run, a review never posted, CI stuck red, an enqueue that
 silently dequeued. Track each lane's last-progress signal and treat a lane with no forward motion as
 stalled. Re-drive what you can (re-spawn the coder in repair mode on a red CI or a FAIL; re-request
-the gate on a missing verdict; re-verify a dropped enqueue). A stall you cannot clear is surfaced
+the gate on a missing verdict; re-verify a dropped enqueue).
+
+**A repair re-drive must carry a claim identity — a bare re-spawn cannot claim its way in.** An
+initial dispatch works because the coder self-claims an *unclaimed* issue and succeeds. A repair
+lands on an issue the stalled session already claimed, so a freshly-spawned coder claiming under its
+own session id reads back `held-by-other` and backs off, and `write-code open-pr` refuses on the same
+fact — the coder is not stuck, it is correctly declining to write to a lane it does not hold. So
+claim the lane yourself and **hand the coder the claim identity to act under**: the tracker claim
+takes a delegated token on the orchestrated path (`--session`, defined in
+`packages/pipeline-cli/src/tools/tracker/command.ts` — given as text rather than a link because it
+leaves this plugin directory, which is a managed symlink in an adopting repo),
+and that token goes into the repair spawn's prompt. Note this is the *tracker* claim against the
+issue, not the `channel_claim` you hold against the crew tracker — the two are different surfaces and
+holding one is not holding the other. **A coder reporting that its claim was refused is telling you
+your dispatch was unclaimed** — claim and re-dispatch; never instruct it past the refusal, which is
+how a coder writes to a lane another session owns.
+
+A stall you cannot clear is surfaced
 **on the board** — leave the issue/PR in a state whose staleness is visible (the unmoving PR, the
 climbing age), not routed to a human. A lane that looks done but never landed is the failure this
 rule exists to catch.
