@@ -51,16 +51,16 @@ repository skill carries **none** of these unless the host repository explicitly
 - **No second validator.** Do not re-implement what `review-skill` already gates. The gate
   reads your diff and checks behavioral correctness, trigger quality, cross-skill shadowing,
   and gate-invariant preservation (below). Authoring a parallel skill-linting validator
-  duplicates that gate and drifts from it; the frontmatter floor is already enforced by
-  [`validate-skills.sh`](../validate-skills.sh) in CI.
+  duplicates that gate and drifts from it; the frontmatter and reference floors are already
+  enforced by [`validate-skills.sh`](../validate-skills.sh), which the CI build job runs.
 
 Lean by default: a skill states what it is and the one non-obvious thing, and instructs the
 agent — it does not re-derive an ADR's rationale it can point to. The exception is below.
 
-## The frontmatter contract (CI-enforced)
+## The frontmatter and reference contract (CI-enforced)
 
-[`validate-skills.sh`](../validate-skills.sh) fails the build unless every
-`skills/*/SKILL.md`:
+[`validate-skills.sh`](../validate-skills.sh), run by the CI build job, fails the build unless
+every `skills/*/SKILL.md`:
 
 1. Opens with a `---` frontmatter fence on **line 1**.
 2. Carries a non-empty `name` that **matches the directory** (`skills/author-skill/` →
@@ -71,6 +71,12 @@ The `description` is not a summary — **it is the routing surface the harness f
 malformed or vague one makes the skill silently unroutable. Write it as concrete trigger
 conditions: what the skill is, then the phrases and situations it should fire on. This is
 also rigor check #2 (below), so getting it right here is getting it right for the gate.
+
+It also fails on a broken reference in **any** markdown you add under the skills root — a
+contract document beside your `SKILL.md` is checked too, not only the `SKILL.md`. Three things
+break the build: a link target that is prose rather than a path, a `#fragment` that matches no
+heading in the target document, and known text-substitution residue. So a heading you rename is a
+link somebody else has to fix, and a "TODO, fill in the real link later" does not survive review.
 
 ## Author toward review-skill's four rigor checks
 

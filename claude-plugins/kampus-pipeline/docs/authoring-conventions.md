@@ -150,10 +150,20 @@ decline — measuring verification diligence instead of the behavior under test.
 An invariant only fails under pressure, so a prompt should supply a sympathetic reason to break the
 rule, not a neutral one.
 
-## 8. Frontmatter, enforced
+## 8. Frontmatter and references, enforced
 
-`validate-skills.sh` fails the build unless every `skills/*/SKILL.md` opens with a `---` fence on
-line 1, carries a non-empty `name` matching its directory, and carries a non-empty `description`.
+`validate-skills.sh` runs in the CI build job. It fails the build unless every `skills/*/SKILL.md`
+opens with a `---` fence on line 1, carries a non-empty `name` matching its directory, and carries
+a non-empty `description`.
+
+It also fails on a broken reference in **any** markdown under the skills root, not only in a
+`SKILL.md`: a link target that is prose rather than a path, a `#fragment` matching no heading in
+the target document, and known text-substitution residue. Frontmatter says a skill is routable and
+nothing more, which is how this payload once carried hundreds of unresolvable references under a
+green validator (#167).
+
+The pre-existing damage is listed in `.pipeline/validate-skills-baseline.tsv` so it does not red
+every build. That list only shrinks — new damage fails from its first commit.
 
 The description is not a summary — it is the routing surface. Write it as concrete trigger
 conditions and a "done when".

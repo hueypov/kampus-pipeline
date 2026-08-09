@@ -13,6 +13,12 @@ validation, ownership boundaries, and the sources that ground technical claims.
 - `pnpm --filter pipeline check:workflow-catalog` — the catalogue is generated
   from the workflow templates; regenerate with `generate:workflow-catalog` in
   the same commit that changes them.
+- `./claude-plugins/kampus-pipeline/skills/validate-skills.sh` — skill
+  frontmatter, plus link and reference resolution across every markdown file
+  under the skills root. Pre-existing damage is listed in
+  `.pipeline/validate-skills-baseline.tsv`, which only ever shrinks; regenerating
+  it with `--write-baseline` re-suppresses whatever is currently failing, so it
+  is a deliberate act rather than a fix.
 
 ## Documentation surfaces
 
