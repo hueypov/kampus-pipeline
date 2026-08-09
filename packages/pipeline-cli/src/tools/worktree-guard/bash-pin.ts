@@ -40,6 +40,8 @@
  * unauthored-hunk capture, not a primary-tree escape — so commits must stage by explicit path only.
  */
 
+import {isManagedWorktree} from "./arm.ts";
+
 export type BashDecision =
 	| {readonly kind: "allow"}
 	| {readonly kind: "rewrite"; readonly command: string; readonly reason: string}
@@ -54,12 +56,6 @@ const stripTrailingSlash = (p: string): string => {
 	while (end > 0 && p[end - 1] === "/") end--;
 	return p.slice(0, end);
 };
-
-const WORKTREE_SEGMENT = "/.claude/worktrees/";
-
-/** True when `$WORKTREE_ROOT` is a managed agent worktree (`<main>/.claude/worktrees/<id>`). */
-const isManagedWorktree = (worktreeRoot: string): boolean =>
-	worktreeRoot.replace(/\\/g, "/").indexOf(WORKTREE_SEGMENT) > 0;
 
 /** True when the command's FIRST effective token is `cd` (it sets its own cwd). */
 export const hasLeadingCd = (command: string): boolean => /^\s*cd(\s|$)/.test(command);
