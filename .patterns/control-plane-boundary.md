@@ -60,10 +60,15 @@ and it stays empty until this repository grows a rendered surface; adding one me
 ## The approval authority is the other half, and is owned elsewhere
 
 A working protected-change approval gate needs both a path set (here) and a resolvable approver.
-`github.shipping.protectedChangeApproval.authority` still carries the shipped
-`{"provider": "github-team", "organization": null, "teamSlug": null}`, and
-`resolveGithubTeamEvidence` refuses a null `teamSlug`. That refusal is fail-closed — a protected
-change with an unresolvable authority is merged by a human, which is the §CP posture — so the two
-halves can land independently. The authority coordinates are changed by #106, which introduces a
-`github-collaborators` provider; this document is the reason the boundary work did not also edit
-that key.
+The two halves are owned separately and land independently, which is why the boundary work does not
+edit the authority key.
+
+The authority half is already settled: `github.shipping.protectedChangeApproval.authority` carries
+`{"provider": "github-collaborators", "organization": null, "teamSlug": null}`, landed by #106. That
+provider resolves the approver set from the repository's own collaborators, so the null
+`organization` and `teamSlug` are correct rather than unconfigured — this repository is not in a
+GitHub org and has no review team. Populating the path set therefore makes protected changes
+*gateable*, not unmergeable.
+
+Both providers fail closed on an authority they cannot resolve: a protected change whose approver
+set is unresolvable is merged by a human, which is the §CP posture either way.
