@@ -1,5 +1,5 @@
 import {assert, describe, it} from "@effect/vitest";
-import {annotatedMapBody, cleanMapBody} from "./fixtures.ts";
+import {annotatedMapBody, cleanMapBody, openSubIssues} from "./fixtures.ts";
 import type {WayfinderMapLedger} from "./Map.ts";
 import {parseMapBody} from "./markdown.ts";
 import type {Graduation} from "./mutate.ts";
@@ -13,10 +13,12 @@ const plan = (overrides: Partial<Graduation> = {}): Graduation => ({
 	...overrides,
 });
 
+// Sub-issues are named by number here and taken as open: these tests exercise the
+// mutation, and a closed one would add a defect to every before/after comparison.
 const ledgerOf = (body: string, subIssues: ReadonlyArray<number>): WayfinderMapLedger => ({
 	number: 100,
 	map: parseMapBody(body),
-	subIssues,
+	subIssues: openSubIssues(subIssues),
 });
 
 /** The graduated body, or a failed assertion naming the refusal that stopped it. */

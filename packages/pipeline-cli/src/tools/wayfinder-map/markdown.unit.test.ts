@@ -1,5 +1,5 @@
 import {assert, describe, it} from "@effect/vitest";
-import {cleanMapBody} from "./fixtures.ts";
+import {cleanMapBody, openSubIssues} from "./fixtures.ts";
 import {parseMapBody} from "./markdown.ts";
 import {validateMap} from "./validate.ts";
 
@@ -104,7 +104,7 @@ describe("parseMapBody — the wrapped worked example validates clean (#2426)", 
 			map.graduatedFog.entries.map((e) => e.issue),
 			[101, 102],
 		);
-		const defects = validateMap({number: 100, map, subIssues: [101, 102, 103, 104]});
+		const defects = validateMap({number: 100, map, subIssues: openSubIssues([101, 102, 103, 104])});
 		assert.deepStrictEqual(defects, []);
 	});
 });
@@ -134,7 +134,7 @@ describe("parseMapBody — CHART-time seed attribution `— from #<MAP>` (#3405)
 			map.decisionsSoFar.entries.map((d) => d.fromIssue),
 			[100, 101],
 		);
-		const defects = validateMap({number: 100, map, subIssues: [101, 103]});
+		const defects = validateMap({number: 100, map, subIssues: openSubIssues([101, 103])});
 		assert.notInclude(
 			defects.map((d) => d.type),
 			"MALFORMED_DECISION_ENTRY",

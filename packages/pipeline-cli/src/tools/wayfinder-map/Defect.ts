@@ -20,9 +20,15 @@ import * as Schema from "effect/Schema";
  * (the destination heading exists but names no end-state — the map has no fixed
  * star to steer by). The three `MALFORMED_*_ENTRY` defects flag a list item that
  * carries no resolvable ref (a decision with no `— from #N` origin, a frontier or
- * fog line with no `#N`). `DANGLING_FRONTIER_REF` closes the set: a frontier
- * ticket that names an issue which is not a real sub-issue of the map — resolved
- * against the sub-issue set at the GitHub boundary, never by parsing.
+ * fog line with no `#N`). The two reconciliation defects close the set, both
+ * resolved against the sub-issue set at the GitHub boundary rather than by parsing:
+ * `DANGLING_FRONTIER_REF` for a frontier ticket naming an issue that is not a real
+ * sub-issue of the map, then `CLOSED_FRONTIER_TICKET` for one naming a sub-issue
+ * that is already closed.
+ *
+ * New types append. The order is the sort key, so an insertion mid-array reorders
+ * the emitted list — and therefore `mapSignature` — for every map carrying two or
+ * more defects; appending leaves every existing pair's relative order untouched.
  */
 export const DEFECT_TYPES = [
 	"MISSING_DESTINATION",
@@ -34,6 +40,7 @@ export const DEFECT_TYPES = [
 	"MALFORMED_FRONTIER_ENTRY",
 	"MALFORMED_FOG_ENTRY",
 	"DANGLING_FRONTIER_REF",
+	"CLOSED_FRONTIER_TICKET",
 ] as const;
 
 export const DefectType = Schema.Literals(DEFECT_TYPES);

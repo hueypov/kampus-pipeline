@@ -769,8 +769,12 @@ does not match what was sent (`13`).
 
 The pure core (`markdown.ts` parse + section/item locators, `validate.ts` floor +
 `isGraduationReady`, `mutate.ts` edits + pre-write proof) is unit-tested directly; the GitHub
-boundary (`github.ts`) fetches the map body + its native sub-issues, resolves a frontier ref
-that names a non-sub-issue as `DANGLING_FRONTIER_REF`, and owns the body PATCH.
+boundary (`github.ts`) fetches the map body + its native sub-issues with their open/closed
+state, resolves a frontier ref that names a non-sub-issue as `DANGLING_FRONTIER_REF` and one
+that names an already-closed sub-issue as `CLOSED_FRONTIER_TICKET`, and owns the body PATCH.
+That second reconciliation is also what keeps graduation-readiness honest: a closed ticket
+still listed on the frontier is finished work, so it stops counting as an answerable unknown
+instead of stranding the map short of ready forever.
 
 ```bash
 # human verdict: valid/malformed + the graduation-ready flag

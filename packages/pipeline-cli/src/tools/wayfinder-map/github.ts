@@ -8,8 +8,9 @@
  * total over the decoded ledger. The raw GitHub shapes are decoded leniently (only
  * the fields the floor needs) and the map body's four sections are parsed at decode
  * time, so the domain model never carries raw markdown and the validator never
- * parses. The map's real sub-issue numbers come from the `sub_issues` endpoint,
- * resolved here at the boundary, never by parsing the body.
+ * parses. The map's real sub-issues — number and open/closed state — come from the
+ * `sub_issues` endpoint, resolved here at the boundary, never by parsing the body:
+ * a body cannot tell you whether the ticket it lists has since been closed.
  *
  * REST only, never GraphQL (broken on the kamp-us org). Every infrastructure failure is a
  * typed error in the `E` channel, never a thrown exception.
@@ -17,7 +18,7 @@
 import {Context, Effect, Layer, Stream} from "effect";
 import * as Schema from "effect/Schema";
 import {ChildProcess, ChildProcessSpawner} from "effect/unstable/process";
-import type {WayfinderMapLedger} from "./Map.ts";
+import type {SubIssueState, WayfinderMapLedger} from "./Map.ts";
 import {parseMapBody} from "./markdown.ts";
 
 /** A null/absent issue body normalizes to the empty string before parsing. */
@@ -29,8 +30,18 @@ const GithubIssue = Schema.Struct({
 	body: GithubBody,
 });
 
-/** A sub-issue ref as the `sub_issues` endpoint returns it; only `number` is read. */
-const SubIssueRef = Schema.Struct({number: Schema.Number});
+/**
+ * A sub-issue ref as the `sub_issues` endpoint returns it: its number and its
+ * `state`. `state` is decoded as a lenient optional string rather than the domain's
+ * closed `"open" | "closed"` union so that a missing, null, or unrecognized wire
+ * value degrades to "state unresolved" instead of failing the whole decode — the
+ * map is still worth validating structurally when GitHub says something we do not
+ * model.
+ */
+const SubIssueRef = Schema.Struct({
+	number: Schema.Number,
+	state: Schema.optionalKey(Schema.NullOr(Schema.String)),
+});
 
 /** The untrusted input: the map issue plus its native sub-issues' numbers. */
 export const GithubMapInput = Schema.Struct({
@@ -43,10 +54,14 @@ const decodeInput = Schema.decodeUnknownEffect(GithubMapInput);
 
 const bodyOf = (body: string | null | undefined): string => body ?? "";
 
+/** Narrow the wire's free-form `state` onto the domain union; anything else is unresolved. */
+const stateOf = (state: string | null | undefined): SubIssueState | undefined =>
+	state === "open" || state === "closed" ? state : undefined;
+
 const toLedger = (input: GithubMapInput): WayfinderMapLedger => ({
 	number: input.map.number,
 	map: parseMapBody(bodyOf(input.map.body)),
-	subIssues: input.subIssues.map((s) => s.number),
+	subIssues: input.subIssues.map((s) => ({number: s.number, state: stateOf(s.state)})),
 });
 
 /**
