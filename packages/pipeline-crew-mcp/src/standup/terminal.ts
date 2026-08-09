@@ -29,6 +29,7 @@ import {
 	launchSessionInHerdr,
 	resolveCrewTabId,
 	resolveTargetHerdrWorkspace,
+	runHerdr,
 } from "./herdr.ts";
 import {
 	FALLBACK_TMUX_SESSION,
@@ -65,11 +66,17 @@ export interface TerminalBackend {
 	 * Launch one planned session as a pane of the crew window under `targetSession`. The first session
 	 * (`intoWindow` undefined) opens the crew window and returns its id; every later session splits into
 	 * that id. Only ever returns for a pane confirmed live — the no-partial-crew contract.
+	 *
+	 * `crewSize` is how many panes the finished window holds, and it is a HINT, not a dimension of the
+	 * contract: a backend that re-tiles after every split (tmux's `select-layout tiled`) ignores it, and
+	 * one that has to compute the even share up front (herdr) places better with it. `spawn-role` adds a
+	 * pane to a window whose final size nobody knows and passes nothing.
 	 */
 	readonly launch: (
 		plan: LaunchPlan,
 		targetSession: string,
 		intoWindow: string | undefined,
+		crewSize?: number,
 	) => Effect.Effect<LaunchedSession, StandUpLaunchError>;
 	/** Resolve the id of the RUNNING crew window in `targetSession`, for `spawn-role` to split into. Fails closed if no crew is up. */
 	readonly resolveCrewWindow: (
@@ -123,7 +130,8 @@ export const tmuxBackend: TerminalBackend = {
 export const herdrBackend: TerminalBackend = {
 	kind: "herdr",
 	resolveTargetSession: () => resolveTargetHerdrWorkspace(),
-	launch: (plan, targetSession, intoWindow) => launchSessionInHerdr(plan, targetSession, intoWindow),
+	launch: (plan, targetSession, intoWindow, crewSize) =>
+		launchSessionInHerdr(plan, targetSession, intoWindow, runHerdr, crewSize),
 	resolveCrewWindow: (targetSession) => resolveCrewTabId(targetSession),
 	findCrewPane: (cwdLabel, displayName) => findCrewPaneIdInHerdr(cwdLabel, displayName),
 	closePane: (paneId) => closeHerdrPane(paneId),

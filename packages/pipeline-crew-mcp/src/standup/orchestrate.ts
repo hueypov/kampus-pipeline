@@ -263,11 +263,13 @@ export interface StandUpInput {
 	readonly resolveTargetSession?: () => Effect.Effect<string, TmuxSessionEnsureError>;
 	/** Launch one planned session as a pane of the crew window under `targetSession`, bound to its role lease. The
 	 * first session (`intoWindow` undefined) opens the crew window and returns its id; every later session splits
-	 * into that window id. Default: `launchSessionInTmux`. */
+	 * into that window id. `crewSize` is how many panes the finished window holds — a placement hint a backend
+	 * that cannot re-tile after the fact needs (see `TerminalBackend.launch`). Default: `launchSessionInTmux`. */
 	readonly launch?: (
 		plan: LaunchPlan,
 		targetSession: string,
 		intoWindow: string | undefined,
+		crewSize?: number,
 	) => Effect.Effect<LaunchedSession, StandUpLaunchError>;
 }
 
@@ -534,7 +536,12 @@ export const runStandUp = (
 		const localScope = input.localScope ?? productionProjectScopeRegistrar;
 		const ensureTracker = input.ensureTracker ?? ensureTrackerRunning;
 		const resolveTargetSession = input.resolveTargetSession ?? resolveTargetSessionDefault;
-		const launch = input.launch ?? launchSessionInTmux;
+		// The tmux default takes an injected runner where the seam takes the placement hint, so it is
+		// adapted rather than passed straight through — tmux re-tiles the window itself and has no use
+		// for a crew size.
+		const launch: NonNullable<StandUpInput["launch"]> =
+			input.launch ??
+			((plan, targetSession, intoWindow) => launchSessionInTmux(plan, targetSession, intoWindow));
 
 		const crewConfigPath = resolveProjectConfigPath(projectRoot);
 		const config = yield* input.config ?? readLaunchConfig({CREW_CONFIG: crewConfigPath});
@@ -604,7 +611,9 @@ export const runStandUp = (
 		const launched: LaunchedSession[] = [];
 		let crewWindow: string | undefined;
 		for (const plan of plans) {
-			const session = yield* launch(plan, targetSession, crewWindow);
+			// The roster length rides along: a backend with no `select-layout tiled` cannot re-tile the
+			// window after the fact, so it needs the FINISHED pane count to size each split (#144).
+			const session = yield* launch(plan, targetSession, crewWindow, plans.length);
 			launched.push(session);
 			crewWindow ??= session.window;
 		}
