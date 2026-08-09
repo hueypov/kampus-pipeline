@@ -6,7 +6,7 @@ date: 2026-08-08
 tags: [crew, channels, launcher, mcp]
 ---
 
-# 0002 — A crew pane's channel is an operator-gated boot precondition, not a launcher guarantee
+# 0003 — A crew pane's channel is an operator-gated boot precondition, not a launcher guarantee
 
 **What this decides:** The crew launcher makes each pane's channel MCP server *visible* but not *approved*, so whether a booted seat has the channel tools is decided per session by host state the launcher neither seeds nor verifies. A seat therefore treats a still-absent channel toolset as permanent for its session and deconflicts over the board, rather than waiting for a connect that is never coming.
 
