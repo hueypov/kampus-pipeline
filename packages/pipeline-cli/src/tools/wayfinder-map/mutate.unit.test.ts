@@ -167,6 +167,18 @@ describe("graduateBody — content the parser does not model survives", () => {
 	});
 });
 
+// Build a defective body by substituting a literal out of the clean fixture, asserting the
+// substitution actually fired. A plain `.replace()` whose search string has drifted matches nothing
+// and returns the clean body unchanged — so the defect is never introduced, the code under test
+// correctly accepts a valid map, and the assertion fails for a reason unrelated to the behaviour
+// being tested. That is precisely how this suite broke: PR #175 renamed the fork marker in
+// `fixtures.ts` (`founder-decision-fork` → `decision-owner-fork`), silently voiding a search string
+// here. The two PRs never touched the same lines, so both stayed green until they met on `main`.
+const mutateFixture = (find: string, replace: string) => {
+	assert.ok(cleanMapBody.includes(find), `fixture drift: cleanMapBody no longer contains ${find}`);
+	return cleanMapBody.replace(find, replace);
+};
+
 describe("graduateBody — refusals", () => {
 	const refusalOf = (body: string, p: Graduation) => {
 		const result = graduateBody(body, p);
@@ -227,8 +239,8 @@ describe("graduateBody — refusals", () => {
 	});
 
 	it("refuses a frontier that names the same ticket twice", () => {
-		const body = cleanMapBody.replace(
-			"- #104 — Decision (founder-decision-fork): should an invited çaylak start at 0 karma?",
+		const body = mutateFixture(
+			"- #104 — Decision (decision-owner-fork): should an invited çaylak start at 0 karma?",
 			"- #103 — Investigation: duplicate entry for the same ticket",
 		);
 		const refusal = refusalOf(body, plan());
@@ -253,7 +265,7 @@ describe("checkGraduation — the pre-write proof", () => {
 	it("does not fault a mutation for a defect the map already had", () => {
 		// An already-malformed map stays the caller's problem: only defects the write
 		// introduced are grounds to refuse.
-		const body = cleanMapBody.replace("— from #101", "");
+		const body = mutateFixture("— from #101", "");
 		const subIssues = [101, 102, 103, 104];
 		const after = mutated(body);
 		assert.isNotEmpty(validateMap(ledgerOf(body, subIssues)));
