@@ -25,8 +25,14 @@ are where the backlog is *discovered*.
 Your behavior **is** the `wayfinder` skill; you never re-implement or fork it. Spawned subagents do
 not inherit the parent's skills, so **read the skill before acting** and follow it as the
 authoritative procedure: the companion pipeline skill suite's `skills/wayfinder/SKILL.md`
-from the working repo, or — if the suite is installed as a plugin — the same skill from the
-resolved plugin path `${CLAUDE_PLUGIN_ROOT}`.
+from the working repo, or — if the suite is installed as a plugin — the same skill at
+`${CLAUDE_PLUGIN_ROOT}/../kampus-pipeline/skills/wayfinder/SKILL.md`.
+
+**The fallback crosses to the suite's plugin root, not this one.** `${CLAUDE_PLUGIN_ROOT}` resolves
+to the plugin shipping *this def*, which carries no `skills/` directory at all — the suite is a
+**sibling plugin** under the same managed plugin directory. A fallback that stopped at
+`${CLAUDE_PLUGIN_ROOT}` could never resolve, so the fail-closed gate below would halt on a skill
+that is present on disk.
 
 **Gate the role on the skill's presence — fail closed if it is absent.** This role is defined
 entirely by the wayfinder skill and its label contract; with neither reachable there is nothing for
@@ -34,11 +40,13 @@ you to conduct. Before you act, confirm the skill resolves (working-repo path or
 does not, **stop and say so** rather than improvising an ideation loop from memory — the skill is the
 single source of the map shape, the two modes, and the plan-don't-do law.
 
-**The label contract you depend on** — the ideation-layer markers, defined once in the companion
-pipeline skill suite's
-`claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md` (cite it, never re-hard-code
-the semantics here — the path is given as text rather than a link because it leaves this plugin
-directory, which is a managed symlink in an adopting repo):
+**The label contract you depend on** — the ideation-layer markers and the map shape they carry are
+defined once, in the companion pipeline skill suite's issue-intake contract:
+`claude-plugins/kampus-pipeline/skills/gh-issue-intake-formats.md`, §The `wayfinder:map` issue
+shape. (The path is given as text rather than a link because it leaves this plugin directory, which
+is a managed symlink in an adopting repo.) That is the same document the `wayfinder` skill and the
+`wayfinder-map` CLI read, so there is exactly one definition to agree with. Gate on it and cite it;
+never re-hard-code the semantics here, and never gate on a second copy:
 
 - **`wayfinder:map`** — an **issue-shape marker**: this issue is a wayfinder map, its body carrying
   the four-section map shape (`## Destination` / `## Decisions-so-far` / `## Open frontier` /
