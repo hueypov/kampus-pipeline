@@ -17,6 +17,15 @@
  * enforced by the permission engine. Coverage is still structural, which is the property the
  * denylist was there for: an agent-type nobody classified reds the build either way.
  *
+ * **The same epistemics bind the read-only fanout, and this guard asserts the defs say so
+ * (#170).** `crew-investigator`'s write exclusions are grant-enforced only for the tools its
+ * grant omits (`Edit`/`Write`, `Task`, `channel_send`); it holds `Bash`, which subsumes them, so
+ * that half is charter-enforced too. A def that justifies fanning out to it as "write-tool-free"
+ * or "enforced structurally", without naming the charter half in the same breath, inherits a
+ * guarantee nothing delivers — so it reds the build. See
+ * `claude-plugins/pipeline-crew/agents/crew-investigator.md` for why `Bash` is not narrowed and
+ * what would have to exist before it could be.
+ *
  * IO-free and total: every decision is a deterministic transform over already-gathered facts
  * (the parsed agent defs). The filesystem boundary (enumerate the agent dirs, read each def)
  * lives in `gate.ts`; this module never touches disk.
@@ -28,12 +37,40 @@
 import {parse as parseYaml} from "yaml";
 
 /**
- * Read-only crew agent-types — write-tool-free by grant (the read-only fanout capability rule). Excluded from the
- * mutating roster: a bridge spawning one is context hygiene, not an execution edge. A NEW
- * agent-type defaults to MUTATING (it is not on this set), so it must be explicitly
- * allowlisted or excluded — the fail-closed default that catches a future roster addition.
+ * Read-only crew agent-types (the read-only fanout capability rule) — mutation-free by grant for
+ * every tool their grant omits, and by charter for the rest. Excluded from the mutating roster: a
+ * bridge spawning one is context hygiene, not an execution edge. A NEW agent-type defaults to
+ * MUTATING (it is not on this set), so it must be explicitly allowlisted or excluded — the
+ * fail-closed default that catches a future roster addition.
  */
 export const READ_ONLY_AGENTS: ReadonlySet<string> = new Set(["crew-investigator"]);
+
+/**
+ * Tools that subsume the write capabilities a read-only grant leaves out — a shell redirect is
+ * `Write`, `gh api -X POST` is a board mutation, `git push` is an execution edge. While a
+ * read-only agent holds one, its read-only property is charter-enforced and no def may state it
+ * as a property of the grant (#170). Narrow that grant and the claims become true on their own,
+ * at which point this check goes quiet.
+ */
+export const GENERAL_CAPABILITY_TOOLS: ReadonlySet<string> = new Set(["Bash"]);
+
+/**
+ * Phrases that assert the read-only fanout's write exclusions are a fact of the tool grant. Each
+ * is the shorthand a bridge def reaches for when it justifies fanning out at all.
+ */
+export const ENFORCEMENT_CLAIM_PATTERNS: ReadonlyArray<RegExp> = [
+	/write-tool-free/i,
+	/\bno write tools?\b/i,
+	/enforced structurally/i,
+	/structurally enforced/i,
+];
+
+/**
+ * What narrows such a phrase back to the truth. A claim that names the charter half beside itself
+ * is stating the split, not overclaiming — so it passes. `grant-enforced` is deliberately NOT a
+ * qualifier: it is the half that is already true and says nothing about the half that is not.
+ */
+const CLAIM_QUALIFIER = /\bby charter\b|\bcharter-enforced\b|\bdefense-in-depth\b/i;
 
 /** The three roster-law BRIDGE seats (the role-kind roster cardinality rule) whose spawn scope this guard enforces. */
 export const BRIDGE_NAMES = [
@@ -90,12 +127,21 @@ export interface AgentDef {
 	readonly declaresDisallowedTools: boolean;
 	/** Agent-types the def's charter states it never spawns, from its `**Never spawn**` paragraph. */
 	readonly charterExclusions: ReadonlyArray<string>;
+	/** Enforcement claims the def makes over the read-only fanout without naming the charter half. */
+	readonly enforcementClaims: ReadonlyArray<string>;
 }
 
-/** One way a bridge def is mis-shaped: its declared toolset would not resolve as written. */
+/**
+ * One way a crew def is mis-shaped: its declared toolset would not resolve as written, or it
+ * asserts an enforcement its grant does not deliver.
+ */
 export interface DefShapeProblem {
-	readonly bridge: string;
-	readonly kind: "self-denial" | "missing-fanout-grant" | "ungrantable-tool";
+	readonly def: string;
+	readonly kind:
+		| "self-denial"
+		| "missing-fanout-grant"
+		| "ungrantable-tool"
+		| "overclaimed-enforcement";
 	readonly detail: string;
 }
 
@@ -156,6 +202,36 @@ export const stringList = (value: unknown): ReadonlyArray<string> =>
 		? value.filter((v): v is string => typeof v === "string").map((v) => v.trim())
 		: [];
 
+/** A def's prose as blank-line-separated blocks. */
+const blocks = (body: string): ReadonlyArray<string> => body.split(/\r?\n[ \t]*\r?\n/);
+
+/**
+ * The units a claim is read in: blank-line blocks, split again at each list-item marker. A bullet
+ * list is one block, but a reader inherits ONE bullet — so a qualifier three bullets away has not
+ * qualified anything.
+ */
+const claimUnits = (body: string): ReadonlyArray<string> =>
+	blocks(body).flatMap((block) => block.split(/\r?\n(?=[ \t]*[-*] )/));
+
+/**
+ * Every enforcement claim in a def — description included, since that is the summary a spawner
+ * reads — that names no charter qualifier beside itself. The claim's own phrase is returned, so
+ * the report can point at the words to change.
+ */
+export const unqualifiedEnforcementClaims = (text: string): ReadonlyArray<string> => {
+	const fm = parseFrontmatter(text);
+	const description = typeof fm?.description === "string" ? fm.description : "";
+	const out = new Set<string>();
+	for (const unit of [description, ...claimUnits(defBody(text))]) {
+		if (CLAIM_QUALIFIER.test(unit)) continue;
+		for (const pattern of ENFORCEMENT_CLAIM_PATTERNS) {
+			const hit = pattern.exec(unit);
+			if (hit?.[0]) out.add(hit[0].toLowerCase());
+		}
+	}
+	return [...out];
+};
+
 /**
  * Pull the excluded agent-types out of a charter's `**Never spawn**` paragraph — every
  * inline-code token in it. A paragraph rather than a single line so the list may wrap; a
@@ -163,7 +239,7 @@ export const stringList = (value: unknown): ReadonlyArray<string> =>
  */
 export const charterExclusions = (body: string): ReadonlyArray<string> => {
 	const out = new Set<string>();
-	for (const paragraph of body.split(/\r?\n[ \t]*\r?\n/)) {
+	for (const paragraph of blocks(body)) {
 		const text = paragraph.trimStart();
 		if (!/^\*\*Never spawn\b/.test(text)) continue;
 		for (const [, token] of text.matchAll(/`([^`]+)`/g)) if (token) out.add(token.trim());
@@ -180,31 +256,35 @@ export const parseAgentDef = (text: string): AgentDef | null => {
 		tools: stringList(fm.tools),
 		declaresDisallowedTools: fm.disallowedTools !== undefined,
 		charterExclusions: charterExclusions(defBody(text)),
+		enforcementClaims: unqualifiedEnforcementClaims(text),
 	};
 };
 
 /** The facts the pure verdict is computed over — gathered at the filesystem boundary. */
 export interface CrewFanoutInput {
-	/** Every discovered agent-type name across both agent dirs (the roster). */
-	readonly rosterAgents: ReadonlyArray<string>;
-	/** The bridge defs actually found on disk, parsed. */
-	readonly bridges: ReadonlyArray<AgentDef>;
+	/**
+	 * Every agent def discovered across both agent dirs, parsed — the roster. The bridges are the
+	 * `BRIDGE_NAMES` entries within it rather than a second field: a bridge that is missing from
+	 * disk is missing from the roster too, so passing them separately would let a caller describe
+	 * a repo that cannot exist.
+	 */
+	readonly defs: ReadonlyArray<AgentDef>;
 }
 
-/** The three def-shape checks, in the order a reader would apply them. */
-const defShapeProblems = (bridges: ReadonlyArray<AgentDef>): ReadonlyArray<DefShapeProblem> => {
+/** The bridge-shape checks, in the order a reader would apply them. */
+const bridgeShapeProblems = (bridges: ReadonlyArray<AgentDef>): ReadonlyArray<DefShapeProblem> => {
 	const problems: Array<DefShapeProblem> = [];
 	for (const bridge of bridges) {
 		if (bridge.declaresDisallowedTools) {
 			problems.push({
-				bridge: bridge.name,
+				def: bridge.name,
 				kind: "self-denial",
 				detail: "declares `disallowedTools`",
 			});
 		}
 		if (!bridge.tools.includes(FANOUT_TOOL)) {
 			problems.push({
-				bridge: bridge.name,
+				def: bridge.name,
 				kind: "missing-fanout-grant",
 				detail: `does not grant \`${FANOUT_TOOL}\``,
 			});
@@ -212,7 +292,7 @@ const defShapeProblems = (bridges: ReadonlyArray<AgentDef>): ReadonlyArray<DefSh
 		for (const tool of bridge.tools) {
 			if (!UNGRANTABLE_TOOLS.has(tool)) continue;
 			problems.push({
-				bridge: bridge.name,
+				def: bridge.name,
 				kind: "ungrantable-tool",
 				detail: `declares ungrantable \`${tool}\``,
 			});
@@ -222,29 +302,52 @@ const defShapeProblems = (bridges: ReadonlyArray<AgentDef>): ReadonlyArray<DefSh
 };
 
 /**
+ * Every def — bridge or not — that claims more enforcement than the read-only agent's grant
+ * delivers (#170). Conditional on that grant, not on the phrasing alone: the claims are only
+ * false while a read-only agent still holds a general-capability tool.
+ */
+const enforcementProblems = (defs: ReadonlyArray<AgentDef>): ReadonlyArray<DefShapeProblem> => {
+	const charterOnly = defs.some(
+		(d) =>
+			READ_ONLY_AGENTS.has(d.name) && d.tools.some((t) => GENERAL_CAPABILITY_TOOLS.has(t)),
+	);
+	if (!charterOnly) return [];
+	return defs.flatMap((d) =>
+		d.enforcementClaims.map((claim) => ({
+			def: d.name,
+			kind: "overclaimed-enforcement" as const,
+			detail: `claims \`${claim}\` without naming the charter half of the split`,
+		})),
+	);
+};
+
+/**
  * Decide the verdict. Fails closed on zero scope, a missing bridge, a mis-shaped bridge def, a
  * stale allowlist, or any mutating roster agent-type a bridge neither allowlists nor excludes.
  */
 export const judge = (input: CrewFanoutInput): CrewFanoutVerdict => {
-	if (input.rosterAgents.length === 0) {
+	if (input.defs.length === 0) {
 		return {pass: false, reason: "zero-scope", detail: "no agent defs discovered"};
 	}
-	if (input.bridges.length === 0) {
+	const byName = new Map(input.defs.map((d) => [d.name, d]));
+	const bridges = BRIDGE_NAMES.map((n) => byName.get(n)).filter(
+		(d): d is AgentDef => d !== undefined,
+	);
+	if (bridges.length === 0) {
 		return {pass: false, reason: "zero-scope", detail: "no bridge defs discovered"};
 	}
 
-	const found = new Set(input.bridges.map((b) => b.name));
-	const missing = BRIDGE_NAMES.filter((n) => !found.has(n));
+	const missing = BRIDGE_NAMES.filter((n) => !byName.has(n));
 	if (missing.length > 0) {
 		return {pass: false, reason: "missing-bridge", missing};
 	}
 
-	const problems = defShapeProblems(input.bridges);
+	const problems = [...bridgeShapeProblems(bridges), ...enforcementProblems(input.defs)];
 	if (problems.length > 0) {
 		return {pass: false, reason: "def-shape", problems};
 	}
 
-	const rosterSet = new Set(input.rosterAgents);
+	const rosterSet = new Set(byName.keys());
 	// A stale allowlist entry (an allowlisted agent-type no longer in the roster) means the
 	// policy drifted from reality — fail closed so a rename/removal forces an allowlist update.
 	const stale: Array<{bridge: string; agent: string}> = [];
@@ -260,7 +363,7 @@ export const judge = (input: CrewFanoutInput): CrewFanoutVerdict => {
 	const mutatingRoster = [...rosterSet].filter((a) => !READ_ONLY_AGENTS.has(a)).sort();
 
 	const gaps: Array<{bridge: string; agent: string}> = [];
-	for (const bridge of input.bridges) {
+	for (const bridge of bridges) {
 		if (!(bridge.name in BRIDGE_ALLOWLIST)) continue;
 		const allow = new Set(BRIDGE_ALLOWLIST[bridge.name as BridgeName]);
 		const excluded = new Set(bridge.charterExclusions);
@@ -273,7 +376,7 @@ export const judge = (input: CrewFanoutInput): CrewFanoutVerdict => {
 		return {pass: false, reason: "uncovered", gaps};
 	}
 
-	return {pass: true, mutatingRoster, bridges: input.bridges.map((b) => b.name).sort()};
+	return {pass: true, mutatingRoster, bridges: bridges.map((b) => b.name).sort()};
 };
 
 /** Render the human-readable report for a verdict (the zero-scope fail-closed invariant §1 "emit what you scanned"). */
@@ -299,14 +402,29 @@ export const renderReport = (verdict: CrewFanoutVerdict): string => {
 		);
 	}
 	if (verdict.reason === "def-shape") {
-		const lines = verdict.problems.map((p) => `  ${p.bridge} ${p.detail}`);
+		const lines = verdict.problems.map((p) => `  ${p.def} ${p.detail}`);
+		const notes: Array<string> = [];
+		if (verdict.problems.some((p) => p.kind !== "overclaimed-enforcement")) {
+			notes.push(
+				"A `disallowedTools` entry is matched by its base tool name, so `Task(x)` subtracts the whole\n" +
+					"`Task` tool and the bridge boots unable to spawn anything; `Grep`/`Glob` are never served to a\n" +
+					"top-level session, so declaring one is a silent no-op (#121). Drop them, grant `Task`, and\n" +
+					"state the per-subagent scope in the def's `**Never spawn**` charter paragraph instead.",
+			);
+		}
+		if (verdict.problems.some((p) => p.kind === "overclaimed-enforcement")) {
+			notes.push(
+				"A def that justifies the read-only fanout as write-tool-free is inheriting a guarantee the\n" +
+					"grant does not deliver: `crew-investigator` holds `Bash`, which subsumes the tools its grant\n" +
+					"omits, so its read-only property is grant-enforced for `Edit`/`Write`/`Task`/`channel_send`\n" +
+					"and charter-enforced for `Bash` (#170). State that split where the claim is made — name the\n" +
+					"charter half in the same paragraph — rather than asserting structural enforcement over both.",
+			);
+		}
 		return (
-			`crew-fanout-guard: ${verdict.problems.length} bridge def(s) declare a toolset that would ` +
-			`not resolve as written:\n${lines.join("\n")}\n\n` +
-			"A `disallowedTools` entry is matched by its base tool name, so `Task(x)` subtracts the whole\n" +
-			"`Task` tool and the bridge boots unable to spawn anything; `Grep`/`Glob` are never served to a\n" +
-			"top-level session, so declaring one is a silent no-op (#121). Drop them, grant `Task`, and\n" +
-			"state the per-subagent scope in the def's `**Never spawn**` charter paragraph instead."
+			`crew-fanout-guard: ${verdict.problems.length} crew def(s) declare a toolset that would not ` +
+			`resolve as written, or an enforcement the grant does not deliver:\n${lines.join("\n")}\n\n` +
+			notes.join("\n\n")
 		);
 	}
 	if (verdict.reason === "stale-allowlist") {
