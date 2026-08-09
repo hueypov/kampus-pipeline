@@ -24,10 +24,12 @@
  *     `--env KEY=VALUE` for the shell they launch, so the pane's `claude` inherits it directly instead
  *     of the tmux path's shell-quoted `CREW_CONFIG=… claude …` prefix.
  *
- * herdr has no `select-layout tiled`, so the even tiling tmux gets for free is approximated by
- * alternating the split direction (right, down, right, …) against the tab's live pane count. This is
- * deliberately a heuristic: it keeps panes from degenerating into unusably narrow columns, which is the
- * property that actually matters, and it is the geometry rule herdr's own agent guide prescribes.
+ * herdr has no `select-layout tiled`, so the even tiling tmux gets for free is computed here instead —
+ * see `planCrewSplit`, which is the whole rule and is pure arithmetic over the geometry `pane layout`
+ * reports. Two things make a layout even and neither is optional: WHICH pane a seat splits, and at what
+ * RATIO. Splitting the newest pane at herdr's default 50/50 — what this module did until #144 — halves
+ * the previous pane every time, so seat n lands on 1/2^n of the tab; a measured six-seat crew came up at
+ * 51/25/12/6/3/3 percent, its last pane holding about three readable lines.
  */
 import {spawn} from "node:child_process";
 import {Effect} from "effect";
@@ -133,6 +135,16 @@ const arrField = (obj: HerdrResult, key: string): readonly unknown[] => {
 	return Array.isArray(value) ? value : [];
 };
 
+/** Read a nested object field off a herdr result object — the `layout` / `rect` / `area` envelopes. */
+const objField = (obj: unknown, key: string): unknown =>
+	typeof obj === "object" && obj !== null ? (obj as Record<string, unknown>)[key] : undefined;
+
+/** Read a finite number field off a herdr result object, returning undefined when absent or not a number. */
+const numField = (obj: unknown, key: string): number | undefined => {
+	const value = objField(obj, key);
+	return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+};
+
 /** Why a herdr step failed, in the operator's words — a spawn failure (herdr absent) or a non-zero exit. */
 const herdrReason = (run: HerdrRun, what: string): string =>
 	run.spawnError !== undefined
@@ -218,7 +230,135 @@ export const resolveTargetHerdrWorkspace = (
 		return id;
 	});
 
-/** Count the panes already open in a tab — the input to the alternating split direction (see the module header). */
+/** One pane's live rectangle in terminal cells, as `herdr pane layout` reports it. */
+export interface HerdrPaneRect {
+	readonly paneId: string;
+	readonly width: number;
+	readonly height: number;
+}
+
+/** A tab's geometry: the content area the panes tile, and the panes tiling it. */
+export interface HerdrTabLayout {
+	readonly width: number;
+	readonly height: number;
+	readonly panes: readonly HerdrPaneRect[];
+}
+
+/** Where the next crew seat goes: which pane it splits, along which axis, and what share that pane keeps. */
+export interface HerdrSplitPlan {
+	/** The pane to pass to `pane split --pane`. */
+	readonly target: string;
+	readonly direction: "right" | "down";
+	/**
+	 * The fraction of the target the TARGET KEEPS — the new pane gets `1 - ratio`. That orientation is
+	 * herdr's, measured rather than assumed: `pane split --pane P --direction right --ratio 0.25` on a
+	 * 171-column pane leaves P at 43 columns and gives the new pane 128.
+	 */
+	readonly ratio: number;
+}
+
+/**
+ * How much taller than wide one terminal cell is, near enough. A pane is readable by its shape ON SCREEN,
+ * not in cells: a 193x57 tab is about 1.6:1 to the eye, not 3.4:1. Comparing raw `width` against `height`
+ * would therefore call almost every region "wider than tall" and split it `right` again and again, which
+ * tiles a six-seat crew into 32-column strips — even in area, useless to read. Cells run about 2:1 in the
+ * fonts a terminal renders, so that is the factor the longer axis is judged against.
+ */
+const CELL_ASPECT = 2;
+
+/**
+ * Choose the pane the next crew seat splits, the axis, and the ratio — the entire placement rule, as pure
+ * arithmetic over one `pane layout` reading. Returns undefined only for a tab with no panes at all.
+ *
+ * `crewSize` is how many seats the tab holds once the stand-up finishes, and knowing it is what makes the
+ * result EVEN rather than merely non-degenerate. Divide a pane's area by the even share
+ * `total / crewSize` and you get the number of seats that pane's region still owes; the pane owing the
+ * most is the one to split, and splitting it so it keeps `ceil(k/2) / k` leaves each side owing half the
+ * seats and holding half the area. Run for every seat, that lands the whole crew within a rounding cell
+ * of `1 / crewSize` each — 2 through 8 seats all come out inside 6% of even.
+ *
+ * `undefined` crewSize is the `spawn-role` case: one seat added to a tab whose final size nobody knows.
+ * The same arithmetic degrades to its `k = 2` case on its own — every pane owes one seat, so the largest
+ * is halved. One split cannot resize the panes it does not touch, so that cannot be even; what it does do
+ * is bound the spread at 2x instead of letting it halve away.
+ */
+export const planCrewSplit = (
+	layout: HerdrTabLayout,
+	crewSize: number | undefined,
+): HerdrSplitPlan | undefined => {
+	const areaOf = (pane: HerdrPaneRect) => pane.width * pane.height;
+	const total =
+		layout.width > 0 && layout.height > 0
+			? layout.width * layout.height
+			: layout.panes.reduce((sum, pane) => sum + areaOf(pane), 0);
+	// The even share one seat is owed. Without a crew size there is none, and every pane owes one seat.
+	const share = crewSize !== undefined && crewSize > 0 && total > 0 ? total / crewSize : undefined;
+	const seatsOwed = (pane: HerdrPaneRect) =>
+		share === undefined ? 1 : Math.max(1, Math.round(areaOf(pane) / share));
+
+	let best: {readonly pane: HerdrPaneRect; readonly owed: number} | undefined;
+	for (const pane of layout.panes) {
+		const owed = seatsOwed(pane);
+		if (
+			best === undefined ||
+			owed > best.owed ||
+			// Ties go to the bigger pane, then to the lower pane id — placement must not depend on the
+			// order herdr happened to list the tab in.
+			(owed === best.owed &&
+				(areaOf(pane) > areaOf(best.pane) ||
+					(areaOf(pane) === areaOf(best.pane) && pane.paneId < best.pane.paneId)))
+		) {
+			best = {pane, owed};
+		}
+	}
+	if (best === undefined) return undefined;
+
+	// Never below 2: this seat and the one already sitting in the target both have to fit in it.
+	const owed = Math.max(2, best.owed);
+	return {
+		target: best.pane.paneId,
+		direction: best.pane.width >= best.pane.height * CELL_ASPECT ? "right" : "down",
+		ratio: Math.ceil(owed / 2) / owed,
+	};
+};
+
+/**
+ * Format a ratio for herdr's `--ratio <FLOAT>`. Four decimals is under a hundredth of a cell on any tab
+ * herdr can render, and it keeps `2/3` out of the argv as `0.6667` rather than seventeen digits.
+ */
+const ratioArg = (ratio: number): string => ratio.toFixed(4);
+
+/**
+ * Read the geometry of the tab holding `paneId`. `pane layout` is tab-scoped and keyed by a pane rather
+ * than a tab, which is why the caller looks a pane up first. Returns undefined for any answer the split
+ * cannot be planned from — the caller falls back rather than failing a launch over a cosmetic query.
+ */
+const readTabLayout = (
+	paneId: string,
+	runHerdrCommand: HerdrRunner,
+): Effect.Effect<HerdrTabLayout | undefined> =>
+	runHerdrCommand(["pane", "layout", "--pane", paneId]).pipe(
+		Effect.map((listed) => {
+			const result = herdrResult(listed);
+			if (result === undefined) return undefined;
+			const layout = result["layout"];
+			const area = objField(layout, "area");
+			const listedPanes = objField(layout, "panes");
+			const panes: HerdrPaneRect[] = [];
+			for (const pane of Array.isArray(listedPanes) ? (listedPanes as readonly unknown[]) : []) {
+				const id = strField(pane, "pane_id");
+				const width = numField(objField(pane, "rect"), "width");
+				const height = numField(objField(pane, "rect"), "height");
+				if (id !== undefined && width !== undefined && height !== undefined) {
+					panes.push({paneId: id, width, height});
+				}
+			}
+			if (panes.length === 0) return undefined;
+			return {width: numField(area, "width") ?? 0, height: numField(area, "height") ?? 0, panes};
+		}),
+	);
+
+/** The panes already open in a tab — the handle the layout is read through, and the fail-closed check that one exists. */
 const paneIdsInTab = (
 	workspaceId: string,
 	tabId: string,
@@ -241,19 +381,25 @@ const paneIdsInTab = (
  * Launch one planned `claude` session as a pane of the single crew tab under `workspaceId`, then CONFIRM
  * it came up before counting it — the herdr implementation of the same contract `launchSessionInTmux`
  * holds. The first session (`intoTab` undefined) opens the crew tab with `tab create` and returns its
- * id so every later session splits into exactly that tab; later sessions `pane split` the tab's last
- * pane, alternating direction to keep the layout usable.
+ * id so every later session splits into exactly that tab; later sessions `pane split` the pane
+ * `planCrewSplit` picks, at the ratio it computes, which is what makes the finished tab evenly tiled.
  *
  * Each launch is the two-step herdr shape — create the pane, then `pane run` the command into its shell
  * — and BOTH steps are checked, so a `LaunchedSession` only ever exists for a pane that was created and
  * commanded. The pane is renamed to its roster label so `retire-role` and the operator can both tell
  * the members apart.
+ *
+ * `crewSize` is how many seats the finished tab holds — `stand-up` knows it, `spawn-role` does not, and
+ * `planCrewSplit` documents what each case gets. tmux takes no such argument because `select-layout
+ * tiled` re-tiles the whole window from scratch after every split; herdr has no equivalent, so the even
+ * share has to be computed before the split rather than restored after it.
  */
 export const launchSessionInHerdr = (
 	plan: LaunchPlan,
 	workspaceId: string,
 	intoTab: string | undefined,
 	runHerdrCommand: HerdrRunner = runHerdr,
+	crewSize?: number,
 ): Effect.Effect<LaunchedSession, StandUpLaunchError> =>
 	Effect.gen(function* () {
 		const {placement, bind, session, cwd} = plan;
@@ -290,11 +436,11 @@ export const launchSessionInHerdr = (
 			paneId = rootPane;
 			pid = opened.pid;
 		} else {
-			// Later session: split the crew tab's last pane. Alternating right/down against the live pane
-			// count stands in for tmux's `select-layout tiled`, which herdr has no equivalent of.
+			// Later session: split the pane the placement rule picks, at the ratio it computes — herdr's
+			// stand-in for `select-layout tiled` (see `planCrewSplit`).
 			const existing = yield* paneIdsInTab(workspaceId, intoTab, runHerdrCommand);
-			const target = existing?.at(-1);
-			if (existing === undefined || target === undefined) {
+			const anyPane = existing?.[0];
+			if (existing === undefined || anyPane === undefined) {
 				return yield* Effect.fail(
 					new StandUpLaunchError({
 						role: session.role,
@@ -303,13 +449,23 @@ export const launchSessionInHerdr = (
 					}),
 				);
 			}
+			// `pane layout` is keyed by a pane, so any pane of the tab reads the whole tab's geometry.
+			const layout = yield* readTabLayout(anyPane, runHerdrCommand);
+			const placed = layout === undefined ? undefined : planCrewSplit(layout, crewSize);
+			// Geometry is unreadable only if herdr answered `pane list` and then refused `pane layout`.
+			// Placement quality is not the launch contract — a crew that comes up unevenly beats a crew
+			// that does not come up — so this falls back to the blind pre-#144 heuristic (halve the last
+			// pane, alternating the axis against the live pane count) rather than failing the launch.
+			const target = placed?.target ?? existing[existing.length - 1] ?? anyPane;
 			const split = yield* runHerdrCommand([
 				"pane",
 				"split",
 				"--pane",
 				target,
 				"--direction",
-				existing.length % 2 === 0 ? "right" : "down",
+				placed?.direction ?? (existing.length % 2 === 0 ? "right" : "down"),
+				"--ratio",
+				ratioArg(placed?.ratio ?? 0.5),
 				"--cwd",
 				cwd,
 				"--no-focus",
