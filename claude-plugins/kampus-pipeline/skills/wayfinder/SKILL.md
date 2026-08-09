@@ -60,7 +60,7 @@ one on its own authority. This is the deliberate human-in-the-loop seam the whol
 layer is built to preserve (the same product-driven-decision boundary the pipeline honors
 elsewhere): wayfinder does the legwork that *frames* a decision, never the deciding. The routing
 mechanics — how a fork is framed for the delegated decision owner, what the map records, and how the agent blocks
-on the answer — are the [decision-owner-fork seam](#the-decision-owner-fork-seam--routing-the-fork-to-the-decision-owner).
+on the answer — are the [decision-owner-fork seam](#the-decision-owner-fork-seam--routing-the-fork-to-the-delegated-decision-owner).
 
 **The repository-owned artifact rule — every repository artifact names repository-owned
 definitions, never personal local setup.** Every repository-side artifact wayfinder composes —
@@ -79,6 +79,25 @@ configuration terminology.
 - It **does not resolve a decision-owner-fork** — that is the preserved human seam above.
 - It is **not part of the linear execution flow** — it is the pre-triage ideation stage that
   runs *before* the pipeline picks anything up.
+
+## The skill's shell
+
+This skill's executable shell lives in [`scripts/`](scripts/), and each fenced `bash` block below is
+an **invocation** of one; the prose keeps the *why*. They set `set -uo pipefail`, deliberately not
+`-e`: the glue steers its own control flow, and `errexit` would abort a fail-closed branch before it
+printed its refusal. Every diagnostic goes to **stderr**, so a caller can capture the issue number a
+script prints on stdout without the refusal text contaminating it.
+
+**[`scripts/create-map.sh`](scripts/create-map.sh) and
+[`scripts/add-frontier-ticket.sh`](scripts/add-frontier-ticket.sh) take the body on stdin and REFUSE
+an empty one.** The body is authored, multi-line markdown, which makes it an external input to the
+script; an unread pipe is byte-identical to an empty one, so filing on it would open a bodyless map
+or ticket that reads as a successful chart. Refusing is the fail-closed guard the seam owes: a
+missing body must surface as a non-zero exit and *nothing filed*, never as a silent empty artifact.
+
+[`scripts/graduate-map.sh`](scripts/graduate-map.sh) **relays** the repository's `tracker graduate`
+verb and derives nothing — the graduation-close envelope (the provenance record plus the
+close-as-completed) stays owned in one place rather than re-hand-rolled here.
 
 ## CHART mode — name the destination, map the frontier (plan-don't-do)
 
@@ -170,7 +189,7 @@ Research / Grilling / Prototype (decisions and unknowns), never Task (deliverabl
 autonomous rows file `type:investigation` tickets WORK mode clears on its own; the Grilling row
 files a `type:decision` ticket flagged a **decision-owner-fork**, which WORK mode *surfaces and
 stops on* rather than resolving — the fork-routing mechanics themselves live in the
-[decision-owner-fork seam](#the-decision-owner-fork-seam--routing-the-fork-to-the-decision-owner)
+[decision-owner-fork seam](#the-decision-owner-fork-seam--routing-the-fork-to-the-delegated-decision-owner)
 below. CHART's job for a fork is only to *recognize* the unknown as a delegated decision owner call, file it as
 `type:decision`, and mark it a fork on the map. The
 **Task** row is deliberately not a frontier ticket: it is the deliverable side of the
@@ -185,12 +204,11 @@ plan-don't-do line, so it enters the pipeline only via emission, never as fog.
    re-lay the `## Open frontier`, but it preserves what earlier runs settled.
 
    ```bash
-   REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
-   # new map (REST only — the org bans GraphQL for issue ops):
-   MAP=$(gh api -X POST repos/$REPO/issues \
-     -f title="<destination, as a short noun phrase>" \
-     -f "labels[]=wayfinder:map" \
-     -f body="$BODY" --jq '.number')
+   # new map (REST only — issue operations do not use GraphQL); prints the map's issue number.
+   # The four-section body arrives on stdin from a per-run file, because it is multi-line authored
+   # markdown; an EMPTY stdin is refused rather than filed as a bodyless map.
+   MAP="$("${CLAUDE_PLUGIN_ROOT:-claude-plugins/kampus-pipeline}/skills/wayfinder/scripts/create-map.sh" \
+     "<destination, as a short noun phrase>" < "<path/to/map-body.md>")" || exit 1
    ```
 
 2. **Name the `## Destination`.** State *where we want to be* in one or two sentences, concrete
@@ -227,11 +245,10 @@ plan-don't-do line, so it enters the pipeline only via emission, never as fog.
    internal **database id** (`.id`), not its issue number:
 
    ```bash
-   CHILD_ID=$(gh api -X POST repos/$REPO/issues \
-     -f title="Investigation: <the open question>" \
-     -f "labels[]=type:investigation" \
-     -f body="<what's unknown, and what an answer would unblock>" --jq '.id')
-   gh api -X POST repos/$REPO/issues/$MAP/sub_issues -F sub_issue_id="$CHILD_ID" >/dev/null
+   # files the ticket and links it under $MAP in one act; prints the child's issue number. The body
+   # (what's unknown, and what an answer would unblock) arrives on stdin; an empty stdin is refused.
+   "${CLAUDE_PLUGIN_ROOT:-claude-plugins/kampus-pipeline}/skills/wayfinder/scripts/add-frontier-ticket.sh" \
+     "$MAP" "Investigation: <the open question>" type:investigation < "<path/to/ticket-body.md>"
    ```
 
    Frontier tickets are **wayfinder-worked, not `write-code`-pickable** — they carry no
@@ -292,7 +309,7 @@ shaped for and the durable seam between runs — WORK mutates the map only throu
 1. **Resolve the map and read its frontier through the CLI.** Load map `#N`'s state via
    `wayfinder-map` and take its `## Open frontier` list. First ask the CLI whether the map is
    **emission-ready** — its `## Open frontier` cleared of answerable unknowns (the
-   graduation-readiness signal, see [Emission](#emission--the-cleared-map-emits-triaged-epics-into-the-pipeline));
+   graduation-readiness signal, see [Emission](#emission--the-cleared-map-graduates-into-its-durable-artifacts));
    if so, this map has nothing left to resolve and WORK hands off to emission rather than picking a
    ticket. Otherwise pick the **next resolvable** ticket deterministically (oldest sub-issue
    first). A ticket already flagged **decision-owner-fork** and awaiting the delegated decision owner is **not
@@ -340,7 +357,7 @@ for the *why*). When the ticket WORK would pick is a fork, it does **not** hand 
 and does **not** pick an option: it leaves the fork on `## Open frontier`, surfaces that the map is
 awaiting a delegated decision owner call, and stops. The mechanics of *routing* a fork to the delegated decision owner — framing the
 decision-request, recording the awaiting-decision-owner state, and blocking on the delegated decision owner's answer —
-are the [decision-owner-fork seam](#the-decision-owner-fork-seam--routing-the-fork-to-the-decision-owner)
+are the [decision-owner-fork seam](#the-decision-owner-fork-seam--routing-the-fork-to-the-delegated-decision-owner)
 below, which this step calls into; WORK's obligation here is only to **recognize the fork and
 refuse to resolve it**, then hand off to that routing contract.
 
@@ -441,7 +458,7 @@ holds; see [Map state is read and written through the `wayfinder-map` CLI](#map-
   Emission is thus the natural terminus of the one-ticket-per-session walk, not a parallel machine.
 - **Graceful block on the human.** A map that still holds a decision-owner-fork *awaiting the
   delegated decision owner* is **not** emission-ready for the plan that fork gates — it is blocked on the human (the
-  [decision-owner-fork seam](#the-decision-owner-fork-seam--routing-the-fork-to-the-decision-owner)),
+  [decision-owner-fork seam](#the-decision-owner-fork-seam--routing-the-fork-to-the-delegated-decision-owner)),
   and emission waits for the delegated decision owner's answer to graduate the fork before that part of the plan
   becomes buildable. Emission never routes around an open fork by guessing the decision.
 
@@ -488,7 +505,6 @@ correctly (§the report footer in the formats contract). Stream the composed bri
 create over stdin (no shared temp file to collide on, per the report skill's filing rule):
 
 ```bash
-REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
 # One emitted epic per coherent buildable unit. The brief is composed from map #$MAP's
 # ## Destination + the relevant ## Decisions-so-far slice (read via the configured wayfinder adapter, never
 # ad-hoc markdown slicing). Files into the SAME status:needs-triage entry `report` uses.
@@ -504,14 +520,14 @@ REPO="${CLAUDE_PIPELINE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOw
 Charted and cleared on wayfinder:map #<MAP>. Downstream is the existing pipeline: triage → plan-epic → write-code.
 EOF
   echo   # blank line before the footer block
-  claude-plugins/pipeline/skills/report/footer.sh   # emits its own `---` + <sub>… line
-} | repository tracker adapter create-issue --title "<the epic, as one concrete deliverable>"
+  "${CLAUDE_PLUGIN_ROOT:-claude-plugins/kampus-pipeline}/skills/report/footer.sh"   # emits its own `---` + <sub>… line
+} | pipeline-cli tracker create-issue --title "<the epic, as one concrete deliverable>"
 ```
 
-The `tracker create-issue` verb owns this intake-create envelope (repository graduation policy;
-`repository tracker adapter`): it files a `status:needs-triage` issue, reading the
-body from stdin so the composed heredoc streams straight in. Don't hand-roll the
-`gh api repos/$REPO/issues` create — that inline envelope is what the repository workflow validation (repository policy) flags.
+The `tracker create-issue` verb owns this intake-create envelope: it files a `status:needs-triage`
+issue, reading the body from stdin so the composed heredoc streams straight in. Don't hand-roll the
+`gh api repos/$REPO/issues` create — that inline envelope is what the repository's workflow
+validation flags.
 
 ### Close the map on graduation — the close-on-source forcing function
 
@@ -544,13 +560,13 @@ Make the ideation→execution handoff traceable from both ends, then close:
 ```bash
 # Name every artifact the map graduated into (epics and/or ADR and/or roadmap), then close it
 # IFF the destination is FULLY graduated. A partial graduation is annotated but stays open.
-# The `tracker graduate` verb owns this graduation-close envelope (repository graduation policy, repository policy): it posts
+# The script relays the `tracker graduate` verb, which owns this graduation-close envelope: it posts
 # the `Graduated into <artifact>` source → artifact provenance record and closes the source as
 # completed. Don't hand-roll the comment + `state_reason=completed` PATCH — that inline
-# re-derivation is what the repository workflow validation (repository policy) flags.
-repository tracker adapter graduate "$MAP" \
-  --artifact "#$E1, #$E2 → triage → plan-epic → write-code; repository decision record; configured roadmap artifact v1" \
-  --note "Frontier cleared — closing this map as the durable record of how the plan was discovered."
+# re-derivation is what the repository's workflow validation flags.
+"${CLAUDE_PLUGIN_ROOT:-claude-plugins/kampus-pipeline}/skills/wayfinder/scripts/graduate-map.sh" "$MAP" \
+  "#$E1, #$E2 → triage → plan-epic → write-code; the recorded decision; the roadmap entry" \
+  "Frontier cleared — closing this map as the durable record of how the plan was discovered."
 # fully-graduated only; a partial graduation is annotated (a plain comment) but stays open.
 ```
 
