@@ -357,8 +357,9 @@ lands on an issue the stalled session already claimed, so a freshly-spawned code
 own session id reads back `held-by-other` and backs off, and `write-code open-pr` refuses on the same
 fact — the coder is not stuck, it is correctly declining to write to a lane it does not hold. So
 claim the lane yourself and **hand the coder the claim identity to act under**: the tracker claim
-takes a delegated token on the orchestrated path (`--session`, see
-[`packages/pipeline-cli/src/tools/tracker/command.ts`](../../../packages/pipeline-cli/src/tools/tracker/command.ts)),
+takes a delegated token on the orchestrated path (`--session`, defined in
+`packages/pipeline-cli/src/tools/tracker/command.ts` — given as text rather than a link because it
+leaves this plugin directory, which is a managed symlink in an adopting repo),
 and that token goes into the repair spawn's prompt. Note this is the *tracker* claim against the
 issue, not the `channel_claim` you hold against the crew tracker — the two are different surfaces and
 holding one is not holding the other. **A coder reporting that its claim was refused is telling you
