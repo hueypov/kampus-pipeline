@@ -19,12 +19,14 @@
  * fetch in `view.ts`/`github.ts`. `GithubLive` is baked in with `Command.provide(...)` so the
  * registered command's residual requirement is the Node platform union (the registry seam, the originating work item).
  */
-import {existsSync} from "node:fs";
+import {existsSync, readFileSync} from "node:fs";
 import {dirname, join, resolve} from "node:path";
-import {Effect, Option} from "effect";
+import {Console, Effect, Option} from "effect";
 import {Command, Flag} from "effect/unstable/cli";
 import {findRootDir} from "../../find-root-dir.ts";
+import {generateDiagram, parseDependencies} from "./diagram.ts";
 import {GithubLive} from "./github.ts";
+import {parseRoadmap} from "../roadmap-guard/roadmap-guard.ts";
 import {renderRoadmap} from "./view.ts";
 
 // Repo-root markers, in priority order: a pnpm workspace, then a VCS dir.
@@ -60,8 +62,26 @@ const view = Command.make(
 	),
 );
 
+// `diagram` needs no live GitHub projection — the mermaid block is generated purely from
+// ROADMAP.md's own tables plus the `## Dependencies` declaration, so the read is a plain file read
+// (mirroring `view.ts`) rather than a `gh api` fetch. Deterministic on purpose: same tables in ⇒
+// byte-identical block out, which is the property a later guard check can compare against.
+const diagram = Command.make(
+	"diagram",
+	{root: rootFlag},
+	Effect.fn(function* ({root: rootOpt}) {
+		const md = readFileSync(join(resolveRoot(rootOpt), "ROADMAP.md"), "utf8");
+		const {arcs, campaigns} = parseRoadmap(md);
+		yield* Console.log(generateDiagram(arcs, campaigns, parseDependencies(md)));
+	}),
+).pipe(
+	Command.withDescription(
+		"Generate the ROADMAP.md mermaid dependency diagram (arcs + campaigns as state-styled nodes, ## Dependencies edges) to stdout",
+	),
+);
+
 export const roadmapCommand = Command.make("roadmap").pipe(
-	Command.withSubcommands([view]),
+	Command.withSubcommands([view, diagram]),
 	Command.withDescription(
 		"Read-only roadmap view: arcs → milestones → epic trees → open PRs, flagging stale p1s (#2639/#2651)",
 	),
