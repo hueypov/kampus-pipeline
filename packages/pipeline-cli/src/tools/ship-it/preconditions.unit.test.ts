@@ -28,11 +28,18 @@ describe("gatePrecondition", () => {
 		[{_tag: "fail"} as const, EXIT.VERDICT_FAIL],
 		[{_tag: "stale", sha: "e1db540e"} as const, EXIT.VERDICT_STALE],
 		[{_tag: "none"} as const, EXIT.NO_VERDICT],
+		[{_tag: "self-issued", author: "hueypov"} as const, EXIT.NO_VERDICT],
 		[{_tag: "unknown", reason: "gh exited 1"} as const, EXIT.PRECONDITION_UNKNOWN],
 	])("refuses %s with its own code", (state, code) => {
 		const p = gatePrecondition("code", state);
 		expect(p.ok).toBe(false);
 		expect(p.ok === false && p.code).toBe(code);
+	});
+
+	it("names the self-issuer, so a visible PASS is not read as a broken gate (#135)", () => {
+		const p = gatePrecondition("code", {_tag: "self-issued", author: "hueypov"});
+		expect(p.detail).toContain("hueypov");
+		expect(p.detail).toContain("self-issued");
 	});
 
 	it("gives a stale verdict a different code from a failing one — different owners", () => {

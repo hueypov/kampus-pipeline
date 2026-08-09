@@ -10,9 +10,10 @@
  * `VerdictComment` the core resolves over.
  *
  * Two verbs:
- *  - `read(pr, gate, expect, headOverride)` — resolve the PR's current head (REST), author-gate
- *    marker authors to write+ collaborators (the runtime ACL authorization rule), and run `resolveVerdict` to classify
- *    the namespace against that head. The consumer branches on the returned outcome.
+ *  - `read(pr, gate, expect, headOverride)` — resolve the PR's current head AND its author (REST),
+ *    author-gate marker authors to write+ collaborators (the runtime ACL authorization rule), and run `resolveVerdict` to
+ *    classify the namespace against that head, dropping the PR author's own markers (V5, #135). The
+ *    consumer branches on the returned outcome.
  *  - `post(pr, gate, body)` — the SHA-bound, one-verdict-per-gate contract rule-2 UPSERT: guard the body's first line is *this*
  *    gate's marker (fail-closed on a cross-namespace body), then PATCH our own prior marker in
  *    the namespace if one exists, else POST a fresh one — exactly one verdict comment per (PR, gate).
@@ -91,14 +92,16 @@ export interface PostResult {
 	readonly commentId: number;
 }
 
-// The PR head-SHA read is the one arg builder unique to `verdict` (the SHA-bound, one-verdict-per-gate contract head binding);
-// the generic comment IO (list/post/patch/get-body) and the `whoami` probe are the shared
-// `../tracker/gh-io.ts` seam.
-const headShaArgs = (repo: string, pr: number): ReadonlyArray<string> => [
+// The PR read is the one arg builder unique to `verdict` (the SHA-bound, one-verdict-per-gate contract head binding
+// plus the V5 read-side author gate); the generic comment IO (list/post/patch/get-body) and the
+// `whoami` probe are the shared `../tracker/gh-io.ts` seam. Both facts come from one REST call —
+// they are read from the same PR object, and splitting them into two calls would let the reader
+// resolve a head and an author from different points in time.
+const prFactsArgs = (repo: string, pr: number): ReadonlyArray<string> => [
 	"api",
 	`repos/${repo}/pulls/${pr}`,
 	"--jq",
-	".head.sha",
+	".head.sha, .user.login",
 ];
 
 const toVerdictComment = (raw: (typeof RawComment)["Type"]): VerdictComment => ({
@@ -108,8 +111,28 @@ const toVerdictComment = (raw: (typeof RawComment)["Type"]): VerdictComment => (
 	body: raw.body ?? "",
 });
 
-const currentHead = Effect.fn("Github.currentHead")(function* (repo: string, pr: number) {
-	return (yield* runGh(headShaArgs(repo, pr))).trim();
+/**
+ * The PR's current head SHA and its author login.
+ *
+ * The author is not optional detail: without it the reader cannot tell a self-issued marker from an
+ * independent one, and V5 would once again be enforced only by whoever happened to route through
+ * `verdict post` (#135). An unreadable author is therefore a hard parse failure rather than an empty
+ * string the resolution silently tolerates — the caller's `unknown` refuses, which is the direction
+ * this must fail in.
+ */
+const prFacts = Effect.fn("Github.prFacts")(function* (repo: string, pr: number) {
+	const args = prFactsArgs(repo, pr);
+	const [headSha = "", author = ""] = (yield* runGh(args))
+		.trim()
+		.split("\n")
+		.map((line) => line.trim());
+	if (author === "") {
+		return yield* new GhParseError({
+			args,
+			message: `could not read #${pr}'s author — the read side cannot tell a self-issued verdict from an independent one without it`,
+		});
+	}
+	return {headSha, author} as const;
 });
 
 /**
@@ -152,6 +175,10 @@ const listComments = Effect.fn("Github.listComments")(function* (repo: string, p
  * Read the PR's verdict for `gate` against its current head (or `headOverride` when the caller
  * already resolved it — e.g. a reviewer binding to the exact head it read). Author-gates the
  * distinct marker authors to write+ collaborators, then runs the pure `resolveVerdict`.
+ *
+ * `headOverride` overrides only the head binding, never the PR read: the author still has to be
+ * fetched for the V5 gate, so there is no invocation that resolves a verdict without knowing whose
+ * PR it is.
  */
 const read = Effect.fn("Github.read")(function* (
 	repo: string,
@@ -160,7 +187,8 @@ const read = Effect.fn("Github.read")(function* (
 	expect: Polarity,
 	headOverride: string | undefined,
 ) {
-	const headSha = headOverride?.trim() || (yield* currentHead(repo, pr));
+	const facts = yield* prFacts(repo, pr);
+	const headSha = headOverride?.trim() || facts.headSha;
 	const comments = yield* listComments(repo, pr);
 	const re = namespaceRe(gate);
 	const markerAuthors = [
@@ -172,7 +200,13 @@ const read = Effect.fn("Github.read")(function* (
 		),
 	];
 	const authorized = yield* authorizedAuthors(repo, markerAuthors);
-	const outcome = resolveVerdict({comments, authorizedAuthors: authorized, gate, headSha});
+	const outcome = resolveVerdict({
+		comments,
+		authorizedAuthors: authorized,
+		gate,
+		headSha,
+		prAuthor: facts.author,
+	});
 	const satisfied = outcome._tag === "current" && outcome.polarity === expect;
 	return {outcome, headSha, gate, satisfied, expect} satisfies ReadResult;
 });

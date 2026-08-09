@@ -54,6 +54,8 @@ export type GateState =
 	| {readonly _tag: "fail"}
 	| {readonly _tag: "stale"; readonly sha: string}
 	| {readonly _tag: "none"}
+	/** The namespace holds only the PR author's own marker — ungated, not merely unreviewed (#135). */
+	| {readonly _tag: "self-issued"; readonly author: string}
 	| {readonly _tag: "unknown"; readonly reason: string};
 
 /** A gate's outcome as a precondition. Anything but a current-head PASS refuses. */
@@ -71,6 +73,15 @@ export const gatePrecondition = (gate: string, state: GateState): Precondition =
 			);
 		case "none":
 			return refused(`gate ${gate}`, EXIT.NO_VERDICT, "no verdict — this PR was never gated");
+		case "self-issued":
+			// Named apart from `none` so the refusal is legible on a PR that visibly carries a PASS:
+			// "never gated" would read as a reader bug and invite an admin override, which is the last
+			// link of the self-approve-and-merge loop this refusal exists to break (#135).
+			return refused(
+				`gate ${gate}`,
+				EXIT.NO_VERDICT,
+				`ungated — the only verdict in this namespace is self-issued by the PR's author (${state.author})`,
+			);
 		case "unknown":
 			return refused(`gate ${gate}`, EXIT.PRECONDITION_UNKNOWN, `could not read: ${state.reason}`);
 	}

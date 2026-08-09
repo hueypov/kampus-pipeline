@@ -47,6 +47,15 @@ never a "fail you may override". A gate that cannot read its scope fails closed.
 This is the split-role firewall, and it holds through repair: the author may fix a FAIL, but an
 independent re-review re-grades it. A shipper that accepts a self-issued PASS has no gate at all.
 
+V5 is enforced on **both** sides, and the read side is the one that makes it hold. `post` refuses an
+author posting on their own PR (exit 10), and `read` — which `ship-it` resolves every gate through —
+drops the author's own markers and resolves `self-verdict`, which no polarity satisfies. That
+redundancy is not belt-and-braces: an emit-only guard is enforced by whoever remembers to route
+through the guarded verb, and for a while nobody did. The shipped reviewer agent card instructed a
+bare `gh api` comment, so the firewall was correct, fail-closed, and never reached — live PRs
+accumulated self-issued PASS verdicts that read as gate-satisfying (#135). A marker the *reader*
+refuses to count has no bypass left to document.
+
 **V6 — FAIL carries its reasons.** A FAIL names the specific findings that produced it, each
 verifiable against the diff. A verdict whose reasons cannot be checked cannot be repaired against,
 and the repair loop degrades into guessing.
@@ -54,6 +63,23 @@ and the repair loop degrades into guessing.
 **V7 — A verdict is proven landed, not assumed.** After posting, the marker is re-read from the PR's
 own state. A post that reported success but landed nothing — or landed malformed — is a false green
 nobody notices until a merge happens on it.
+
+## What V5 closes, and what it does not
+
+V5's read-side enforcement is one link in a four-link loop, and the other three are live. Stating
+them here keeps whoever sequences the remaining fixes from reading a closed link as a closed loop:
+
+1. **Self-issued verdicts** — closed by V5 above. A self-PASS resolves `self-verdict` and refuses.
+2. **`ship-it check` reporting `mergeable ok` on a BLOCKED PR** (#99) — still open. The verdict
+   gate refusing does not stop a shipper that trusts a mergeability report over it.
+3. **An empty control-plane path set** (#134) — still open. A change to the gate's own definitions
+   classifies as `ordinary` and draws no elevated approval, so this contract can be edited under
+   the same authority it grants.
+4. **Branch protection that does not enforce for admins** — still open, and outside this contract.
+   An admin merge is available regardless of any refusal above.
+
+Together those still compose a path from "an agent judges its own work" to "it lands", so V5 is a
+necessary link and not a sufficient one. A verdict gate is not a merge policy.
 
 ## The verbs
 

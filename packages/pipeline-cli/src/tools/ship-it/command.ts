@@ -59,6 +59,7 @@ const resolveGate = (pr: number, gate: VerdictGate): Effect.Effect<GateState, ne
 		const result = yield* gh.read(pr, gate, "PASS", undefined);
 		const o = result.outcome;
 		if (o._tag === "none") return {_tag: "none"} as const;
+		if (o._tag === "self-verdict") return {_tag: "self-issued", author: o.author} as const;
 		if (o._tag === "stale") return {_tag: "stale", sha: o.sha} as const;
 		if (o._tag === "sha-less") return {_tag: "stale", sha: "unbound"} as const;
 		return o.polarity === "PASS"
